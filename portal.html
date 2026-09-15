@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Member Portal | Obit Cooperative Society</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <header class="site-header" id="top">
+    <div class="container nav-wrap">
+      <a class="brand" href="index.html" aria-label="Obit Cooperative Society home">
+        <img src="assets/obit-logo.png" alt="Obit Cooperative Society" class="brand-logo">
+        <span><strong>OBIT</strong><small>COOPERATIVE SOCIETY</small></span>
+      </a>
+      <button class="nav-toggle" aria-label="Open navigation" aria-expanded="false">☰</button>
+      <nav class="main-nav">
+        <a href="index.html">Home</a>
+        <a href="index.html#about">About</a>
+        <a href="index.html#membership">Membership</a>
+        <a href="index.html#services">Services</a>
+        <a href="index.html#network">Obit Network</a>
+        <a href="news.html">News</a>
+        <a href="index.html#contact">Contact</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn btn-ghost" href="#" id="logoutLink" style="display:none">Log out</a>
+        <a class="btn btn-primary" href="apply.html">Join Now</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <div class="container" style="max-width:820px">
+
+      <!-- LOGGED OUT VIEW -->
+      <div id="loggedOutView">
+        <div class="app-header auth-shell" style="text-align:center;margin:0 auto 30px">
+          <div class="eyebrow green">MEMBER PORTAL — BETA</div>
+          <h1>Log in to your account</h1>
+        </div>
+
+        <div class="card auth-shell">
+          <div class="tab-row">
+            <button class="active" id="tabLogin">Log In</button>
+            <button id="tabSetup">First time? Set your password</button>
+          </div>
+
+          <div id="alertBox"></div>
+
+          <div id="loginForm">
+            <label class="field">Email or phone
+              <input id="loginIdentifier" placeholder="you@example.com" />
+            </label>
+            <label class="field">Password
+              <input id="loginPassword" type="password" />
+            </label>
+            <button class="btn btn-primary btn-block" id="btnLogin">Log In</button>
+            <p class="muted-note">Portal access opens once your membership payment is verified. Applied recently? <a href="apply.html">Check your application</a>.</p>
+          </div>
+
+          <div id="setupForm" style="display:none">
+            <p class="muted-note" style="margin-bottom:14px">Step 1: request a setup code using your application ID. In this sandbox, the code is printed to the backend's server log rather than sent by SMS/email.</p>
+            <label class="field">Application ID
+              <input id="setupAppId" type="number" placeholder="e.g. 1" />
+            </label>
+            <button class="btn btn-secondary btn-block" id="btnRequestSetup" style="margin-bottom:18px">Request Setup Code</button>
+
+            <label class="field">User ID (returned above)
+              <input id="setupUserId" type="number" />
+            </label>
+            <label class="field">Setup code
+              <input id="setupCode" placeholder="6-digit code" />
+            </label>
+            <label class="field">New password
+              <input id="setupPassword" type="password" placeholder="At least 8 characters" />
+            </label>
+            <button class="btn btn-primary btn-block" id="btnSetPassword">Set Password</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOGGED IN VIEW -->
+      <div id="loggedInView" style="display:none">
+        <div class="app-header">
+          <div class="eyebrow green">MEMBER PORTAL — BETA</div>
+          <h1>Welcome back</h1>
+        </div>
+
+        <div class="sandbox-banner">Ledger balances and contribution processing are not live yet — Release 2. Figures below are placeholders until then.</div>
+
+        <div class="card" style="margin-bottom:20px">
+          <h2 style="margin-bottom:16px">Membership</h2>
+          <dl class="kv" id="membershipSummary"></dl>
+        </div>
+
+        <div class="card" style="margin-bottom:20px">
+          <h2 style="margin-bottom:16px">Propose a contribution plan</h2>
+          <div class="grid-2">
+            <label class="field">Amount (₦)<input id="planAmount" type="number" min="0" /></label>
+            <label class="field">Frequency
+              <select id="planFrequency"><option>Daily</option><option>Weekly</option><option>Monthly</option></select>
+            </label>
+            <label class="field">Purpose
+              <select id="planPurpose">
+                <option>Emergency Fund</option><option>Business Capital</option><option>Rent</option>
+                <option>School Fees</option><option>Equipment</option><option>Vehicle</option>
+                <option>Housing</option><option>General Savings</option>
+              </select>
+            </label>
+            <label class="field">Target amount (optional, ₦)<input id="planTarget" type="number" min="0" /></label>
+          </div>
+          <button class="btn btn-primary" id="btnCreatePlan">Save Plan</button>
+          <div class="table-wrap" style="margin-top:18px">
+            <table class="app-table"><thead><tr><th>Amount</th><th>Frequency</th><th>Purpose</th><th>Status</th></tr></thead><tbody id="plansBody"></tbody></table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 style="margin-bottom:16px">Statement</h2>
+          <dl class="kv" id="statementSummary"></dl>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer id="contact">
+    <div class="container footer-bottom">
+      <span>© 2026 Obit Cooperative Multipurpose Society Limited.</span>
+      <span>Proudly Nigerian. Built for shared prosperity.</span>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/portal.js"></script>
+</body>
+</html>

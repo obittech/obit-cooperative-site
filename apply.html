@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Become a Member | Obit Cooperative Society</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <header class="site-header" id="top">
+    <div class="container nav-wrap">
+      <a class="brand" href="index.html" aria-label="Obit Cooperative Society home">
+        <img src="assets/obit-logo.png" alt="Obit Cooperative Society" class="brand-logo">
+        <span><strong>OBIT</strong><small>COOPERATIVE SOCIETY</small></span>
+      </a>
+      <button class="nav-toggle" aria-label="Open navigation" aria-expanded="false">☰</button>
+      <nav class="main-nav">
+        <a href="index.html">Home</a>
+        <a href="index.html#about">About</a>
+        <a href="index.html#membership">Membership</a>
+        <a href="index.html#services">Services</a>
+        <a href="index.html#network">Obit Network</a>
+        <a href="news.html">News</a>
+        <a href="index.html#contact">Contact</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn btn-ghost" href="portal.html">Login</a>
+        <a class="btn btn-primary" href="apply.html">Join Now</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <div class="container" style="max-width:760px">
+      <div class="app-header">
+        <div class="eyebrow green">MEMBERSHIP APPLICATION</div>
+        <h1>Become an Obit member</h1>
+        <p>Create your profile, verify your identity and complete your membership fee. Your application, KYC and payment history carry forward into Obit One when it launches — you will not need to register again.</p>
+      </div>
+
+      <div class="sandbox-banner" id="modeBanner">
+        <strong>Sandbox mode.</strong> This demo talks to a local developer API with no live KYC provider or payment gateway connected. No real identity documents or card details are collected anywhere on this page.
+      </div>
+
+      <div class="stepper" id="stepper">
+        <div class="step" data-step="profile">1. Profile</div>
+        <div class="step" data-step="review">2. Review & Consent</div>
+        <div class="step" data-step="kyc">3. Verify (KYC)</div>
+        <div class="step" data-step="payment">4. Membership Fee</div>
+        <div class="step" data-step="done">5. Under Review</div>
+      </div>
+
+      <div id="alertBox"></div>
+
+      <div class="card">
+
+        <!-- STEP 1: PROFILE -->
+        <section id="panel-profile">
+          <h2 style="margin-bottom:18px">Create your profile</h2>
+          <div class="grid-2">
+            <label class="field">Full legal name
+              <input id="full_legal_name" required placeholder="As it appears on your ID" />
+            </label>
+            <label class="field">Date of birth
+              <input id="date_of_birth" type="date" />
+            </label>
+            <label class="field">Gender
+              <select id="gender"><option value="">Prefer not to say</option><option>Female</option><option>Male</option></select>
+            </label>
+            <label class="field">Membership type
+              <select id="membership_type" required>
+                <option value="">Select</option>
+                <option>Individual</option>
+                <option>MSME / Business</option>
+              </select>
+            </label>
+            <label class="field">Phone number
+              <input id="phone" required placeholder="+234..." />
+            </label>
+            <label class="field">WhatsApp number
+              <input id="whatsapp" placeholder="+234... (if different)" />
+            </label>
+            <label class="field">Email
+              <input id="email" type="email" required placeholder="you@example.com" />
+            </label>
+            <label class="field">Occupation category
+              <select id="occupation_category">
+                <option value="">Select</option>
+                <option>Salary Earner</option>
+                <option>Trader</option>
+                <option>Artisan</option>
+                <option>Driver</option>
+                <option>Tech Worker</option>
+                <option>Shop Owner</option>
+                <option>MSME Owner</option>
+                <option>Other</option>
+              </select>
+            </label>
+            <label class="field">State
+              <input id="state" required placeholder="e.g. Lagos" />
+            </label>
+            <label class="field">LGA
+              <input id="lga" placeholder="e.g. Ikeja" />
+            </label>
+            <label class="field" style="grid-column:1/-1">Address
+              <input id="address" required placeholder="Street address" />
+            </label>
+            <label class="field">Next of kin — name
+              <input id="next_of_kin_name" />
+            </label>
+            <label class="field">Next of kin — phone
+              <input id="next_of_kin_phone" />
+            </label>
+            <label class="field">Intended savings amount (₦)
+              <input id="intended_savings_amount" type="number" min="0" />
+            </label>
+            <label class="field">Savings frequency
+              <select id="intended_savings_frequency"><option value="">Select</option><option>Daily</option><option>Weekly</option><option>Monthly</option></select>
+            </label>
+          </div>
+          <label class="field">What are you interested in? (select any)
+            <select id="interests" multiple size="4">
+              <option>Savings</option>
+              <option>Business Support</option>
+              <option>Financing</option>
+              <option>FFK / Community Hub</option>
+              <option>Agriculture</option>
+              <option>Training</option>
+            </select>
+            <small>Hold Ctrl/Cmd to select more than one.</small>
+          </label>
+          <div class="btn-row">
+            <button class="btn btn-primary btn-block" id="btnStartOrSave">Save & Continue</button>
+          </div>
+        </section>
+
+        <!-- STEP 2: REVIEW + CONSENT -->
+        <section id="panel-review" style="display:none">
+          <h2 style="margin-bottom:18px">Review & consent</h2>
+          <dl class="kv" id="reviewSummary"></dl>
+          <div style="margin:22px 0">
+            <label class="checkbox-row"><input type="checkbox" id="consent_terms" /> I accept the Obit Cooperative membership terms.</label>
+            <label class="checkbox-row"><input type="checkbox" id="consent_privacy" /> I accept the Privacy Policy.</label>
+            <label class="checkbox-row"><input type="checkbox" id="consent_marketing" /> I'm OK receiving updates about programmes and opportunities.</label>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary" id="btnBackToProfile">Back</button>
+            <button class="btn btn-primary btn-block" id="btnSubmitApplication">Submit Application</button>
+          </div>
+        </section>
+
+        <!-- STEP 3: KYC -->
+        <section id="panel-kyc" style="display:none">
+          <h2 style="margin-bottom:10px">Verify your identity</h2>
+          <p class="muted-note" style="margin-bottom:18px">In production this hands off to a licensed KYC provider's secure flow. This sandbox simulates that provider so you can see the full journey.</p>
+          <div id="kycStatusBox"></div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="btnStartKyc">Start Verification</button>
+            <button class="btn btn-secondary" id="btnSimulateVerified" style="display:none">Sandbox: Mark Verified</button>
+          </div>
+        </section>
+
+        <!-- STEP 4: PAYMENT -->
+        <section id="panel-payment" style="display:none">
+          <h2 style="margin-bottom:10px">Membership fee</h2>
+          <p class="muted-note" style="margin-bottom:18px">Payment status is only ever confirmed by a signed webhook from the provider — never by this page. Refreshing or closing this tab will not fake a successful payment.</p>
+          <div id="paymentStatusBox"></div>
+          <div class="btn-row">
+            <select id="providerSelect" style="max-width:200px" class="field" >
+              <option value="paystack">Paystack</option>
+              <option value="monnify">Monnify</option>
+            </select>
+            <button class="btn btn-primary" id="btnInitPayment">Pay Membership Fee</button>
+          </div>
+        </section>
+
+        <!-- STEP 5: DONE -->
+        <section id="panel-done" style="display:none">
+          <h2 style="margin-bottom:10px">You're under review 🎉</h2>
+          <p>Your payment has been verified and your application is now with the Obit team for final review and activation. You'll receive your permanent Member ID once approved.</p>
+          <p class="muted-note">Once active, come back to <a href="portal.html">Login</a> to set your Member Portal password.</p>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <footer id="contact">
+    <div class="container footer-bottom">
+      <span>© 2026 Obit Cooperative Multipurpose Society Limited.</span>
+      <span>Proudly Nigerian. Built for shared prosperity.</span>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/apply.js"></script>
+</body>
+</html>
