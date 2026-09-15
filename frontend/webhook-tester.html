@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Obit — Payment Webhook Tester (sandbox only)</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 560px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; }
+  h1 { font-size: 20px; }
+  label { display: block; margin-top: 14px; font-weight: 600; font-size: 14px; }
+  input, select { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+  button { margin-top: 20px; padding: 12px 20px; background: #146c43; color: white; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+  button:hover { background: #0f5132; }
+  #result { margin-top: 20px; padding: 14px; border-radius: 8px; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+  .ok { background: #eaf7ee; color: #1e5b34; border: 1px solid #b6e2c3; }
+  .err { background: #fdecea; color: #8c2b22; border: 1px solid #f3b8b0; }
+  .note { color: #666; font-size: 13px; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <h1>Obit — Payment Webhook Tester</h1>
+  <p class="note">Sandbox-only tool. Fill in the reference and amount shown on your apply.html payment step, then click Send. This does NOT touch any real payment provider.</p>
+
+  <label>Backend URL
+    <input id="backend" value="https://obit-cooperative-api.onrender.com" />
+  </label>
+  <label>Payment Reference (from the site, e.g. OBIT-1-bafe22a85cd6)
+    <input id="reference" placeholder="OBIT-1-xxxxxxxxxxxx" />
+  </label>
+  <label>Amount in Naira (must match exactly, e.g. 2000)
+    <input id="amount" value="2000" type="number" />
+  </label>
+  <label>Sandbox Secret (must match WEBHOOK_SANDBOX_SECRET on Render)
+    <input id="secret" value="dev-only-shared-secret" />
+  </label>
+  <label>Result
+    <select id="status">
+      <option value="success">success (payment worked)</option>
+      <option value="failed">failed (payment failed)</option>
+    </select>
+  </label>
+
+  <button id="send">Send Simulated Payment</button>
+  <div id="result" style="display:none"></div>
+
+  <script>
+    async function hmacHex(secret, message) {
+      const enc = new TextEncoder();
+      const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+      return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    document.getElementById('send').addEventListener('click', async () => {
+      const backend = document.getElementById('backend').value.replace(/\/$/, '');
+      const reference = document.getElementById('reference').value.trim();
+      const amountNaira = Number(document.getElementById('amount').value);
+      const secret = document.getElementById('secret').value;
+      const status = document.getElementById('status').value;
+      const resultBox = document.getElementById('result');
+      resultBox.style.display = 'block';
+      resultBox.className = '';
+
+      if (!reference || !amountNaira || !secret) {
+        resultBox.className = 'err';
+        resultBox.textContent = 'Please fill in reference, amount and secret.';
+        return;
+      }
+
+      const body = JSON.stringify({
+        id: 'evt_' + crypto.randomUUID(),
+        data: { reference, amount: Math.round(amountNaira * 100), currency: 'NGN', status }
+      });
+
+      try {
+        const signature = await hmacHex(secret, body);
+        const res = await fetch(`${backend}/api/webhooks/payments/paystack`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-sandbox-signature': signature },
+          body
+        });
+        const text = await res.text();
+        resultBox.className = res.ok ? 'ok' : 'err';
+        resultBox.textContent = `Status: ${res.status}\n${text}`;
+      } catch (err) {
+        resultBox.className = 'err';
+        resultBox.textContent = 'Request failed: ' + err.message + '\n\nIf this says "Failed to fetch", double check the Backend URL and that CORS_ORIGIN is set to * on Render.';
+      }
+    });
+  </script>
+</body>
+</html>
