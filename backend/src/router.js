@@ -50,7 +50,7 @@ export function sendJson(res, status, body) {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(payload),
     'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-sandbox-signature',
     'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
   });
   res.end(payload);
