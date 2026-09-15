@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Obit — Seed Admin Account (dev tool)</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 20px; }
+  label { display: block; margin-top: 14px; font-weight: 600; font-size: 14px; }
+  input { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+  button { margin-top: 20px; padding: 12px 20px; background: #146c43; color: white; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+  #result { margin-top: 20px; padding: 14px; border-radius: 8px; font-size: 14px; white-space: pre-wrap; }
+  .ok { background: #eaf7ee; color: #1e5b34; border: 1px solid #b6e2c3; }
+  .err { background: #fdecea; color: #8c2b22; border: 1px solid #f3b8b0; }
+</style>
+</head>
+<body>
+  <h1>Seed Admin Account</h1>
+  <p>Creates or resets a staff/admin login directly on the live backend. Runs once, safe to reuse.</p>
+
+  <label>Backend URL<input id="backend" value="https://obit-cooperative-api.onrender.com" /></label>
+  <label>Dev Seed Secret (must match DEV_SEED_SECRET on Render)<input id="secret" value="obit-dev-seed-2026" /></label>
+  <label>Admin Email<input id="email" value="admin@obit.test" /></label>
+  <label>Admin Password<input id="password" value="AdminPass123" /></label>
+
+  <button id="send">Create/Reset Admin</button>
+  <div id="result" style="display:none"></div>
+
+  <script>
+    document.getElementById('send').addEventListener('click', async () => {
+      const backend = document.getElementById('backend').value.replace(/\/$/, '');
+      const secret = document.getElementById('secret').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const box = document.getElementById('result');
+      box.style.display = 'block';
+      try {
+        const res = await fetch(`${backend}/api/dev/seed-admin`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ secret, email, password, role: 'admin' })
+        });
+        const text = await res.text();
+        box.className = res.ok ? 'ok' : 'err';
+        box.textContent = `Status: ${res.status}\n${text}`;
+      } catch (err) {
+        box.className = 'err';
+        box.textContent = 'Request failed: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
