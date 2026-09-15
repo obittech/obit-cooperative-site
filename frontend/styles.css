@@ -22,7 +22,7 @@ a{color:inherit;text-decoration:none}
 .site-header{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-bottom:1px solid rgba(13,27,42,.06)}
 .nav-wrap{min-height:78px;display:flex;align-items:center;gap:26px}
 .brand{display:flex;align-items:center;gap:10px;min-width:220px}
-.brand-mark{width:42px;height:42px;border-radius:50% 45% 50% 15%;display:grid;place-items:center;background:linear-gradient(135deg,var(--green),#0bbf68);color:#fff;font-family:"Manrope";font-weight:800;font-size:24px}
+.brand-logo{width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0}
 .brand strong{font:800 24px/1 "Manrope";display:block;letter-spacing:.03em;color:var(--green-dark)}
 .brand small{font-size:10px;letter-spacing:.12em;font-weight:700}
 .main-nav{display:flex;align-items:center;gap:22px;margin-left:auto}
