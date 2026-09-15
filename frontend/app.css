@@ -1,0 +1,76 @@
+/* app.css — shared with apply.html / portal.html / admin.html / news.html.
+   Reuses the color variables defined in styles.css; only adds what the
+   marketing site didn't need: forms, tables, status badges, auth cards. */
+
+.app-main{padding:120px 0 90px}
+.app-header{max-width:680px;margin-bottom:36px}
+.app-header .eyebrow{margin-bottom:10px}
+.app-header h1{font-size:clamp(30px,4vw,44px);letter-spacing:-.03em;color:var(--ink)}
+.app-header p{color:var(--muted);font-size:16px}
+
+.sandbox-banner{
+  background:#fff7e0;border:1px solid #f0d38a;color:#6b4e00;
+  border-radius:12px;padding:12px 16px;font-size:14px;margin-bottom:28px;
+}
+.sandbox-banner strong{color:#4a3600}
+
+.card{
+  background:var(--white);border:1px solid var(--line);border-radius:18px;
+  padding:28px;box-shadow:var(--shadow);
+}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:640px){.grid-2{grid-template-columns:1fr}}
+
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px;font-size:14px;color:var(--ink);font-weight:600}
+.field input,.field select,.field textarea{
+  font:inherit;font-weight:500;border:1px solid var(--line);border-radius:10px;
+  padding:11px 13px;background:#fbfcfb;color:var(--ink);
+}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--green);outline-offset:1px}
+.field small{color:var(--muted);font-weight:400}
+.field-error{color:#b3261e;font-size:13px;font-weight:500}
+
+.checkbox-row{display:flex;align-items:flex-start;gap:10px;font-size:14px;font-weight:500;color:var(--ink);margin-bottom:12px}
+.checkbox-row input{margin-top:3px}
+
+.stepper{display:flex;gap:8px;margin-bottom:30px;flex-wrap:wrap}
+.stepper .step{
+  display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;
+  background:#eef3f0;color:var(--muted);font-size:13px;font-weight:700;
+}
+.stepper .step.active{background:var(--green);color:#fff}
+.stepper .step.done{background:var(--green-dark);color:#fff}
+
+.btn-secondary{background:#fff;color:var(--green-dark);border:1px solid var(--line)}
+.btn-block{width:100%}
+.btn-row{display:flex;gap:12px;margin-top:8px}
+
+.alert{border-radius:12px;padding:12px 16px;font-size:14px;margin-bottom:18px}
+.alert-error{background:#fdecea;color:#8c2b22;border:1px solid #f3b8b0}
+.alert-success{background:#eaf7ee;color:#1e5b34;border:1px solid #b6e2c3}
+
+.status-badge{display:inline-flex;padding:4px 11px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.02em}
+.status-badge.ok{background:#eaf7ee;color:#1e5b34}
+.status-badge.pending{background:#fff7e0;color:#6b4e00}
+.status-badge.fail{background:#fdecea;color:#8c2b22}
+.status-badge.neutral{background:#eef1f0;color:var(--muted)}
+
+.kv{display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:14px}
+.kv dt{color:var(--muted);font-weight:600}
+.kv dd{color:var(--ink);font-weight:600;margin:0}
+
+table.app-table{width:100%;border-collapse:collapse;font-size:14px}
+table.app-table th{text-align:left;color:var(--muted);font-weight:700;padding:10px 12px;border-bottom:1px solid var(--line)}
+table.app-table td{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--ink)}
+table.app-table tr:hover td{background:#fafcfb}
+.table-wrap{overflow-x:auto}
+
+.auth-shell{max-width:420px;margin:0 auto}
+.member-code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;
+  background:#eef3f0;color:var(--green-dark);padding:3px 9px;border-radius:8px;
+}
+.muted-note{color:var(--muted);font-size:13px;margin-top:6px}
+.tab-row{display:flex;gap:10px;margin-bottom:24px;border-bottom:1px solid var(--line)}
+.tab-row button{background:none;border:none;padding:10px 4px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+.tab-row button.active{color:var(--green-dark);border-bottom-color:var(--green)}
