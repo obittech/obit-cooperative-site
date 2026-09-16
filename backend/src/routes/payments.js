@@ -12,10 +12,56 @@ import { Router, HttpError } from '../router.js';
 import { get, run } from '../db.js';
 import { audit } from '../utils/audit.js';
 import crypto from 'node:crypto';
+import https from 'node:https';
 
 export const paymentsRouter = new Router();
 
 const MEMBERSHIP_FEE_NGN = Number(process.env.MEMBERSHIP_FEE_NGN || 2000);
+
+// Real call to Paystack's "initialize transaction" API. Secret key stays
+// server-side only — never sent to or exposed in the browser.
+function initializePaystackTransaction({ email, amountNaira, reference }) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({
+      email,
+      amount: Math.round(amountNaira * 100), // Paystack expects kobo
+      reference,
+      currency: 'NGN',
+    });
+
+    const req = https.request(
+      {
+        hostname: 'api.paystack.co',
+        path: '/transaction/initialize',
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            if (res.statusCode >= 200 && res.statusCode < 300 && parsed.status) {
+              resolve(parsed.data); // { authorization_url, access_code, reference }
+            } else {
+              reject(new Error(parsed.message || `Paystack returned status ${res.statusCode}`));
+            }
+          } catch (err) {
+            reject(err);
+          }
+        });
+      }
+    );
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
 
 paymentsRouter.post('/api/payments/membership/initialize', async (req, res) => {
   const { application_id, provider } = req.body || {};
@@ -38,20 +84,35 @@ paymentsRouter.post('/api/payments/membership/initialize', async (req, res) => {
   run("UPDATE member_applications SET status = 'PAYMENT_PENDING', updated_at = datetime('now') WHERE id = ?", [application_id]);
   audit(null, 'PAYMENT_INITIALIZED', 'member_applications', application_id, { reference, provider });
 
-  const hasLiveKeys = provider === 'paystack' ? !!process.env.PAYSTACK_SECRET_KEY : !!process.env.MONNIFY_SECRET_KEY;
+  // Paystack: real integration, live once PAYSTACK_SECRET_KEY is set.
+  if (provider === 'paystack' && process.env.PAYSTACK_SECRET_KEY) {
+    try {
+      const paystackData = await initializePaystackTransaction({
+        email: application.email,
+        amountNaira: MEMBERSHIP_FEE_NGN,
+        reference,
+      });
+      return res.json(201, {
+        reference,
+        amount: MEMBERSHIP_FEE_NGN,
+        currency: 'NGN',
+        checkout_url: paystackData.authorization_url,
+      });
+    } catch (err) {
+      audit(null, 'PAYSTACK_INIT_FAILED', 'member_applications', application_id, { error: err.message });
+      throw new HttpError(502, `Could not start Paystack checkout: ${err.message}`);
+    }
+  }
 
+  // Monnify real integration is not yet implemented — still sandboxed.
+  // Paystack without a key configured also falls through to sandbox mode.
   res.json(201, {
     reference,
     amount: MEMBERSHIP_FEE_NGN,
     currency: 'NGN',
-    // In production, call the provider's real "initialize transaction" API
-    // here with the SECRET key (server-side only) and return their
-    // authorization_url instead of this placeholder.
-    checkout_url: hasLiveKeys
-      ? null // real integration point — call provider SDK/API here
-      : `about:blank#sandbox-checkout-${reference}`,
-    sandbox_note: hasLiveKeys
-      ? undefined
-      : `No ${provider.toUpperCase()} secret key configured — this is a placeholder checkout pointer, not a real payment page.`,
+    checkout_url: `about:blank#sandbox-checkout-${reference}`,
+    sandbox_note: provider === 'monnify'
+      ? 'Monnify live checkout is not implemented yet — this is a placeholder checkout pointer, not a real payment page.'
+      : `No PAYSTACK secret key configured — this is a placeholder checkout pointer, not a real payment page.`,
   });
 });
