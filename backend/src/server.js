@@ -27,11 +27,12 @@ const { kycRouter } = await import('./routes/kyc.js');
 const { paymentsRouter } = await import('./routes/payments.js');
 const { meRouter } = await import('./routes/me.js');
 const { adminRouter } = await import('./routes/admin.js');
+const { devRouter } = await import('./routes/dev.js');
 const { handlePaymentWebhook } = await import('./routes/webhooks.js');
 
 migrate();
 
-const routers = [authRouter, applicationsRouter, kycRouter, paymentsRouter, meRouter, adminRouter];
+const routers = [authRouter, applicationsRouter, kycRouter, paymentsRouter, meRouter, adminRouter, devRouter];
 const WEBHOOK_PATTERN = /^\/api\/webhooks\/payments\/([^/]+)\/?$/;
 
 const server = http.createServer(async (req, res) => {
