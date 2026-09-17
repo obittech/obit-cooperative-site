@@ -14,22 +14,21 @@ import crypto from 'node:crypto';
 
 export const webhooksRouter = new Router();
 
+function verifyHmacSha512(rawBody, signatureHeader, secret) {
+  if (!secret || typeof signatureHeader !== 'string' || !/^[0-9a-fA-F]{128}$/.test(signatureHeader)) {
+    return false;
+  }
+  const expected = crypto.createHmac('sha512', secret).update(rawBody).digest();
+  const received = Buffer.from(signatureHeader, 'hex');
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+}
+
 function verifyPaystackSignature(rawBody, signatureHeader) {
-  const secret = process.env.PAYSTACK_SECRET_KEY;
-  if (!secret) return false; // sandbox: no live key configured, refuse rather than trust
-  const expected = crypto.createHmac('sha512', secret).update(rawBody).digest('hex');
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signatureHeader || '', 'hex');
-  return a.length === b.length && crypto.timingSafeEqual(a, Buffer.from(b));
+  return verifyHmacSha512(rawBody, signatureHeader, process.env.PAYSTACK_SECRET_KEY);
 }
 
 function verifyMonnifySignature(rawBody, signatureHeader) {
-  const secret = process.env.MONNIFY_SECRET_KEY;
-  if (!secret) return false;
-  const expected = crypto.createHmac('sha512', secret).update(rawBody).digest('hex');
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signatureHeader || '', 'hex');
-  return a.length === b.length && crypto.timingSafeEqual(a, Buffer.from(b));
+  return verifyHmacSha512(rawBody, signatureHeader, process.env.MONNIFY_SECRET_KEY);
 }
 
 // Handler is registered manually in server.js (needs the raw body, so it
@@ -61,7 +60,7 @@ export async function handlePaymentWebhook(req, res, params) {
   let event;
   try { event = JSON.parse(raw); } catch { throw new HttpError(400, 'Invalid JSON'); }
 
-  const eventId = event.id || event.reference || event.data?.reference || crypto.randomUUID();
+  const eventId = event.id || event.data?.id || event.reference || event.data?.reference || crypto.randomUUID();
   const alreadyProcessed = get('SELECT * FROM webhook_events WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
   if (alreadyProcessed) {
     res.json(200, { ok: true, idempotent_replay: true });
