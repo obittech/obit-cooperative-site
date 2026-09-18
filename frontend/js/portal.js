@@ -243,4 +243,10 @@ document.getElementById('btnCreatePlan').addEventListener('click', async () => {
   } catch (err) { alert(err.message); }
 });
 
-if (OBIT.getSession('member')) loadDashboard();
+// A page refresh must not briefly expose the login form while an existing
+// authenticated session is being restored.
+if (OBIT.getSession('member')) {
+  document.getElementById('loggedOutView').style.display = 'none';
+  document.getElementById('loggedInView').style.display = '';
+  loadDashboard();
+}
