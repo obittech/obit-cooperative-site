@@ -77,9 +77,46 @@ export async function handlePaymentWebhook(req, res, params) {
   const status = event.data?.status || event.status;
 
   const payment = get('SELECT * FROM membership_payments WHERE reference = ?', [reference]);
-  if (!payment) {
+  const contribution = !payment ? get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'CONTRIBUTION'", [reference]) : null;
+  if (!payment && !contribution) {
     audit(null, 'WEBHOOK_UNKNOWN_REFERENCE', 'webhook_events', null, { provider, reference });
     throw new HttpError(404, 'Unknown payment reference');
+  }
+
+  if (contribution) {
+    if (contribution.status === 'VERIFIED') {
+      run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+      res.json(200, { ok: true, idempotent_replay: true });
+      return;
+    }
+
+    const expectedContributionKobo = Math.round(contribution.amount * 100);
+    const contributionAmountMatches = amountKobo === undefined || Number(amountKobo) === expectedContributionKobo;
+    const contributionCurrencyMatches = currency === contribution.currency;
+    const contributionSuccess = ['success', 'PAID', 'successful'].includes(status);
+
+    if (!contributionAmountMatches || !contributionCurrencyMatches || !contributionSuccess) {
+      run("UPDATE transactions SET status = 'FAILED' WHERE id = ?", [contribution.id]);
+      run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+      audit(null, 'CONTRIBUTION_FAILED', 'transactions', contribution.id, { reference, status, amountKobo });
+      if (!contributionAmountMatches || !contributionCurrencyMatches) throw new HttpError(422, 'Amount or currency mismatch');
+      res.json(200, { ok: true });
+      return;
+    }
+
+    run("INSERT OR IGNORE INTO ledger_accounts (member_id, account_type, balance, currency) VALUES (?, 'SAVINGS', 0, 'NGN')", [contribution.member_id]);
+    const account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [contribution.member_id]);
+    run("UPDATE transactions SET status = 'VERIFIED' WHERE id = ?", [contribution.id]);
+    const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount) VALUES (?, ?, 'credit', ?)", [account.id, contribution.id, contribution.amount]);
+    if (Number(entry.changes) > 0) {
+      run("UPDATE ledger_accounts SET balance = balance + ? WHERE id = ?", [contribution.amount, account.id]);
+    }
+    const receiptNo = `OBR-${new Date().getUTCFullYear()}-${String(contribution.id).padStart(8, '0')}`;
+    run("INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)", [contribution.id, receiptNo]);
+    run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+    audit(null, 'CONTRIBUTION_VERIFIED', 'transactions', contribution.id, { reference, receiptNo });
+    res.json(200, { ok: true });
+    return;
   }
 
   // A reference that is already PAYMENT_VERIFIED must never be reprocessed,
