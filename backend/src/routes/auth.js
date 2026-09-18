@@ -19,8 +19,8 @@ authRouter.post('/api/auth/request-portal-setup', async (req, res, params) => {
   const { application_id } = req.body;
   const application = get('SELECT * FROM member_applications WHERE id = ?', [application_id]);
   if (!application) throw new HttpError(404, 'Application not found');
-  if (!['PAYMENT_VERIFIED', 'UNDER_REVIEW', 'ACTIVE'].includes(application.status)) {
-    throw new HttpError(409, 'Portal access opens after membership payment is verified');
+  if (application.status !== 'ACTIVE') {
+    throw new HttpError(409, 'Portal setup opens after your membership application is approved and activated');
   }
 
   let user = get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
