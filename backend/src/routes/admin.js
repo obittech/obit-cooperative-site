@@ -100,7 +100,16 @@ adminRouter.post('/api/admin/withdrawals/:id/initiate-payout', requireAuth('admi
   const w = get('SELECT * FROM withdrawal_requests WHERE id = ?', [params.id]);
   if (!w) throw new HttpError(404, 'Withdrawal request not found');
   if (w.status !== 'APPROVED') throw new HttpError(409, 'Withdrawal must be approved first');
-  const bank = get('SELECT * FROM member_bank_accounts WHERE id = ? AND member_id = ? AND verified_at IS NOT NULL', [w.bank_account_id, w.member_id]);
+  let bank = get('SELECT * FROM member_bank_accounts WHERE id = ? AND member_id = ? AND verified_at IS NOT NULL', [w.bank_account_id, w.member_id]);
+
+  // Backfill older withdrawal requests created before bank_account_id was added.
+  if (!bank) {
+    bank = get(`SELECT * FROM member_bank_accounts
+                WHERE member_id = ? AND account_number = ? AND verified_at IS NOT NULL
+                ORDER BY verified_at DESC LIMIT 1`, [w.member_id, w.account_number]);
+    if (bank) run('UPDATE withdrawal_requests SET bank_account_id = ? WHERE id = ?', [bank.id, w.id]);
+  }
+
   if (!bank?.recipient_code) throw new HttpError(409, 'A verified Paystack transfer recipient is required');
   const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
   if (!account || Number(account.balance) < Number(w.amount)) throw new HttpError(409, 'Insufficient current savings balance');
