@@ -53,6 +53,7 @@
 
         <div class="tab-row">
           <button class="active" data-tab="queue">Application Queue</button>
+          <button data-tab="withdrawals">Withdrawals</button>
           <button data-tab="reconciliation">Reconciliation</button>
           <button data-tab="audit">Audit Log</button>
         </div>
@@ -63,6 +64,13 @@
               <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Updated</th><th>Decision</th></tr></thead>
               <tbody id="queueBody"></tbody>
             </table>
+          </div>
+        </div>
+
+        <div id="panel-withdrawals" style="display:none">
+          <div class="grid-2" style="margin-bottom:16px" id="financeCards"></div>
+          <div class="table-wrap card">
+            <table class="app-table"><thead><tr><th>Member</th><th>Amount</th><th>Verified bank</th><th>Status</th><th>Action</th></tr></thead><tbody id="withdrawalsBody"></tbody></table>
           </div>
         </div>
 
