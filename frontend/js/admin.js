@@ -26,7 +26,7 @@ document.getElementById('logoutLink').addEventListener('click', (e) => {
 document.querySelectorAll('.tab-row [data-tab]').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-row [data-tab]').forEach((b) => b.classList.toggle('active', b === btn));
-    ['queue', 'reconciliation', 'audit'].forEach((name) => {
+    ['queue', 'withdrawals', 'reconciliation', 'audit'].forEach((name) => {
       document.getElementById(`panel-${name}`).style.display = name === btn.dataset.tab ? '' : 'none';
     });
   });
@@ -50,6 +50,7 @@ async function loadAll() {
     `;
 
     await refreshQueue(token);
+    await refreshWithdrawals(token);
     await refreshReconciliation(token);
     await refreshAudit(token);
 
@@ -95,6 +96,37 @@ async function refreshQueue(token) {
       } catch (err) { alert(err.message); }
     });
   });
+}
+
+async function refreshWithdrawals(token) {
+  const summary = await OBIT.get('/api/admin/finance/summary', { token });
+  document.getElementById('financeCards').innerHTML = `
+    <div class="card"><div class="eyebrow green">VERIFIED CONTRIBUTIONS</div><h2>₦${Number(summary.verified_contributions.total || 0).toLocaleString()}</h2></div>
+    <div class="card"><div class="eyebrow green">PENDING WITHDRAWALS</div><h2>₦${Number(summary.pending_withdrawals.total || 0).toLocaleString()}</h2></div>`;
+  const rows = await OBIT.get('/api/admin/withdrawals', { token });
+  document.getElementById('withdrawalsBody').innerHTML = rows.map(w => `<tr>
+    <td>${w.member_code}<br><span class="muted-note">${w.full_legal_name}</span></td>
+    <td>₦${Number(w.amount).toLocaleString()}</td><td>${w.bank_name}<br><span class="muted-note">${w.account_number}</span></td>
+    <td>${badge(w.status)}</td><td>${w.status === 'PENDING' ? `
+      <button class="btn btn-secondary" data-wid="${w.id}" data-wdecision="APPROVE">Approve</button>
+      <button class="btn btn-secondary" data-wid="${w.id}" data-wdecision="REJECT">Reject</button>` :
+      w.status === 'APPROVED' ? `<button class="btn btn-primary" data-payout="${w.id}">Initiate Test Payout</button>` : '—'}</td>
+  </tr>`).join('') || '<tr><td colspan="5" class="muted-note">No withdrawal requests.</td></tr>';
+
+  document.querySelectorAll('[data-wdecision]').forEach(btn => btn.addEventListener('click', async () => {
+    try {
+      await OBIT.post(`/api/admin/withdrawals/${btn.dataset.wid}/decision`, { decision: btn.dataset.wdecision }, { token });
+      await refreshWithdrawals(token);
+    } catch (err) { alert(err.message); }
+  }));
+  document.querySelectorAll('[data-payout]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm('Initiate this Paystack payout? Continue only in the current controlled test environment.')) return;
+    try {
+      const r = await OBIT.post(`/api/admin/withdrawals/${btn.dataset.payout}/initiate-payout`, {}, { token });
+      alert(`Payout initiated. Provider status: ${r.provider_status}. The member ledger will debit only after transfer.success confirmation.`);
+      await refreshWithdrawals(token);
+    } catch (err) { alert(err.message); }
+  }));
 }
 
 async function refreshReconciliation(token) {
