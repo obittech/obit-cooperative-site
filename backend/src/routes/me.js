@@ -143,9 +143,20 @@ meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => 
   if (!account || n > Number(account.balance)) throw new HttpError(409, 'Withdrawal amount exceeds available savings balance');
   const pending = get("SELECT COALESCE(SUM(amount),0) AS total FROM withdrawal_requests WHERE member_id = ? AND status IN ('PENDING','APPROVED')", [member.id]);
   if (n > Number(account.balance) - Number(pending.total || 0)) throw new HttpError(409, 'Amount exceeds balance available after pending withdrawal requests');
-  const result = run(`INSERT INTO withdrawal_requests (member_id, ledger_account_id, amount, bank_name, account_name, account_number)
-                      VALUES (?, ?, ?, ?, ?, ?)`, [member.id, account.id, n, bank.bank_name, bank.account_name, bank.account_number]);
-  run('UPDATE withdrawal_requests SET bank_account_id = ? WHERE id = ?', [bank.id, result.lastInsertRowid]);
+
+  // Prevent accidental double-click / rapid duplicate withdrawal submissions.
+  const recentDuplicate = get(`SELECT id, status FROM withdrawal_requests
+                               WHERE member_id = ? AND bank_account_id = ? AND amount = ?
+                                 AND status = 'PENDING'
+                                 AND created_at >= datetime('now', '-2 minutes')
+                               ORDER BY id DESC LIMIT 1`, [member.id, bank.id, n]);
+  if (recentDuplicate) {
+    res.json(200, { id: recentDuplicate.id, amount: n, status: recentDuplicate.status, duplicate_prevented: true });
+    return;
+  }
+
+  const result = run(`INSERT INTO withdrawal_requests (member_id, ledger_account_id, amount, bank_name, account_name, account_number, bank_account_id)
+                      VALUES (?, ?, ?, ?, ?, ?, ?)`, [member.id, account.id, n, bank.bank_name, bank.account_name, bank.account_number, bank.id]);
   res.json(201, { id: result.lastInsertRowid, amount: n, status: 'PENDING' });
 });
 
