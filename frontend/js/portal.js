@@ -116,6 +116,29 @@ async function refreshPlans(token) {
     : `<tr><td colspan="4" class="muted-note">No contribution plans proposed yet.</td></tr>`;
 }
 
+document.getElementById('btnSaveNow').addEventListener('click', async () => {
+  const token = OBIT.getSession('member');
+  const amount = Number(document.getElementById('saveAmount').value);
+  const box = document.getElementById('savingsAlert');
+  box.innerHTML = '';
+  if (!Number.isFinite(amount) || amount < 100) {
+    box.innerHTML = '<div class="alert alert-error">Enter at least ₦100.</div>';
+    return;
+  }
+  const btn = document.getElementById('btnSaveNow');
+  btn.disabled = true;
+  btn.textContent = 'Opening secure checkout…';
+  try {
+    const res = await OBIT.post('/api/payments/contributions/initialize', { amount }, { token });
+    if (!res.checkout_url || !res.checkout_url.startsWith('https://')) throw new Error('Secure checkout could not be created.');
+    window.location.href = res.checkout_url;
+  } catch (err) {
+    box.innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = 'Save Now with Paystack';
+  }
+});
+
 document.getElementById('btnCreatePlan').addEventListener('click', async () => {
   const token = OBIT.getSession('member');
   const amount = Number(document.getElementById('planAmount').value);
