@@ -85,11 +85,23 @@
       <!-- LOGGED IN VIEW -->
       <div id="loggedInView" style="display:none">
         <div class="app-header">
-          <div class="eyebrow green">MEMBER PORTAL — BETA</div>
+          <div class="eyebrow green">MEMBER PORTAL</div>
           <h1>Welcome back</h1>
         </div>
 
-        <div class="sandbox-banner">Ledger balances and contribution processing are not live yet — Release 2. Figures below are placeholders until then.</div>
+        <div class="sandbox-banner">Your membership account is active. Savings and contribution collection will be enabled after the cooperative ledger and reconciliation controls complete production testing.</div>
+
+        <div class="grid-2" style="margin-bottom:20px">
+          <div class="card">
+            <div class="muted-note">Membership status</div>
+            <div id="statusTile" style="font-size:24px;font-weight:800;margin-top:8px">—</div>
+          </div>
+          <div class="card">
+            <div class="muted-note">Savings balance</div>
+            <div id="balanceTile" style="font-size:24px;font-weight:800;margin-top:8px">₦0</div>
+            <div class="muted-note">Collection not yet enabled</div>
+          </div>
+        </div>
 
         <div class="card" style="margin-bottom:20px">
           <h2 style="margin-bottom:16px">Membership</h2>
@@ -97,7 +109,7 @@
         </div>
 
         <div class="card" style="margin-bottom:20px">
-          <h2 style="margin-bottom:16px">Propose a contribution plan</h2>
+          <h2 style="margin-bottom:6px">Savings goal</h2><p class="muted-note" style="margin-bottom:16px">Plan what you want to save toward. Creating a goal does not debit your account or collect money.</p>
           <div class="grid-2">
             <label class="field">Amount (₦)<input id="planAmount" type="number" min="0" /></label>
             <label class="field">Frequency
@@ -119,8 +131,11 @@
         </div>
 
         <div class="card">
-          <h2 style="margin-bottom:16px">Statement</h2>
+          <h2 style="margin-bottom:16px">Account statement</h2>
           <dl class="kv" id="statementSummary"></dl>
+          <div class="table-wrap" style="margin-top:18px">
+            <table class="app-table"><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Status</th></tr></thead><tbody id="transactionsBody"></tbody></table>
+          </div>
         </div>
       </div>
 
