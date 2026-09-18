@@ -91,6 +91,8 @@ async function loadDashboard() {
 
     await refreshPlans(token);
     await refreshTransactions(token);
+    await refreshReceipts(token);
+    await refreshWithdrawals(token);
 
     document.getElementById('loggedOutView').style.display = 'none';
     document.getElementById('loggedInView').style.display = '';
@@ -99,6 +101,20 @@ async function loadDashboard() {
     OBIT.clearSession('member');
     showAlert(err.message);
   }
+}
+
+async function refreshReceipts(token) {
+  const rows = await OBIT.get('/api/me/receipts', { token });
+  document.getElementById('receiptsBody').innerHTML = rows.length
+    ? rows.map(r => `<tr><td><span class="member-code">${r.receipt_number}</span></td><td>${r.issued_at || '—'}</td><td>₦${Number(r.amount).toLocaleString()}</td><td>${badge(r.status)}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted-note">No receipts yet.</td></tr>';
+}
+
+async function refreshWithdrawals(token) {
+  const rows = await OBIT.get('/api/me/withdrawals', { token });
+  document.getElementById('withdrawalsBody').innerHTML = rows.length
+    ? rows.map(r => `<tr><td>${r.created_at || '—'}</td><td>₦${Number(r.amount).toLocaleString()}</td><td>${r.bank_name}</td><td>${badge(r.status)}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted-note">No withdrawal requests.</td></tr>';
 }
 
 async function refreshTransactions(token) {
@@ -137,6 +153,22 @@ document.getElementById('btnSaveNow').addEventListener('click', async () => {
     btn.disabled = false;
     btn.textContent = 'Save Now with Paystack';
   }
+});
+
+document.getElementById('btnWithdraw').addEventListener('click', async () => {
+  const token = OBIT.getSession('member');
+  const payload = {
+    amount: Number(document.getElementById('withdrawAmount').value),
+    bank_name: document.getElementById('withdrawBank').value.trim(),
+    account_name: document.getElementById('withdrawAccountName').value.trim(),
+    account_number: document.getElementById('withdrawAccountNumber').value.trim()
+  };
+  const box = document.getElementById('withdrawAlert');
+  try {
+    const r = await OBIT.post('/api/me/withdrawals', payload, { token });
+    box.innerHTML = `<div class="alert alert-success">Withdrawal request submitted. Status: ${r.status}.</div>`;
+    await refreshWithdrawals(token);
+  } catch (err) { box.innerHTML = `<div class="alert alert-error">${err.message}</div>`; }
 });
 
 document.getElementById('btnCreatePlan').addEventListener('click', async () => {
