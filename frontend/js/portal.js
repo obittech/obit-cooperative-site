@@ -93,6 +93,8 @@ async function loadDashboard() {
     await refreshTransactions(token);
     await refreshReceipts(token);
     await refreshWithdrawals(token);
+    await refreshBankAccounts(token);
+    await loadBanks(token);
 
     document.getElementById('loggedOutView').style.display = 'none';
     document.getElementById('loggedInView').style.display = '';
@@ -108,6 +110,20 @@ async function refreshReceipts(token) {
   document.getElementById('receiptsBody').innerHTML = rows.length
     ? rows.map(r => `<tr><td><span class="member-code">${r.receipt_number}</span></td><td>${r.issued_at || '—'}</td><td>₦${Number(r.amount).toLocaleString()}</td><td>${badge(r.status)}</td></tr>`).join('')
     : '<tr><td colspan="4" class="muted-note">No receipts yet.</td></tr>';
+}
+
+async function loadBanks(token) {
+  const select = document.getElementById('verifyBank');
+  if (select.dataset.loaded) return;
+  const banks = await OBIT.get('/api/me/banks', { token });
+  select.innerHTML = '<option value="">Select bank</option>' + banks.map(b => `<option value="${b.code}" data-name="${b.name}">${b.name}</option>`).join('');
+  select.dataset.loaded = '1';
+}
+
+async function refreshBankAccounts(token) {
+  const rows = await OBIT.get('/api/me/bank-accounts', { token });
+  document.getElementById('withdrawBankAccount').innerHTML = '<option value="">Select verified account</option>' +
+    rows.map(r => `<option value="${r.id}">${r.bank_name} • ${r.account_number} • ${r.account_name}</option>`).join('');
 }
 
 async function refreshWithdrawals(token) {
@@ -155,13 +171,26 @@ document.getElementById('btnSaveNow').addEventListener('click', async () => {
   }
 });
 
+document.getElementById('btnVerifyBank').addEventListener('click', async () => {
+  const token = OBIT.getSession('member');
+  const select = document.getElementById('verifyBank');
+  const option = select.options[select.selectedIndex];
+  const box = document.getElementById('bankVerifyAlert');
+  try {
+    const r = await OBIT.post('/api/me/bank-accounts/verify', {
+      bank_code: select.value, bank_name: option?.dataset?.name || option?.text || '',
+      account_number: document.getElementById('verifyAccountNumber').value.trim()
+    }, { token });
+    box.innerHTML = `<div class="alert alert-success">Verified: ${r.account_name} • ${r.bank_name} • ${r.account_number}</div>`;
+    await refreshBankAccounts(token);
+  } catch (err) { box.innerHTML = `<div class="alert alert-error">${err.message}</div>`; }
+});
+
 document.getElementById('btnWithdraw').addEventListener('click', async () => {
   const token = OBIT.getSession('member');
   const payload = {
     amount: Number(document.getElementById('withdrawAmount').value),
-    bank_name: document.getElementById('withdrawBank').value.trim(),
-    account_name: document.getElementById('withdrawAccountName').value.trim(),
-    account_number: document.getElementById('withdrawAccountNumber').value.trim()
+    bank_account_id: Number(document.getElementById('withdrawBankAccount').value)
   };
   const box = document.getElementById('withdrawAlert');
   try {
