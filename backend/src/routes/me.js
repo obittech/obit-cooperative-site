@@ -78,11 +78,15 @@ meRouter.get('/api/me/transactions', requireAuth('member'), async (req, res) => 
 
 meRouter.get('/api/me/statement', requireAuth('member'), async (req, res) => {
   const member = memberForUser(req.user.id);
-  const account = get('SELECT * FROM ledger_accounts WHERE member_id = ?', [member.id]);
+  let account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
+  if (!account) {
+    run("INSERT OR IGNORE INTO ledger_accounts (member_id, account_type, balance, currency) VALUES (?, 'SAVINGS', 0, 'NGN')", [member.id]);
+    account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
+  }
   res.json(200, {
     member_code: member.member_code,
     balance: account?.balance ?? 0,
     currency: account?.currency ?? 'NGN',
-    sandbox_note: 'Ledger balances are not populated until Release 2 contribution processing is live.',
+    sandbox_note: 'Savings collection is not enabled yet. This balance is derived only from reconciled ledger entries.',
   });
 });
