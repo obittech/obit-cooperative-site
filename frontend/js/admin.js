@@ -85,7 +85,10 @@ async function refreshQueue(token) {
       const id = btn.dataset.decide;
       const decision = btn.dataset.decision;
       try {
-        await OBIT.post(`/api/admin/applications/${id}/decision`, { decision }, { token });
+        const result = await OBIT.post(`/api/admin/applications/${id}/decision`, { decision }, { token });
+        if (decision === 'APPROVE' && result.member?.member_code) {
+          alert(`Application approved. Permanent Member ID: ${result.member.member_code}`);
+        }
         await refreshQueue(token);
         const dash = await OBIT.get('/api/admin/dashboard', { token });
         document.getElementById('dashboardCards').querySelector('h2').textContent = dash.active_members;
