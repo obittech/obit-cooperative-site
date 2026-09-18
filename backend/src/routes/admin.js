@@ -124,9 +124,31 @@ adminRouter.post('/api/admin/withdrawals/:id/initiate-payout', requireAuth('admi
   });
   const payload = await response.json();
   if (!response.ok || !payload.status) throw new HttpError(502, payload.message || 'Could not initiate payout');
-  run('UPDATE withdrawal_requests SET transfer_reference = ? WHERE id = ?', [reference, w.id]);
+  run('UPDATE withdrawal_requests SET transfer_reference = ?, transfer_code = ? WHERE id = ?', [reference, payload.data?.transfer_code || null, w.id]);
   audit(req.user.id, 'WITHDRAWAL_PAYOUT_INITIATED', 'withdrawal_requests', w.id, { reference, paystack_status: payload.data?.status });
   res.json(200, { reference, provider_status: payload.data?.status || 'pending' });
+});
+
+adminRouter.post('/api/admin/withdrawals/:id/finalize-payout', requireAuth('admin'), async (req, res, params) => {
+  const w = get('SELECT * FROM withdrawal_requests WHERE id = ?', [params.id]);
+  if (!w) throw new HttpError(404, 'Withdrawal request not found');
+  if (w.status !== 'APPROVED') throw new HttpError(409, 'Withdrawal must be approved first');
+  if (!w.transfer_code || !w.transfer_reference) throw new HttpError(409, 'No OTP-authorized Paystack transfer is waiting for confirmation');
+
+  const otp = String(req.body?.otp || '').trim();
+  if (!/^\d{6}$/.test(otp)) throw new HttpError(400, 'Enter the 6-digit Paystack transfer OTP');
+
+  const key = process.env.PAYSTACK_SECRET_KEY;
+  if (!key) throw new HttpError(503, 'Paystack transfers are not configured');
+  const response = await fetch('https://api.paystack.co/transfer/finalize_transfer', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transfer_code: w.transfer_code, otp }),
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.status) throw new HttpError(502, payload.message || 'Could not finalize payout');
+  audit(req.user.id, 'WITHDRAWAL_PAYOUT_OTP_CONFIRMED', 'withdrawal_requests', w.id, { reference: w.transfer_reference, paystack_status: payload.data?.status });
+  res.json(200, { reference: w.transfer_reference, provider_status: payload.data?.status || 'pending' });
 });
 
 adminRouter.post('/api/admin/withdrawals/:id/mark-paid', requireAuth('admin'), async (req, res, params) => {
