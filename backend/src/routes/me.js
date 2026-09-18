@@ -70,6 +70,14 @@ meRouter.get('/api/me/contribution-plans', requireAuth('member'), async (req, re
   res.json(200, plans);
 });
 
+meRouter.get('/api/me/receipts', requireAuth('member'), async (req, res) => {
+  const member = memberForUser(req.user.id);
+  const rows = all(`SELECT r.receipt_number, r.issued_at, t.amount, t.currency, t.provider_reference, t.status
+                    FROM receipts r JOIN transactions t ON t.id = r.transaction_id
+                    WHERE t.member_id = ? ORDER BY r.issued_at DESC`, [member.id]);
+  res.json(200, rows);
+});
+
 meRouter.get('/api/me/transactions', requireAuth('member'), async (req, res) => {
   const member = memberForUser(req.user.id);
   const txns = all('SELECT * FROM transactions WHERE member_id = ? ORDER BY created_at DESC', [member.id]);
