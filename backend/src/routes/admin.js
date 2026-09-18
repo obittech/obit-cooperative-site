@@ -96,6 +96,30 @@ adminRouter.post('/api/admin/withdrawals/:id/decision', requireAuth('staff', 'ad
   res.json(200, get('SELECT * FROM withdrawal_requests WHERE id = ?', [w.id]));
 });
 
+adminRouter.post('/api/admin/withdrawals/:id/initiate-payout', requireAuth('admin'), async (req, res, params) => {
+  const w = get('SELECT * FROM withdrawal_requests WHERE id = ?', [params.id]);
+  if (!w) throw new HttpError(404, 'Withdrawal request not found');
+  if (w.status !== 'APPROVED') throw new HttpError(409, 'Withdrawal must be approved first');
+  const bank = get('SELECT * FROM member_bank_accounts WHERE id = ? AND member_id = ? AND verified_at IS NOT NULL', [w.bank_account_id, w.member_id]);
+  if (!bank?.recipient_code) throw new HttpError(409, 'A verified Paystack transfer recipient is required');
+  const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
+  if (!account || Number(account.balance) < Number(w.amount)) throw new HttpError(409, 'Insufficient current savings balance');
+
+  const key = process.env.PAYSTACK_SECRET_KEY;
+  if (!key) throw new HttpError(503, 'Paystack transfers are not configured');
+  const reference = `obit-wd-${w.id}-${Date.now()}`;
+  const response = await fetch('https://api.paystack.co/transfer', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source: 'balance', amount: Math.round(Number(w.amount) * 100), recipient: bank.recipient_code, reference, reason: 'Obit Cooperative savings withdrawal', currency: 'NGN' }),
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.status) throw new HttpError(502, payload.message || 'Could not initiate payout');
+  run('UPDATE withdrawal_requests SET transfer_reference = ? WHERE id = ?', [reference, w.id]);
+  audit(req.user.id, 'WITHDRAWAL_PAYOUT_INITIATED', 'withdrawal_requests', w.id, { reference, paystack_status: payload.data?.status });
+  res.json(200, { reference, provider_status: payload.data?.status || 'pending' });
+});
+
 adminRouter.post('/api/admin/withdrawals/:id/mark-paid', requireAuth('admin'), async (req, res, params) => {
   const w = get('SELECT * FROM withdrawal_requests WHERE id = ?', [params.id]);
   if (!w) throw new HttpError(404, 'Withdrawal request not found');
