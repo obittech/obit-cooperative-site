@@ -81,13 +81,16 @@ async function loadDashboard() {
       <dt>Orientation</dt><dd>${membership.community_onboarding.orientation_completed ? 'Completed' : 'Pending'}</dd>
     `;
 
+    document.getElementById('statusTile').innerHTML = badge(membership.status);
     const statement = await OBIT.get('/api/me/statement', { token });
+    document.getElementById('balanceTile').textContent = `₦${Number(statement.balance || 0).toLocaleString()}`;
     document.getElementById('statementSummary').innerHTML = `
       <dt>Balance</dt><dd>₦${statement.balance} ${statement.currency}</dd>
       <dt>Note</dt><dd class="muted-note" style="font-weight:400">${statement.sandbox_note || ''}</dd>
     `;
 
     await refreshPlans(token);
+    await refreshTransactions(token);
 
     document.getElementById('loggedOutView').style.display = 'none';
     document.getElementById('loggedInView').style.display = '';
@@ -96,6 +99,14 @@ async function loadDashboard() {
     OBIT.clearSession('member');
     showAlert(err.message);
   }
+}
+
+async function refreshTransactions(token) {
+  const txns = await OBIT.get('/api/me/transactions', { token });
+  const body = document.getElementById('transactionsBody');
+  body.innerHTML = txns.length
+    ? txns.map((t) => `<tr><td>${t.created_at || '—'}</td><td>${t.type || t.transaction_type || 'Transaction'}</td><td>₦${Number(t.amount || 0).toLocaleString()}</td><td>${badge(t.status)}</td></tr>`).join('')
+    : `<tr><td colspan="4" class="muted-note">No financial transactions yet.</td></tr>`;
 }
 
 async function refreshPlans(token) {
