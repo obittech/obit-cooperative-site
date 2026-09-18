@@ -63,6 +63,39 @@ adminRouter.post('/api/admin/applications/:id/decision', requireAuth('staff', 'a
   res.json(200, { application: updated, member: member ?? null });
 });
 
+adminRouter.get('/api/admin/finance/summary', requireAuth('staff', 'admin'), async (req, res) => {
+  const verified = get("SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS n FROM transactions WHERE type = 'CONTRIBUTION' AND status = 'VERIFIED'");
+  const balances = get("SELECT COALESCE(SUM(balance),0) AS total FROM ledger_accounts WHERE account_type = 'SAVINGS'");
+  const pendingWithdrawals = get("SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS n FROM withdrawal_requests WHERE status = 'PENDING'");
+  res.json(200, { verified_contributions: verified, member_savings_balances: balances.total, pending_withdrawals: pendingWithdrawals });
+});
+
+adminRouter.get('/api/admin/withdrawals', requireAuth('staff', 'admin'), async (req, res) => {
+  const rows = all(`SELECT w.*, m.member_code, a.full_legal_name
+                    FROM withdrawal_requests w
+                    JOIN members m ON m.id = w.member_id
+                    JOIN member_applications a ON a.id = m.application_id
+                    ORDER BY w.created_at DESC LIMIT 200`);
+  res.json(200, rows);
+});
+
+adminRouter.post('/api/admin/withdrawals/:id/decision', requireAuth('staff', 'admin'), async (req, res, params) => {
+  const w = get('SELECT * FROM withdrawal_requests WHERE id = ?', [params.id]);
+  if (!w) throw new HttpError(404, 'Withdrawal request not found');
+  if (w.status !== 'PENDING') throw new HttpError(409, 'Only pending withdrawals can be decided');
+  const { decision } = req.body || {};
+  if (!['APPROVE','REJECT'].includes(decision)) throw new HttpError(400, "decision must be 'APPROVE' or 'REJECT'");
+  if (decision === 'APPROVE') {
+    const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
+    if (!account || Number(account.balance) < Number(w.amount)) throw new HttpError(409, 'Insufficient current member balance');
+    run("UPDATE withdrawal_requests SET status = 'APPROVED', reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?", [req.user.id, w.id]);
+  } else {
+    run("UPDATE withdrawal_requests SET status = 'REJECTED', reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?", [req.user.id, w.id]);
+  }
+  audit(req.user.id, `WITHDRAWAL_${decision}`, 'withdrawal_requests', w.id, { amount: w.amount });
+  res.json(200, get('SELECT * FROM withdrawal_requests WHERE id = ?', [w.id]));
+});
+
 adminRouter.get('/api/admin/reconciliation/exceptions', requireAuth('staff', 'admin'), async (req, res) => {
   // Anything with a webhook event recorded but not marked processed, or a
   // payment stuck PENDING for a while, needs a human look.
@@ -70,7 +103,13 @@ adminRouter.get('/api/admin/reconciliation/exceptions', requireAuth('staff', 'ad
   const stuckPayments = all(
     `SELECT * FROM membership_payments WHERE status = 'PAYMENT_PENDING' AND created_at < datetime('now', '-1 day')`
   );
-  res.json(200, { stuck_webhooks: stuckWebhooks, stale_pending_payments: stuckPayments });
+  const staleContributions = all("SELECT * FROM transactions WHERE type = 'CONTRIBUTION' AND status = 'PENDING' AND created_at < datetime('now', '-1 hour')");
+  const balanceMismatch = get(`SELECT COALESCE(SUM(CASE direction WHEN 'credit' THEN amount ELSE -amount END),0) AS ledger_total
+                               FROM ledger_entries`);
+  const storedBalance = get("SELECT COALESCE(SUM(balance),0) AS total FROM ledger_accounts").total;
+  res.json(200, { stuck_webhooks: stuckWebhooks, stale_pending_payments: stuckPayments, stale_pending_contributions: staleContributions,
+                  ledger_total: balanceMismatch.ledger_total, stored_balance_total: storedBalance,
+                  ledger_balance_matches: Number(balanceMismatch.ledger_total) === Number(storedBalance) });
 });
 
 adminRouter.get('/api/admin/audit', requireAuth('staff', 'admin'), async (req, res) => {
