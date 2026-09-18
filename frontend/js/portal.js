@@ -171,19 +171,49 @@ document.getElementById('btnSaveNow').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('btnVerifyBank').addEventListener('click', async () => {
+let bankVerifyTimer;
+let lastBankVerification = '';
+
+async function verifyBankAccountAutomatically() {
   const token = OBIT.getSession('member');
   const select = document.getElementById('verifyBank');
+  const input = document.getElementById('verifyAccountNumber');
   const option = select.options[select.selectedIndex];
   const box = document.getElementById('bankVerifyAlert');
+  const accountNumber = input.value.trim();
+
+  if (!select.value || !/^\\d{10}$/.test(accountNumber)) {
+    box.innerHTML = '';
+    return;
+  }
+  const fingerprint = select.value + ':' + accountNumber;
+  if (fingerprint === lastBankVerification) return;
+  box.innerHTML = '<div class="muted-note">Verifying account…</div>';
   try {
     const r = await OBIT.post('/api/me/bank-accounts/verify', {
       bank_code: select.value, bank_name: option?.dataset?.name || option?.text || '',
-      account_number: document.getElementById('verifyAccountNumber').value.trim()
+      account_number: accountNumber
     }, { token });
-    box.innerHTML = `<div class="alert alert-success">Verified: ${r.account_name} • ${r.bank_name} • ${r.account_number}</div>`;
+    lastBankVerification = fingerprint;
+    box.innerHTML = `<div class="alert alert-success">✓ Verified: ${r.account_name} • ${r.bank_name} • ${r.account_number}</div>`;
     await refreshBankAccounts(token);
-  } catch (err) { box.innerHTML = `<div class="alert alert-error">${err.message}</div>`; }
+    document.getElementById('withdrawBankAccount').value = String(r.id);
+  } catch (err) {
+    lastBankVerification = '';
+    box.innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+  }
+}
+
+document.getElementById('verifyAccountNumber').addEventListener('input', () => {
+  clearTimeout(bankVerifyTimer);
+  const digits = document.getElementById('verifyAccountNumber').value.replace(/\\D/g, '').slice(0, 10);
+  document.getElementById('verifyAccountNumber').value = digits;
+  if (digits.length === 10) bankVerifyTimer = setTimeout(verifyBankAccountAutomatically, 350);
+  else document.getElementById('bankVerifyAlert').innerHTML = '';
+});
+document.getElementById('verifyBank').addEventListener('change', () => {
+  lastBankVerification = '';
+  if (document.getElementById('verifyAccountNumber').value.length === 10) verifyBankAccountAutomatically();
 });
 
 document.getElementById('btnWithdraw').addEventListener('click', async () => {
