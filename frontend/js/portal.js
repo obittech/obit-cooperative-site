@@ -182,7 +182,7 @@ async function verifyBankAccountAutomatically() {
   const box = document.getElementById('bankVerifyAlert');
   const accountNumber = input.value.trim();
 
-  if (!select.value || !/^\\d{10}$/.test(accountNumber)) {
+  if (!select.value || !/^\d{10}$/.test(accountNumber)) {
     box.innerHTML = '';
     return;
   }
@@ -206,7 +206,7 @@ async function verifyBankAccountAutomatically() {
 
 document.getElementById('verifyAccountNumber').addEventListener('input', () => {
   clearTimeout(bankVerifyTimer);
-  const digits = document.getElementById('verifyAccountNumber').value.replace(/\\D/g, '').slice(0, 10);
+  const digits = document.getElementById('verifyAccountNumber').value.replace(/\D/g, '').slice(0, 10);
   document.getElementById('verifyAccountNumber').value = digits;
   if (digits.length === 10) bankVerifyTimer = setTimeout(verifyBankAccountAutomatically, 350);
   else document.getElementById('bankVerifyAlert').innerHTML = '';
