@@ -24,7 +24,16 @@ meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
   const member = memberForUser(req.user.id);
   const application = get('SELECT * FROM member_applications WHERE id = ?', [member.application_id]);
   const kyc = get('SELECT status, verified_at FROM kyc_checks WHERE application_id = ? ORDER BY id DESC LIMIT 1', [member.application_id]);
-  const payment = get('SELECT status, verified_at, amount, currency FROM membership_payments WHERE application_id = ? ORDER BY id DESC LIMIT 1', [member.application_id]);
+  const payment = get(
+    `SELECT status, verified_at, amount, currency
+     FROM membership_payments
+     WHERE application_id = ?
+     ORDER BY CASE status WHEN 'PAYMENT_VERIFIED' THEN 0 ELSE 1 END,
+              COALESCE(verified_at, created_at) DESC,
+              id DESC
+     LIMIT 1`,
+    [member.application_id]
+  );
   const onboarding = get('SELECT whatsapp_joined, orientation_completed FROM community_onboarding WHERE member_id = ?', [member.id]);
 
   res.json(200, {
