@@ -84,6 +84,26 @@ meRouter.get('/api/me/transactions', requireAuth('member'), async (req, res) => 
   res.json(200, txns);
 });
 
+meRouter.get('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
+  const member = memberForUser(req.user.id);
+  res.json(200, all('SELECT id, amount, bank_name, account_name, account_number, status, reviewed_at, created_at FROM withdrawal_requests WHERE member_id = ? ORDER BY created_at DESC', [member.id]));
+});
+
+meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
+  const member = memberForUser(req.user.id);
+  const { amount, bank_name, account_name, account_number } = req.body || {};
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n <= 0) throw new HttpError(400, 'Enter a valid withdrawal amount');
+  if (!bank_name || !account_name || !account_number) throw new HttpError(400, 'Bank name, account name and account number are required');
+  const account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
+  if (!account || n > Number(account.balance)) throw new HttpError(409, 'Withdrawal amount exceeds available savings balance');
+  const pending = get("SELECT COALESCE(SUM(amount),0) AS total FROM withdrawal_requests WHERE member_id = ? AND status IN ('PENDING','APPROVED')", [member.id]);
+  if (n > Number(account.balance) - Number(pending.total || 0)) throw new HttpError(409, 'Amount exceeds balance available after pending withdrawal requests');
+  const result = run(`INSERT INTO withdrawal_requests (member_id, ledger_account_id, amount, bank_name, account_name, account_number)
+                      VALUES (?, ?, ?, ?, ?, ?)`, [member.id, account.id, n, bank_name.trim(), account_name.trim(), account_number.trim()]);
+  res.json(201, { id: result.lastInsertRowid, amount: n, status: 'PENDING' });
+});
+
 meRouter.get('/api/me/statement', requireAuth('member'), async (req, res) => {
   const member = memberForUser(req.user.id);
   let account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
