@@ -60,19 +60,17 @@
               <input id="loginPassword" type="password" />
             </label>
             <button class="btn btn-primary btn-block" id="btnLogin">Log In</button>
-            <p class="muted-note">Portal access opens once your membership payment is verified. Applied recently? <a href="apply.html">Check your application</a>.</p>
+            <p class="muted-note">Portal access opens once your membership application is approved and activated. Applied recently? <a href="apply.html">Check your application</a>.</p>
           </div>
 
           <div id="setupForm" style="display:none">
-            <p class="muted-note" style="margin-bottom:14px">Step 1: request a setup code using your application ID. In this sandbox, the code is printed to the backend's server log rather than sent by SMS/email.</p>
-            <label class="field">Application ID
-              <input id="setupAppId" type="number" placeholder="e.g. 1" />
+            <p class="muted-note" style="margin-bottom:14px">Enter the email address used for your approved membership. We'll send a 6-digit verification code to that email.</p>
+            <label class="field">Registered email
+              <input id="setupIdentifier" type="email" placeholder="you@example.com" autocomplete="email" />
             </label>
             <button class="btn btn-secondary btn-block" id="btnRequestSetup" style="margin-bottom:18px">Request Setup Code</button>
 
-            <label class="field">User ID (returned above)
-              <input id="setupUserId" type="number" />
-            </label>
+            <input id="setupUserId" type="hidden" />
             <label class="field">Setup code
               <input id="setupCode" placeholder="6-digit code" />
             </label>
