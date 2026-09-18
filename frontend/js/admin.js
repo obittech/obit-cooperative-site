@@ -137,12 +137,24 @@ async function refreshWithdrawals(token) {
     <td>${badge(w.status)}</td><td>${w.status === 'PENDING' ? `
       <button class="btn btn-secondary" data-wid="${w.id}" data-wdecision="APPROVE">Approve</button>
       <button class="btn btn-secondary" data-wid="${w.id}" data-wdecision="REJECT">Reject</button>` :
-      w.status === 'APPROVED' ? `<button class="btn btn-primary" data-payout="${w.id}">Initiate Test Payout</button>` : '—'}</td>
+      w.status === 'APPROVED' ? (w.transfer_reference
+        ? `<button class="btn btn-primary" data-finalize-payout="${w.id}">Enter Paystack OTP</button>`
+        : `<button class="btn btn-primary" data-payout="${w.id}">Initiate Test Payout</button>`) : '—'}</td>
   </tr>`).join('') || '<tr><td colspan="5" class="muted-note">No withdrawal requests.</td></tr>';
 
   document.querySelectorAll('[data-wdecision]').forEach(btn => btn.addEventListener('click', async () => {
     try {
       await OBIT.post(`/api/admin/withdrawals/${btn.dataset.wid}/decision`, { decision: btn.dataset.wdecision }, { token });
+      await refreshWithdrawals(token);
+    } catch (err) { alert(err.message); }
+  }));
+  document.querySelectorAll('[data-finalize-payout]').forEach(btn => btn.addEventListener('click', async () => {
+    const otp = prompt('Enter the 6-digit Paystack transfer OTP sent to the business contact.');
+    if (otp === null) return;
+    if (!/^\d{6}$/.test(otp.trim())) return alert('Enter a valid 6-digit OTP.');
+    try {
+      const r = await OBIT.post(`/api/admin/withdrawals/${btn.dataset.finalizePayout}/finalize-payout`, { otp: otp.trim() }, { token });
+      alert(`OTP accepted. Provider status: ${r.provider_status}. Ledger debit will occur only after transfer.success confirmation.`);
       await refreshWithdrawals(token);
     } catch (err) { alert(err.message); }
   }));
