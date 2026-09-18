@@ -19,6 +19,10 @@ export function migrate() {
   const schemaPath = path.join(__dirname, '..', 'migrations', 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
   db.exec(schema);
+  // Forward-compatible SQLite upgrades for existing persistent databases.
+  const withdrawalCols = all('PRAGMA table_info(withdrawal_requests)').map((r) => r.name);
+  if (!withdrawalCols.includes('bank_account_id')) db.exec('ALTER TABLE withdrawal_requests ADD COLUMN bank_account_id INTEGER REFERENCES member_bank_accounts(id)');
+  if (!withdrawalCols.includes('transfer_reference')) db.exec('ALTER TABLE withdrawal_requests ADD COLUMN transfer_reference TEXT');
 }
 
 // Small helpers so route files read like plain SQL, not ORM boilerplate.
