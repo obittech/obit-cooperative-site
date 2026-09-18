@@ -4,6 +4,33 @@ function showAlert(message, type = 'error') {
   document.getElementById('alertBox').innerHTML = `<div class="alert alert-${type}">${message}</div>`;
 }
 
+document.getElementById('btnShowAdminSetup').addEventListener('click', () => {
+  const panel = document.getElementById('adminSetup');
+  panel.style.display = panel.style.display === 'none' ? '' : 'none';
+});
+
+document.getElementById('btnAdminCode').addEventListener('click', async () => {
+  try {
+    const email = document.getElementById('adminSetupEmail').value.trim();
+    const r = await OBIT.post('/api/auth/request-admin-setup', { email });
+    document.getElementById('adminSetupUserId').value = r.user_id;
+    showAlert('Activation code sent. Check the authorized admin mailbox.', 'success');
+  } catch (err) { showAlert(err.message); }
+});
+
+document.getElementById('btnAdminActivate').addEventListener('click', async () => {
+  try {
+    await OBIT.post('/api/auth/set-admin-password', {
+      user_id: Number(document.getElementById('adminSetupUserId').value),
+      setup_code: document.getElementById('adminSetupCode').value.trim(),
+      password: document.getElementById('adminSetupPassword').value
+    });
+    showAlert('Super Admin activated. You can now log in with your admin email and new password.', 'success');
+    document.getElementById('loginIdentifier').value = document.getElementById('adminSetupEmail').value.trim();
+    document.getElementById('adminSetup').style.display = 'none';
+  } catch (err) { showAlert(err.message); }
+});
+
 document.getElementById('btnLogin').addEventListener('click', async () => {
   const identifier = document.getElementById('loginIdentifier').value;
   const password = document.getElementById('loginPassword').value;
