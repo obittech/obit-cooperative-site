@@ -17,12 +17,12 @@ function switchTab(which) {
 
 document.getElementById('btnRequestSetup').addEventListener('click', async () => {
   clearAlert();
-  const appId = document.getElementById('setupAppId').value;
-  if (!appId) return showAlert('Enter your application ID.');
+  const identifier = document.getElementById('setupIdentifier').value.trim();
+  if (!identifier) return showAlert('Enter your registered email address.');
   try {
-    const res = await OBIT.post('/api/auth/request-portal-setup', { application_id: Number(appId) });
+    const res = await OBIT.post('/api/auth/request-portal-setup', { identifier });
     document.getElementById('setupUserId').value = res.user_id;
-    showAlert(`${res.sandbox_note} (User ID prefilled below.)`, 'success');
+    showAlert(res.message || 'Verification code sent. Check your email.', 'success');
   } catch (err) { showAlert(err.message); }
 });
 
