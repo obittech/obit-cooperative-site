@@ -149,10 +149,14 @@
           <h2 style="margin-bottom:6px">Request withdrawal</h2>
           <p class="muted-note" style="margin-bottom:16px">Requests are reviewed before payout. Submitting a request does not immediately debit your savings.</p>
           <div class="grid-2">
+            <label class="field">Bank<select id="verifyBank"><option value="">Select bank</option></select></label>
+            <label class="field">Account number<input id="verifyAccountNumber" inputmode="numeric" maxlength="10" /></label>
+          </div>
+          <button class="btn btn-secondary" id="btnVerifyBank" style="margin-bottom:18px">Verify Bank Account</button>
+          <div id="bankVerifyAlert" style="margin-bottom:14px"></div>
+          <div class="grid-2">
             <label class="field">Amount (₦)<input id="withdrawAmount" type="number" min="1" /></label>
-            <label class="field">Bank name<input id="withdrawBank" /></label>
-            <label class="field">Account name<input id="withdrawAccountName" /></label>
-            <label class="field">Account number<input id="withdrawAccountNumber" inputmode="numeric" /></label>
+            <label class="field">Verified payout account<select id="withdrawBankAccount"><option value="">Select verified account</option></select></label>
           </div>
           <button class="btn btn-secondary" id="btnWithdraw">Submit Withdrawal Request</button>
           <div id="withdrawAlert" style="margin-top:12px"></div>
