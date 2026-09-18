@@ -11,6 +11,7 @@
 import { Router, HttpError } from '../router.js';
 import { get, run } from '../db.js';
 import { audit } from '../utils/audit.js';
+import { requireAuth } from '../middleware/auth.js';
 import crypto from 'node:crypto';
 import https from 'node:https';
 
@@ -62,6 +63,40 @@ function initializePaystackTransaction({ email, amountNaira, reference }) {
     req.end();
   });
 }
+
+paymentsRouter.post('/api/payments/contributions/initialize', requireAuth('member'), async (req, res) => {
+  const { amount, plan_id } = req.body || {};
+  const amountNaira = Number(amount);
+  if (!Number.isFinite(amountNaira) || amountNaira < 100) throw new HttpError(400, 'Contribution amount must be at least ₦100');
+
+  const member = get('SELECT * FROM members WHERE user_id = ?', [req.user.id]);
+  if (!member || member.status !== 'ACTIVE') throw new HttpError(403, 'Active membership required');
+
+  const user = get('SELECT email FROM users WHERE id = ?', [req.user.id]);
+  const application = get('SELECT email FROM member_applications WHERE id = ?', [member.application_id]);
+  const email = user?.email || application?.email;
+  if (!email) throw new HttpError(400, 'Member email is required');
+
+  if (plan_id) {
+    const plan = get('SELECT * FROM contribution_plans WHERE id = ? AND member_id = ?', [plan_id, member.id]);
+    if (!plan) throw new HttpError(404, 'Savings goal not found');
+  }
+
+  const reference = `OBIT-SAV-${member.id}-${crypto.randomBytes(6).toString('hex')}`;
+  run(`INSERT INTO transactions (member_id, type, amount, currency, provider_reference, status)
+       VALUES (?, 'CONTRIBUTION', ?, 'NGN', ?, 'PENDING')`,
+      [member.id, amountNaira, reference]);
+
+  try {
+    const paystackData = await initializePaystackTransaction({ email, amountNaira, reference });
+    audit(req.user.id, 'CONTRIBUTION_INITIALIZED', 'members', member.id, { reference, amount: amountNaira, plan_id: plan_id || null });
+    return res.json(201, { reference, amount: amountNaira, currency: 'NGN', checkout_url: paystackData.authorization_url });
+  } catch (err) {
+    run("UPDATE transactions SET status = 'FAILED' WHERE provider_reference = ?", [reference]);
+    audit(req.user.id, 'CONTRIBUTION_INIT_FAILED', 'members', member.id, { reference, error: err.message });
+    throw new HttpError(502, `Could not start contribution checkout: ${err.message}`);
+  }
+});
 
 paymentsRouter.post('/api/payments/membership/initialize', async (req, res) => {
   const { application_id, provider } = req.body || {};
