@@ -84,6 +84,49 @@ meRouter.get('/api/me/transactions', requireAuth('member'), async (req, res) => 
   res.json(200, txns);
 });
 
+async function paystack(path, options = {}) {
+  const key = process.env.PAYSTACK_SECRET_KEY;
+  if (!key) throw new HttpError(503, 'Bank verification is not configured');
+  const response = await fetch(`https://api.paystack.co${path}`, {
+    ...options,
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+  const data = await response.json();
+  if (!response.ok || !data.status) throw new HttpError(502, data.message || 'Paystack request failed');
+  return data.data;
+}
+
+meRouter.get('/api/me/banks', requireAuth('member'), async (req, res) => {
+  const data = await paystack('/bank?country=nigeria&currency=NGN');
+  res.json(200, data.filter(b => b.active !== false).map(b => ({ name: b.name, code: b.code })));
+});
+
+meRouter.post('/api/me/bank-accounts/verify', requireAuth('member'), async (req, res) => {
+  const member = memberForUser(req.user.id);
+  const { account_number, bank_code, bank_name } = req.body || {};
+  if (!/^\d{10}$/.test(String(account_number || ''))) throw new HttpError(400, 'Enter a valid 10-digit Nigerian account number');
+  if (!bank_code || !bank_name) throw new HttpError(400, 'Select a bank');
+
+  const resolved = await paystack(`/bank/resolve?account_number=${encodeURIComponent(account_number)}&bank_code=${encodeURIComponent(bank_code)}`);
+  const recipient = await paystack('/transferrecipient', {
+    method: 'POST',
+    body: JSON.stringify({ type: 'nuban', name: resolved.account_name, account_number, bank_code, currency: 'NGN' }),
+  });
+
+  run(`INSERT INTO member_bank_accounts (member_id, bank_code, bank_name, account_number, account_name, recipient_code, verified_at)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(member_id, bank_code, account_number) DO UPDATE SET
+       bank_name=excluded.bank_name, account_name=excluded.account_name, recipient_code=excluded.recipient_code, verified_at=datetime('now')`,
+      [member.id, bank_code, bank_name, account_number, resolved.account_name, recipient.recipient_code]);
+  const row = get('SELECT * FROM member_bank_accounts WHERE member_id = ? AND bank_code = ? AND account_number = ?', [member.id, bank_code, account_number]);
+  res.json(200, { id: row.id, bank_name: row.bank_name, account_number: row.account_number, account_name: row.account_name, verified: true });
+});
+
+meRouter.get('/api/me/bank-accounts', requireAuth('member'), async (req, res) => {
+  const member = memberForUser(req.user.id);
+  res.json(200, all('SELECT id, bank_name, account_number, account_name, verified_at FROM member_bank_accounts WHERE member_id = ? ORDER BY verified_at DESC', [member.id]));
+});
+
 meRouter.get('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
   const member = memberForUser(req.user.id);
   res.json(200, all('SELECT id, amount, bank_name, account_name, account_number, status, reviewed_at, created_at FROM withdrawal_requests WHERE member_id = ? ORDER BY created_at DESC', [member.id]));
@@ -91,16 +134,18 @@ meRouter.get('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
 
 meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
   const member = memberForUser(req.user.id);
-  const { amount, bank_name, account_name, account_number } = req.body || {};
+  const { amount, bank_account_id } = req.body || {};
   const n = Number(amount);
   if (!Number.isFinite(n) || n <= 0) throw new HttpError(400, 'Enter a valid withdrawal amount');
-  if (!bank_name || !account_name || !account_number) throw new HttpError(400, 'Bank name, account name and account number are required');
+  const bank = get('SELECT * FROM member_bank_accounts WHERE id = ? AND member_id = ? AND verified_at IS NOT NULL', [bank_account_id, member.id]);
+  if (!bank) throw new HttpError(400, 'Select a verified bank account');
   const account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
   if (!account || n > Number(account.balance)) throw new HttpError(409, 'Withdrawal amount exceeds available savings balance');
   const pending = get("SELECT COALESCE(SUM(amount),0) AS total FROM withdrawal_requests WHERE member_id = ? AND status IN ('PENDING','APPROVED')", [member.id]);
   if (n > Number(account.balance) - Number(pending.total || 0)) throw new HttpError(409, 'Amount exceeds balance available after pending withdrawal requests');
   const result = run(`INSERT INTO withdrawal_requests (member_id, ledger_account_id, amount, bank_name, account_name, account_number)
-                      VALUES (?, ?, ?, ?, ?, ?)`, [member.id, account.id, n, bank_name.trim(), account_name.trim(), account_number.trim()]);
+                      VALUES (?, ?, ?, ?, ?, ?)`, [member.id, account.id, n, bank.bank_name, bank.account_name, bank.account_number]);
+  run('UPDATE withdrawal_requests SET bank_account_id = ? WHERE id = ?', [bank.id, result.lastInsertRowid]);
   res.json(201, { id: result.lastInsertRowid, amount: n, status: 'PENDING' });
 });
 
