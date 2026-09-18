@@ -39,6 +39,15 @@
           <label class="field">Email<input id="loginIdentifier" /></label>
           <label class="field">Password<input id="loginPassword" type="password" /></label>
           <button class="btn btn-primary btn-block" id="btnLogin">Log In</button>
+          <button class="btn btn-ghost btn-block" id="btnShowAdminSetup" style="margin-top:10px">First Super Admin? Activate Account</button>
+          <div id="adminSetup" style="display:none;margin-top:18px">
+            <label class="field">Authorized admin email<input id="adminSetupEmail" type="email" autocomplete="email" /></label>
+            <button class="btn btn-secondary btn-block" id="btnAdminCode">Send Activation Code</button>
+            <input id="adminSetupUserId" type="hidden" />
+            <label class="field" style="margin-top:14px">6-digit activation code<input id="adminSetupCode" inputmode="numeric" maxlength="6" /></label>
+            <label class="field">New admin password<input id="adminSetupPassword" type="password" autocomplete="new-password" placeholder="At least 12 characters" /></label>
+            <button class="btn btn-primary btn-block" id="btnAdminActivate">Activate Super Admin</button>
+          </div>
         </div>
       </div>
 
