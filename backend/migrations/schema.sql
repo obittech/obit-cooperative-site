@@ -162,6 +162,19 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
   UNIQUE(ledger_account_id, transaction_id, direction)
 );
 
+CREATE TABLE IF NOT EXISTS member_bank_accounts (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  member_id         INTEGER NOT NULL REFERENCES members(id),
+  bank_code         TEXT NOT NULL,
+  bank_name         TEXT NOT NULL,
+  account_number    TEXT NOT NULL,
+  account_name      TEXT NOT NULL,
+  recipient_code    TEXT,
+  verified_at       TEXT,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(member_id, bank_code, account_number)
+);
+
 CREATE TABLE IF NOT EXISTS withdrawal_requests (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
   member_id         INTEGER NOT NULL REFERENCES members(id),
@@ -170,6 +183,8 @@ CREATE TABLE IF NOT EXISTS withdrawal_requests (
   bank_name         TEXT,
   account_name      TEXT,
   account_number    TEXT,
+  bank_account_id   INTEGER REFERENCES member_bank_accounts(id),
+  transfer_reference TEXT,
   status            TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED','PAID','CANCELLED')),
   reviewed_by       INTEGER REFERENCES users(id),
   reviewed_at       TEXT,
