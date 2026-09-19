@@ -136,11 +136,17 @@ meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => 
   const member = memberForUser(req.user.id);
   const { amount, bank_account_id } = req.body || {};
   const n = Number(amount);
-  if (!Number.isFinite(n) || n <= 0) throw new HttpError(400, 'Enter a valid withdrawal amount');
+  if (!Number.isFinite(n) || n <= 0 || !Number.isSafeInteger(Math.round(n * 100))) throw new HttpError(400, 'Enter a valid withdrawal amount');
+  const minWithdrawal = Number(process.env.MIN_WITHDRAWAL_NGN || 100);
+  const maxWithdrawal = Number(process.env.MAX_WITHDRAWAL_NGN || 500000);
+  if (n < minWithdrawal || n > maxWithdrawal) throw new HttpError(400, `Withdrawal must be between ₦${minWithdrawal.toLocaleString()} and ₦${maxWithdrawal.toLocaleString()}`);
   const bank = get('SELECT * FROM member_bank_accounts WHERE id = ? AND member_id = ? AND verified_at IS NOT NULL', [bank_account_id, member.id]);
   if (!bank) throw new HttpError(400, 'Select a verified bank account');
   const account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
   if (!account || n > Number(account.balance)) throw new HttpError(409, 'Withdrawal amount exceeds available savings balance');
+  const daily = get("SELECT COALESCE(SUM(amount),0) AS total FROM withdrawal_requests WHERE member_id = ? AND status IN ('APPROVED','PAID') AND created_at >= datetime('now','-24 hours')", [member.id]);
+  const dailyLimit = Number(process.env.DAILY_WITHDRAWAL_LIMIT_NGN || 1000000);
+  if (Number(daily.total || 0) + n > dailyLimit) throw new HttpError(409, 'Daily withdrawal limit exceeded. Contact Obit support for review.');
   const pending = get("SELECT COALESCE(SUM(amount),0) AS total FROM withdrawal_requests WHERE member_id = ? AND status IN ('PENDING','APPROVED')", [member.id]);
   if (n > Number(account.balance) - Number(pending.total || 0)) throw new HttpError(409, 'Amount exceeds balance available after pending withdrawal requests');
 
