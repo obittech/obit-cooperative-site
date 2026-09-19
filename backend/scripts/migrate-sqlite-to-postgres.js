@@ -38,7 +38,11 @@ try {
     for (const row of rows) {
       const vals = common.map(c => row[c]);
       const qs = vals.map((_,i)=>'$'+(i+1)).join(',');
-      await target.query(`INSERT INTO ${table} (${common.map(c=>'"'+c+'"').join(',')}) VALUES (${qs}) ON CONFLICT DO NOTHING`, vals);
+      await target.query(
+        `INSERT INTO ${table} (${common.map(c=>'"'+c+'"').join(',')}) VALUES (${qs})
+         ON CONFLICT (id) DO UPDATE SET ${common.filter(c=>c!=='id').map((c,i)=>`"${c}"=EXCLUDED."${c}"`).join(',')}`,
+        vals
+      );
     }
   }
   for (const table of tables) {
