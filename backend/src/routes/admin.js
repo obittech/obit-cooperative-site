@@ -5,7 +5,7 @@
 // in the handover's status flow.
 
 import { Router, HttpError } from '../router.js';
-import { get, all, run } from '../db.js';
+import { get, all, run, atomic } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { audit } from '../utils/audit.js';
 import { generateMemberCode } from '../utils/auth.js';
@@ -169,17 +169,20 @@ adminRouter.post('/api/admin/withdrawals/:id/reconcile-payout', requireAuth('adm
 
   const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
   if (!account || Number(account.balance) < Number(w.amount)) throw new HttpError(409, 'Insufficient current savings balance');
-  let tx = get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'WITHDRAWAL'", [w.transfer_reference]);
-  if (!tx) {
-    const created = run(`INSERT INTO transactions (member_id, type, amount, currency, provider_reference, status) VALUES (?, 'WITHDRAWAL', ?, 'NGN', ?, 'VERIFIED')`, [w.member_id, w.amount, w.transfer_reference]);
-    tx = get('SELECT * FROM transactions WHERE id = ?', [Number(created.lastInsertRowid)]);
-  }
-  const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount) VALUES (?, ?, 'debit', ?)", [account.id, tx.id, w.amount]);
-  if (Number(entry.changes) > 0) run('UPDATE ledger_accounts SET balance = balance - ? WHERE id = ?', [w.amount, account.id]);
-  run("UPDATE withdrawal_requests SET status = 'PAID', reviewed_at = datetime('now') WHERE id = ?", [w.id]);
-  const receiptNo = `OBW-${new Date().getUTCFullYear()}-${String(tx.id).padStart(8, '0')}`;
-  run('INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)', [tx.id, receiptNo]);
-  audit(req.user.id, 'WITHDRAWAL_RECONCILED_FROM_PAYSTACK', 'withdrawal_requests', w.id, { reference: w.transfer_reference, receiptNo });
+  let receiptNo;
+  atomic(() => {
+    let tx = get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'WITHDRAWAL'", [w.transfer_reference]);
+    if (!tx) {
+      const created = run(`INSERT INTO transactions (member_id, type, amount, currency, provider_reference, status) VALUES (?, 'WITHDRAWAL', ?, 'NGN', ?, 'VERIFIED')`, [w.member_id, w.amount, w.transfer_reference]);
+      tx = get('SELECT * FROM transactions WHERE id = ?', [Number(created.lastInsertRowid)]);
+    }
+    const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount) VALUES (?, ?, 'debit', ?)", [account.id, tx.id, w.amount]);
+    if (Number(entry.changes) > 0) run('UPDATE ledger_accounts SET balance = balance - ? WHERE id = ?', [w.amount, account.id]);
+    run("UPDATE withdrawal_requests SET status = 'PAID', reviewed_at = datetime('now') WHERE id = ?", [w.id]);
+    receiptNo = `OBW-${new Date().getUTCFullYear()}-${String(tx.id).padStart(8, '0')}`;
+    run('INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)', [tx.id, receiptNo]);
+    audit(req.user.id, 'WITHDRAWAL_RECONCILED_FROM_PAYSTACK', 'withdrawal_requests', w.id, { reference: w.transfer_reference, receiptNo });
+  });
   res.json(200, { status: 'PAID', provider_status: payload.data.status, receipt_number: receiptNo });
 });
 
