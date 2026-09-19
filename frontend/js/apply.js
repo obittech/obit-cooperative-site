@@ -119,8 +119,10 @@ async function startKyc() {
     const session = await OBIT.post('/api/kyc/session', { application_id: state.applicationId });
     state.kycSessionRef = session.session_ref;
     localStorage.setItem('obit_kyc_session_ref', session.session_ref);
-    renderKycStatus('KYC_PENDING', session.sandbox_note);
-    document.getElementById('btnSimulateVerified').style.display = '';
+    renderKycStatus('KYC_PENDING', session.message);
+    document.getElementById('kycIdentityFields').style.display = '';
+    document.getElementById('btnVerifyDojah').style.display = '';
+    document.getElementById('btnStartKyc').style.display = 'none';
   } catch (err) {
     showAlert(err.message);
   }
@@ -200,7 +202,11 @@ async function restoreExistingApplication() {
     if (target === 'kyc' && state.kycSessionRef) {
       const check = await OBIT.get(`/api/kyc/${state.kycSessionRef}/status`);
       renderKycStatus(check.status);
-      if (check.status !== 'KYC_VERIFIED') document.getElementById('btnSimulateVerified').style.display = '';
+      if (check.status !== 'KYC_VERIFIED') {
+        document.getElementById('kycIdentityFields').style.display = '';
+        document.getElementById('btnVerifyDojah').style.display = '';
+        document.getElementById('btnStartKyc').style.display = 'none';
+      }
     }
   } catch {
     // Application id is stale (e.g. different backend/DB) — start fresh.
@@ -214,7 +220,7 @@ document.getElementById('btnStartOrSave').addEventListener('click', saveProfileA
 document.getElementById('btnBackToProfile').addEventListener('click', () => goToStep('profile'));
 document.getElementById('btnSubmitApplication').addEventListener('click', submitApplication);
 document.getElementById('btnStartKyc').addEventListener('click', startKyc);
-document.getElementById('btnSimulateVerified').addEventListener('click', simulateKycVerified);
+document.getElementById('btnVerifyDojah').addEventListener('click', verifyDojahKyc);
 document.getElementById('btnInitPayment').addEventListener('click', initPayment);
 
 restoreExistingApplication();
