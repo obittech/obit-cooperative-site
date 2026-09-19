@@ -37,7 +37,14 @@ document.getElementById('btnLogin').addEventListener('click', async () => {
   try {
     const res = await OBIT.post('/api/auth/login', { identifier, password });
     if (!['staff', 'admin'].includes(res.role)) throw new Error('This login is for staff/admin accounts only.');
-    OBIT.saveSession('staff', res.token);
+    if (res.mfa_required) {
+      const code = prompt('A 6-digit Admin login code was sent to your authorized email. Enter it here.');
+      if (code === null) return;
+      const verified = await OBIT.post('/api/auth/admin-mfa', { user_id: res.user_id, code: code.trim() });
+      OBIT.saveSession('staff', verified.token);
+    } else {
+      OBIT.saveSession('staff', res.token);
+    }
     await loadAll();
   } catch (err) { showAlert(err.message); }
 });
