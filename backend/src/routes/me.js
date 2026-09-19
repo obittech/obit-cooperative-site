@@ -136,7 +136,8 @@ meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => 
   const member = memberForUser(req.user.id);
   const { amount, bank_account_id } = req.body || {};
   const n = Number(amount);
-  if (!Number.isFinite(n) || n <= 0 || !Number.isSafeInteger(Math.round(n * 100))) throw new HttpError(400, 'Enter a valid withdrawal amount');
+  const amountKobo = Math.round(n * 100);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isSafeInteger(amountKobo)) throw new HttpError(400, 'Enter a valid withdrawal amount');
   const minWithdrawal = Number(process.env.MIN_WITHDRAWAL_NGN || 100);
   const maxWithdrawal = Number(process.env.MAX_WITHDRAWAL_NGN || 500000);
   if (n < minWithdrawal || n > maxWithdrawal) throw new HttpError(400, `Withdrawal must be between ₦${minWithdrawal.toLocaleString()} and ₦${maxWithdrawal.toLocaleString()}`);
@@ -161,8 +162,8 @@ meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => 
     return;
   }
 
-  const result = run(`INSERT INTO withdrawal_requests (member_id, ledger_account_id, amount, bank_name, account_name, account_number, bank_account_id)
-                      VALUES (?, ?, ?, ?, ?, ?, ?)`, [member.id, account.id, n, bank.bank_name, bank.account_name, bank.account_number, bank.id]);
+  const result = run(`INSERT INTO withdrawal_requests (member_id, ledger_account_id, amount, amount_kobo, bank_name, account_name, account_number, bank_account_id)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [member.id, account.id, n, amountKobo, bank.bank_name, bank.account_name, bank.account_number, bank.id]);
   res.json(201, { id: result.lastInsertRowid, amount: n, status: 'PENDING' });
 });
 
