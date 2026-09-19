@@ -43,7 +43,7 @@
       </div>
 
       <div class="sandbox-banner" id="modeBanner">
-        <strong>Verification notice.</strong> Paystack payment processing is connected. Identity verification (KYC) is still in testing mode, so do not submit real identity documents until the live KYC provider is enabled.
+        <strong>Verification notice.</strong> Paystack payment processing is connected. Dojah identity verification is currently configured for sandbox testing. Use Dojah sandbox test data only until live KYC is approved and enabled.
       </div>
 
       <div class="stepper" id="stepper">
@@ -156,11 +156,22 @@
         <!-- STEP 3: KYC -->
         <section id="panel-kyc" style="display:none">
           <h2 style="margin-bottom:10px">Verify your identity</h2>
-          <p class="muted-note" style="margin-bottom:18px">In production this hands off to a licensed KYC provider's secure flow. This sandbox simulates that provider so you can see the full journey.</p>
+          <p class="muted-note" style="margin-bottom:18px">Identity verification is provided by Dojah. While the platform is in sandbox mode, use Dojah test data only. Your NIN/BVN is sent to the provider for verification and is not stored in the Obit database.</p>
           <div id="kycStatusBox"></div>
+          <div id="kycIdentityFields" style="display:none;margin-top:16px">
+            <div class="grid-2">
+              <label class="field">Identity type
+                <select id="kycIdType"><option value="nin">NIN</option><option value="bvn">BVN</option></select>
+              </label>
+              <label class="field">NIN / BVN
+                <input id="kycIdNumber" inputmode="numeric" autocomplete="off" maxlength="11" placeholder="Sandbox test number only" />
+              </label>
+            </div>
+            <p class="muted-note">Do not enter a real NIN or BVN while the sandbox notice is displayed.</p>
+          </div>
           <div class="btn-row">
             <button class="btn btn-primary" id="btnStartKyc">Start Verification</button>
-            <button class="btn btn-secondary" id="btnSimulateVerified" style="display:none">Sandbox: Mark Verified</button>
+            <button class="btn btn-primary" id="btnVerifyDojah" style="display:none">Verify with Dojah</button>
           </div>
         </section>
 
