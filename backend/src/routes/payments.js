@@ -28,6 +28,7 @@ function initializePaystackTransaction({ email, amountNaira, reference }) {
       amount: Math.round(amountNaira * 100), // Paystack expects kobo
       reference,
       currency: 'NGN',
+      callback_url: process.env.PAYSTACK_CALLBACK_URL || 'https://obitcooperative.com/portal.html?payment=return',
     });
 
     const req = https.request(
@@ -67,7 +68,8 @@ function initializePaystackTransaction({ email, amountNaira, reference }) {
 paymentsRouter.post('/api/payments/contributions/initialize', requireAuth('member'), async (req, res) => {
   const { amount, plan_id } = req.body || {};
   const amountNaira = Number(amount);
-  if (!Number.isFinite(amountNaira) || amountNaira < 100) throw new HttpError(400, 'Contribution amount must be at least ₦100');
+  if (!Number.isFinite(amountNaira) || amountNaira < 100 || !Number.isSafeInteger(Math.round(amountNaira * 100))) throw new HttpError(400, 'Contribution amount must be at least ₦100');
+  if (amountNaira > Number(process.env.MAX_CONTRIBUTION_NGN || 5000000)) throw new HttpError(400, 'Contribution amount exceeds the permitted online limit');
 
   const member = get('SELECT * FROM members WHERE user_id = ?', [req.user.id]);
   if (!member || member.status !== 'ACTIVE') throw new HttpError(403, 'Active membership required');
