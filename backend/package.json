@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node --experimental-sqlite src/server.js",
     "dev": "node --experimental-sqlite --watch src/server.js",
-    "simulate-webhook": "node scripts/simulate-webhook.js"
+    "simulate-webhook": "node scripts/simulate-webhook.js",
+    "migrate:postgres": "node --experimental-sqlite scripts/migrate-sqlite-to-postgres.js"
   },
   "dependencies": {
     "pg": "^8.16.3"
