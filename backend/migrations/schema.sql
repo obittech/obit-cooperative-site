@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS membership_payments (
   provider       TEXT NOT NULL CHECK (provider IN ('paystack','monnify')),
   reference      TEXT NOT NULL UNIQUE,
   amount         REAL NOT NULL,
+  amount_kobo    INTEGER,
   currency       TEXT NOT NULL DEFAULT 'NGN',
   status         TEXT NOT NULL DEFAULT 'PAYMENT_PENDING' CHECK (status IN ('PAYMENT_PENDING','PAYMENT_VERIFIED','PAYMENT_FAILED')),
   verified_at    TEXT,
@@ -117,9 +118,11 @@ CREATE TABLE IF NOT EXISTS contribution_plans (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   member_id      INTEGER NOT NULL REFERENCES members(id),
   amount         REAL NOT NULL,
+  amount_kobo    INTEGER,
   frequency      TEXT NOT NULL,          -- Daily / Weekly / Monthly
   purpose        TEXT NOT NULL,          -- Emergency Fund / Business Capital / Rent / ...
   target_amount  REAL,
+  target_amount_kobo INTEGER,
   status         TEXT NOT NULL DEFAULT 'PROPOSED' CHECK (status IN ('PROPOSED','ACTIVE','PAUSED','CLOSED')),
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -137,6 +140,7 @@ CREATE TABLE IF NOT EXISTS ledger_accounts (
   member_id   INTEGER NOT NULL REFERENCES members(id),
   account_type TEXT NOT NULL DEFAULT 'SAVINGS',
   balance     REAL NOT NULL DEFAULT 0,
+  balance_kobo INTEGER NOT NULL DEFAULT 0,
   currency    TEXT NOT NULL DEFAULT 'NGN',
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -146,6 +150,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   member_id           INTEGER NOT NULL REFERENCES members(id),
   type                TEXT NOT NULL,     -- MEMBERSHIP_FEE / CONTRIBUTION / ...
   amount              REAL NOT NULL,
+  amount_kobo         INTEGER,
   currency            TEXT NOT NULL DEFAULT 'NGN',
   provider_reference  TEXT,
   status              TEXT NOT NULL DEFAULT 'PENDING',
@@ -158,6 +163,7 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
   transaction_id    INTEGER NOT NULL REFERENCES transactions(id),
   direction         TEXT NOT NULL CHECK (direction IN ('debit','credit')),
   amount            REAL NOT NULL,
+  amount_kobo       INTEGER,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(ledger_account_id, transaction_id, direction)
 );
@@ -180,11 +186,13 @@ CREATE TABLE IF NOT EXISTS withdrawal_requests (
   member_id         INTEGER NOT NULL REFERENCES members(id),
   ledger_account_id INTEGER NOT NULL REFERENCES ledger_accounts(id),
   amount            REAL NOT NULL CHECK (amount > 0),
+  amount_kobo       INTEGER,
   bank_name         TEXT,
   account_name      TEXT,
   account_number    TEXT,
   bank_account_id   INTEGER REFERENCES member_bank_accounts(id),
   transfer_reference TEXT,
+  provider_status   TEXT NOT NULL DEFAULT 'not_started',
   status            TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED','PAID','CANCELLED')),
   reviewed_by       INTEGER REFERENCES users(id),
   reviewed_at       TEXT,
