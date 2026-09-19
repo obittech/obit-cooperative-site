@@ -64,10 +64,10 @@ adminRouter.post('/api/admin/applications/:id/decision', requireAuth('staff', 'a
 });
 
 adminRouter.get('/api/admin/finance/summary', requireAuth('staff', 'admin'), async (req, res) => {
-  const verified = get("SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS n FROM transactions WHERE type = 'CONTRIBUTION' AND status = 'VERIFIED'");
-  const balances = get("SELECT COALESCE(SUM(balance),0) AS total FROM ledger_accounts WHERE account_type = 'SAVINGS'");
-  const pendingWithdrawals = get("SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS n FROM withdrawal_requests WHERE status = 'PENDING'");
-  res.json(200, { verified_contributions: verified, member_savings_balances: balances.total, pending_withdrawals: pendingWithdrawals });
+  const verified = get("SELECT COALESCE(SUM(amount_kobo),0) AS total_kobo, COUNT(*) AS n FROM transactions WHERE type = 'CONTRIBUTION' AND status = 'VERIFIED'");
+  const balances = get("SELECT COALESCE(SUM(balance_kobo),0) AS total_kobo FROM ledger_accounts WHERE account_type = 'SAVINGS'");
+  const pendingWithdrawals = get("SELECT COALESCE(SUM(amount_kobo),0) AS total_kobo, COUNT(*) AS n FROM withdrawal_requests WHERE status = 'PENDING'");
+  res.json(200, { verified_contributions: { total: Number(verified.total_kobo)/100, total_kobo: verified.total_kobo, n: verified.n }, member_savings_balances: Number(balances.total_kobo)/100, pending_withdrawals: { total: Number(pendingWithdrawals.total_kobo)/100, total_kobo: pendingWithdrawals.total_kobo, n: pendingWithdrawals.n } });
 });
 
 adminRouter.get('/api/admin/withdrawals', requireAuth('staff', 'admin'), async (req, res) => {
@@ -87,7 +87,7 @@ adminRouter.post('/api/admin/withdrawals/:id/decision', requireAuth('staff', 'ad
   if (!['APPROVE','REJECT'].includes(decision)) throw new HttpError(400, "decision must be 'APPROVE' or 'REJECT'");
   if (decision === 'APPROVE') {
     const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
-    if (!account || Number(account.balance) < Number(w.amount)) throw new HttpError(409, 'Insufficient current member balance');
+    if (!account || Number(account.balance_kobo ?? Math.round(account.balance * 100)) < Number(w.amount_kobo ?? Math.round(w.amount * 100))) throw new HttpError(409, 'Insufficient current member balance');
     run("UPDATE withdrawal_requests SET status = 'APPROVED', reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?", [req.user.id, w.id]);
   } else {
     run("UPDATE withdrawal_requests SET status = 'REJECTED', reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?", [req.user.id, w.id]);
@@ -120,7 +120,7 @@ adminRouter.post('/api/admin/withdrawals/:id/initiate-payout', requireAuth('admi
   const response = await fetch('https://api.paystack.co/transfer', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ source: 'balance', amount: Math.round(Number(w.amount) * 100), recipient: bank.recipient_code, reference, reason: 'Obit Cooperative savings withdrawal', currency: 'NGN' }),
+    body: JSON.stringify({ source: 'balance', amount: Number(w.amount_kobo ?? Math.round(Number(w.amount) * 100)), recipient: bank.recipient_code, reference, reason: 'Obit Cooperative savings withdrawal', currency: 'NGN' }),
   });
   const payload = await response.json();
   if (!response.ok || !payload.status) throw new HttpError(502, payload.message || 'Could not initiate payout');
@@ -225,9 +225,9 @@ adminRouter.get('/api/admin/reconciliation/exceptions', requireAuth('staff', 'ad
     `SELECT * FROM membership_payments WHERE status = 'PAYMENT_PENDING' AND created_at < datetime('now', '-1 day')`
   );
   const staleContributions = all("SELECT * FROM transactions WHERE type = 'CONTRIBUTION' AND status = 'PENDING' AND created_at < datetime('now', '-1 hour')");
-  const balanceMismatch = get(`SELECT COALESCE(SUM(CASE direction WHEN 'credit' THEN amount ELSE -amount END),0) AS ledger_total
+  const balanceMismatch = get(`SELECT COALESCE(SUM(CASE direction WHEN 'credit' THEN amount_kobo ELSE -amount_kobo END),0) AS ledger_total
                                FROM ledger_entries`);
-  const storedBalance = get("SELECT COALESCE(SUM(balance),0) AS total FROM ledger_accounts").total;
+  const storedBalance = get("SELECT COALESCE(SUM(balance_kobo),0) AS total FROM ledger_accounts").total;
   res.json(200, { stuck_webhooks: stuckWebhooks, stale_pending_payments: stuckPayments, stale_pending_contributions: staleContributions,
                   ledger_total: balanceMismatch.ledger_total, stored_balance_total: storedBalance,
                   ledger_balance_matches: Number(balanceMismatch.ledger_total) === Number(storedBalance) });
