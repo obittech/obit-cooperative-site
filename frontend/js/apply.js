@@ -135,6 +135,45 @@ function renderKycStatus(status, note) {
     (note ? `<p class="muted-note">${note}</p>` : '');
 }
 
+async function verifyDojahKyc() {
+  clearAlert();
+  if (!state.kycSessionRef) return showAlert('Start identity verification first.');
+
+  const type = document.getElementById('kycIdType').value;
+  const input = document.getElementById('kycIdNumber');
+  const idNumber = input.value.trim();
+
+  if (!/^[0-9]{11}$/.test(idNumber)) {
+    return showAlert('Enter the 11-digit Dojah sandbox NIN or BVN test number.');
+  }
+
+  const button = document.getElementById('btnVerifyDojah');
+  button.disabled = true;
+  button.textContent = 'Verifying…';
+
+  try {
+    const result = await OBIT.post(`/api/kyc/session/${state.kycSessionRef}/verify`, {
+      type,
+      id_number: idNumber,
+    });
+    input.value = '';
+    renderKycStatus(result.status, result.message);
+
+    if (result.status === 'KYC_VERIFIED') {
+      state.application = await OBIT.get(`/api/applications/${state.applicationId}`);
+      setTimeout(() => goToStep('payment'), 700);
+    } else {
+      showAlert(result.message || 'Identity verification was not successful.');
+    }
+  } catch (err) {
+    input.value = '';
+    showAlert(err.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Verify with Dojah';
+  }
+}
+
 async function simulateKycVerified() {
   clearAlert();
   try {
