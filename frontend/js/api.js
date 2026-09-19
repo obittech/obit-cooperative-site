@@ -1,7 +1,7 @@
 // api.js — thin fetch wrapper used by apply.js / portal.js / admin.js.
-// Session tokens are kept in localStorage, scoped per role, purely for this
-// demo front-end; a production build may prefer httpOnly cookies issued by
-// the backend instead.
+// Session tokens are kept in sessionStorage so they disappear when the browser
+// session closes. This reduces persistence while the API/frontend remain on
+// separate origins. The final same-origin deployment should use HttpOnly cookies.
 
 const OBIT = {
   base: () => window.OBIT_API_BASE,
@@ -27,7 +27,18 @@ const OBIT = {
   post(path, body, opts = {}) { return OBIT.request('POST', path, { ...opts, body }); },
   patch(path, body, opts = {}) { return OBIT.request('PATCH', path, { ...opts, body }); },
 
-  saveSession(role, token) { localStorage.setItem(`obit_${role}_token`, token); },
-  getSession(role) { return localStorage.getItem(`obit_${role}_token`); },
-  clearSession(role) { localStorage.removeItem(`obit_${role}_token`); },
+  saveSession(role, token) {
+    localStorage.removeItem(`obit_${role}_token`);
+    sessionStorage.setItem(`obit_${role}_token`, token);
+  },
+  getSession(role) {
+    // One-time compatibility migration removes persistent legacy tokens.
+    const legacy = localStorage.getItem(`obit_${role}_token`);
+    if (legacy) localStorage.removeItem(`obit_${role}_token`);
+    return sessionStorage.getItem(`obit_${role}_token`);
+  },
+  clearSession(role) {
+    sessionStorage.removeItem(`obit_${role}_token`);
+    localStorage.removeItem(`obit_${role}_token`);
+  },
 };
