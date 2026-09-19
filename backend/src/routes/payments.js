@@ -68,7 +68,8 @@ function initializePaystackTransaction({ email, amountNaira, reference }) {
 paymentsRouter.post('/api/payments/contributions/initialize', requireAuth('member'), async (req, res) => {
   const { amount, plan_id } = req.body || {};
   const amountNaira = Number(amount);
-  if (!Number.isFinite(amountNaira) || amountNaira < 100 || !Number.isSafeInteger(Math.round(amountNaira * 100))) throw new HttpError(400, 'Contribution amount must be at least ₦100');
+  const amountKobo = Math.round(amountNaira * 100);
+  if (!Number.isFinite(amountNaira) || amountNaira < 100 || !Number.isSafeInteger(amountKobo)) throw new HttpError(400, 'Contribution amount must be at least ₦100');
   if (amountNaira > Number(process.env.MAX_CONTRIBUTION_NGN || 5000000)) throw new HttpError(400, 'Contribution amount exceeds the permitted online limit');
 
   const member = get('SELECT * FROM members WHERE user_id = ?', [req.user.id]);
@@ -85,9 +86,9 @@ paymentsRouter.post('/api/payments/contributions/initialize', requireAuth('membe
   }
 
   const reference = `OBIT-SAV-${member.id}-${crypto.randomBytes(6).toString('hex')}`;
-  run(`INSERT INTO transactions (member_id, type, amount, currency, provider_reference, status)
-       VALUES (?, 'CONTRIBUTION', ?, 'NGN', ?, 'PENDING')`,
-      [member.id, amountNaira, reference]);
+  run(`INSERT INTO transactions (member_id, type, amount, amount_kobo, currency, provider_reference, status)
+       VALUES (?, 'CONTRIBUTION', ?, ?, 'NGN', ?, 'PENDING')`,
+      [member.id, amountNaira, amountKobo, reference]);
 
   try {
     const paystackData = await initializePaystackTransaction({ email, amountNaira, reference });
