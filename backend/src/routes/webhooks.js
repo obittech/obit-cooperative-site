@@ -88,19 +88,21 @@ export async function handlePaymentWebhook(req, res, params) {
 
     if (event.event === 'transfer.success' && withdrawal.status === 'APPROVED') {
       const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [withdrawal.ledger_account_id]);
-      if (!account || Number(account.balance) < Number(withdrawal.amount)) throw new HttpError(409, 'Insufficient current savings balance');
+      if (!account || Number(account.balance_kobo ?? Math.round(account.balance * 100)) < Number(withdrawal.amount_kobo ?? Math.round(withdrawal.amount * 100))) throw new HttpError(409, 'Insufficient current savings balance');
 
       atomic(() => {
         let tx = get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'WITHDRAWAL'", [reference]);
         if (!tx) {
-          const created = run(`INSERT INTO transactions (member_id, type, amount, currency, provider_reference, status)
-                               VALUES (?, 'WITHDRAWAL', ?, 'NGN', ?, 'VERIFIED')`,
-                              [withdrawal.member_id, withdrawal.amount, reference]);
+          const withdrawalKobo = Number(withdrawal.amount_kobo ?? Math.round(withdrawal.amount * 100));
+          const created = run(`INSERT INTO transactions (member_id, type, amount, amount_kobo, currency, provider_reference, status)
+                               VALUES (?, 'WITHDRAWAL', ?, ?, 'NGN', ?, 'VERIFIED')`,
+                              [withdrawal.member_id, withdrawal.amount, withdrawalKobo, reference]);
           tx = get('SELECT * FROM transactions WHERE id = ?', [Number(created.lastInsertRowid)]);
         }
-        const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount) VALUES (?, ?, 'debit', ?)",
-                          [account.id, tx.id, withdrawal.amount]);
-        if (Number(entry.changes) > 0) run('UPDATE ledger_accounts SET balance = balance - ? WHERE id = ?', [withdrawal.amount, account.id]);
+        const withdrawalKobo = Number(withdrawal.amount_kobo ?? Math.round(withdrawal.amount * 100));
+        const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount, amount_kobo) VALUES (?, ?, 'debit', ?, ?)",
+                          [account.id, tx.id, withdrawal.amount, withdrawalKobo]);
+        if (Number(entry.changes) > 0) run('UPDATE ledger_accounts SET balance = balance - ?, balance_kobo = COALESCE(balance_kobo, CAST(ROUND(balance * 100) AS INTEGER)) - ? WHERE id = ?', [withdrawal.amount, withdrawalKobo, account.id]);
         run("UPDATE withdrawal_requests SET status = 'PAID', reviewed_at = datetime('now') WHERE id = ?", [withdrawal.id]);
         const receiptNo = `OBW-${new Date().getUTCFullYear()}-${String(tx.id).padStart(8, '0')}`;
         run('INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)', [tx.id, receiptNo]);
@@ -129,7 +131,7 @@ export async function handlePaymentWebhook(req, res, params) {
       return;
     }
 
-    const expectedContributionKobo = Math.round(contribution.amount * 100);
+    const expectedContributionKobo = Number(contribution.amount_kobo ?? Math.round(contribution.amount * 100));
     const contributionAmountMatches = amountKobo === undefined || Number(amountKobo) === expectedContributionKobo;
     const contributionCurrencyMatches = currency === contribution.currency;
     const contributionSuccess = ['success', 'PAID', 'successful'].includes(status);
@@ -143,12 +145,13 @@ export async function handlePaymentWebhook(req, res, params) {
       return;
     }
 
-    run("INSERT OR IGNORE INTO ledger_accounts (member_id, account_type, balance, currency) VALUES (?, 'SAVINGS', 0, 'NGN')", [contribution.member_id]);
+    run("INSERT OR IGNORE INTO ledger_accounts (member_id, account_type, balance, balance_kobo, currency) VALUES (?, 'SAVINGS', 0, 0, 'NGN')", [contribution.member_id]);
     const account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [contribution.member_id]);
     run("UPDATE transactions SET status = 'VERIFIED' WHERE id = ?", [contribution.id]);
-    const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount) VALUES (?, ?, 'credit', ?)", [account.id, contribution.id, contribution.amount]);
+    const contributionKobo = Number(contribution.amount_kobo ?? Math.round(contribution.amount * 100));
+    const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount, amount_kobo) VALUES (?, ?, 'credit', ?, ?)", [account.id, contribution.id, contribution.amount, contributionKobo]);
     if (Number(entry.changes) > 0) {
-      run("UPDATE ledger_accounts SET balance = balance + ? WHERE id = ?", [contribution.amount, account.id]);
+      run("UPDATE ledger_accounts SET balance = balance + ?, balance_kobo = COALESCE(balance_kobo, CAST(ROUND(balance * 100) AS INTEGER)) + ? WHERE id = ?", [contribution.amount, contributionKobo, account.id]);
     }
     const receiptNo = `OBR-${new Date().getUTCFullYear()}-${String(contribution.id).padStart(8, '0')}`;
     run("INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)", [contribution.id, receiptNo]);
@@ -169,7 +172,7 @@ export async function handlePaymentWebhook(req, res, params) {
     return;
   }
 
-  const expectedAmountKobo = Math.round(payment.amount * 100);
+  const expectedAmountKobo = Number(payment.amount_kobo ?? Math.round(payment.amount * 100));
   const amountMatches = amountKobo === undefined || Number(amountKobo) === expectedAmountKobo;
   const currencyMatches = currency === payment.currency;
   const success = ['success', 'PAID', 'successful'].includes(status);
