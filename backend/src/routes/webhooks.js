@@ -76,6 +76,43 @@ export async function handlePaymentWebhook(req, res, params) {
   const currency = event.data?.currency || event.currency || 'NGN';
   const status = event.data?.status || event.status;
 
+  // Transfer events use the same signed Paystack webhook endpoint but are not membership payments.
+  if (provider === 'paystack' && ['transfer.success', 'transfer.failed', 'transfer.reversed'].includes(event.event)) {
+    const withdrawal = get('SELECT * FROM withdrawal_requests WHERE transfer_reference = ?', [reference]);
+    if (!withdrawal) {
+      run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+      audit(null, 'TRANSFER_UNKNOWN_REFERENCE', 'webhook_events', null, { reference, event: event.event });
+      res.json(200, { ok: true });
+      return;
+    }
+
+    if (event.event === 'transfer.success' && withdrawal.status === 'APPROVED') {
+      const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [withdrawal.ledger_account_id]);
+      if (!account || Number(account.balance) < Number(withdrawal.amount)) throw new HttpError(409, 'Insufficient current savings balance');
+
+      let tx = get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'WITHDRAWAL'", [reference]);
+      if (!tx) {
+        const created = run(`INSERT INTO transactions (member_id, type, amount, currency, provider_reference, status)
+                             VALUES (?, 'WITHDRAWAL', ?, 'NGN', ?, 'VERIFIED')`,
+                            [withdrawal.member_id, withdrawal.amount, reference]);
+        tx = get('SELECT * FROM transactions WHERE id = ?', [Number(created.lastInsertRowid)]);
+      }
+      const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount) VALUES (?, ?, 'debit', ?)",
+                        [account.id, tx.id, withdrawal.amount]);
+      if (Number(entry.changes) > 0) run('UPDATE ledger_accounts SET balance = balance - ? WHERE id = ?', [withdrawal.amount, account.id]);
+      run("UPDATE withdrawal_requests SET status = 'PAID', reviewed_at = datetime('now') WHERE id = ?", [withdrawal.id]);
+      const receiptNo = `OBW-${new Date().getUTCFullYear()}-${String(tx.id).padStart(8, '0')}`;
+      run('INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)', [tx.id, receiptNo]);
+      audit(null, 'WITHDRAWAL_TRANSFER_CONFIRMED', 'withdrawal_requests', withdrawal.id, { reference, receiptNo });
+    } else if (event.event !== 'transfer.success') {
+      audit(null, event.event === 'transfer.reversed' ? 'WITHDRAWAL_TRANSFER_REVERSED' : 'WITHDRAWAL_TRANSFER_FAILED', 'withdrawal_requests', withdrawal.id, { reference });
+    }
+
+    run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+    res.json(200, { ok: true });
+    return;
+  }
+
   const payment = get('SELECT * FROM membership_payments WHERE reference = ?', [reference]);
   const contribution = !payment ? get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'CONTRIBUTION'", [reference]) : null;
   if (!payment && !contribution) {
