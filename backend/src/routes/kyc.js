@@ -18,17 +18,6 @@ function dojahConfigured() {
   return Boolean(process.env.DOJAH_APP_ID && process.env.DOJAH_SECRET_KEY);
 }
 
-// Safe runtime diagnostic: reports presence only, never credential values.
-kycRouter.get('/api/kyc/provider-status', async (req, res) => {
-  res.json(200, {
-    provider: 'DOJAH',
-    environment: DOJAH_ENV,
-    app_id_present: Boolean(process.env.DOJAH_APP_ID),
-    secret_key_present: Boolean(process.env.DOJAH_SECRET_KEY),
-    configured: dojahConfigured(),
-  });
-});
-
 function requireDojah() {
   if (!dojahConfigured()) {
     throw new HttpError(503, 'KYC provider is not configured yet.');
@@ -76,7 +65,7 @@ function hasRequiredConsent(applicationId) {
 
 function identityMatches(application, entity = {}) {
   const normalize = (v) => String(v || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  const nameParts = String(application.full_legal_name || '').trim().split(/\\s+/).filter(Boolean);
+  const nameParts = String(application.full_legal_name || '').trim().split(/\s+/).filter(Boolean);
   const first = normalize(entity.first_name || entity.firstname || entity.firstName);
   const last = normalize(entity.last_name || entity.surname || entity.last_name || entity.lastName);
   if (!first || !last) return false;
