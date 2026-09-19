@@ -138,7 +138,7 @@ async function refreshWithdrawals(token) {
       <button class="btn btn-secondary" data-wid="${w.id}" data-wdecision="APPROVE">Approve</button>
       <button class="btn btn-secondary" data-wid="${w.id}" data-wdecision="REJECT">Reject</button>` :
       w.status === 'APPROVED' ? (w.transfer_reference
-        ? `<button class="btn btn-primary" data-finalize-payout="${w.id}">Enter Paystack OTP</button>`
+        ? `<button class="btn btn-primary" data-reconcile-payout="${w.id}">Verify Paystack Status</button>`
         : `<button class="btn btn-primary" data-payout="${w.id}">Initiate Test Payout</button>`) : '—'}</td>
   </tr>`).join('') || '<tr><td colspan="5" class="muted-note">No withdrawal requests.</td></tr>';
 
@@ -148,13 +148,10 @@ async function refreshWithdrawals(token) {
       await refreshWithdrawals(token);
     } catch (err) { alert(err.message); }
   }));
-  document.querySelectorAll('[data-finalize-payout]').forEach(btn => btn.addEventListener('click', async () => {
-    const otp = prompt('Enter the 6-digit Paystack transfer OTP sent to the business contact.');
-    if (otp === null) return;
-    if (!/^\d{6}$/.test(otp.trim())) return alert('Enter a valid 6-digit OTP.');
+  document.querySelectorAll('[data-reconcile-payout]').forEach(btn => btn.addEventListener('click', async () => {
     try {
-      const r = await OBIT.post(`/api/admin/withdrawals/${btn.dataset.finalizePayout}/finalize-payout`, { otp: otp.trim() }, { token });
-      alert(`OTP accepted. Provider status: ${r.provider_status}. Ledger debit will occur only after transfer.success confirmation.`);
+      const r = await OBIT.post(`/api/admin/withdrawals/${btn.dataset.reconcilePayout}/reconcile-payout`, {}, { token });
+      alert(r.status === 'PAID' ? 'Paystack confirmed the payout. Withdrawal is now PAID and the member ledger has been updated.' : `Paystack status: ${r.provider_status || r.status}. No ledger debit was made.`);
       await refreshWithdrawals(token);
     } catch (err) { alert(err.message); }
   }));
