@@ -13,6 +13,7 @@ const setupCodes = new Map();
 const adminSetupCodes = new Map(); // userId -> { codeHash, expires, attempts }
 const loginAttempts = new Map();
 const adminLoginCodes = new Map();
+const resetCodes = new Map();
 
 export const authRouter = new Router();
 
@@ -161,12 +162,43 @@ authRouter.post('/api/auth/set-admin-password', async (req, res) => {
   res.json(200, { ok: true });
 });
 
+authRouter.post('/api/auth/request-password-reset', async (req, res) => {
+  const identifier = String(req.body?.identifier || '').trim();
+  const generic = { message: 'If an active account matches that email, a password reset code has been sent.' };
+  if (!identifier) { res.json(200, generic); return; }
+  const user = get("SELECT * FROM users WHERE lower(email) = lower(?) AND status = 'ACTIVE'", [identifier]);
+  if (!user?.email) { res.json(200, generic); return; }
+  const code = crypto.randomInt(100000, 1000000).toString();
+  resetCodes.set(user.id, { codeHash: hashSetupCode(code), expires: Date.now() + 15 * 60 * 1000, attempts: 0 });
+  try { await sendSetupEmail(user.email, code); } catch (err) { resetCodes.delete(user.id); throw err; }
+  audit(user.id, 'PASSWORD_RESET_CODE_SENT', 'user', user.id);
+  res.json(200, generic);
+});
+
+authRouter.post('/api/auth/reset-password', async (req, res) => {
+  const identifier = String(req.body?.identifier || '').trim();
+  const code = String(req.body?.code || '').trim();
+  const password = String(req.body?.password || '');
+  const user = get("SELECT * FROM users WHERE lower(email) = lower(?) AND status = 'ACTIVE'", [identifier]);
+  if (!user) throw new HttpError(401, 'Invalid or expired reset code');
+  const minLength = user.role === 'admin' ? 12 : 8;
+  if (password.length < minLength) throw new HttpError(400, `Password must be at least ${minLength} characters`);
+  const entry = resetCodes.get(user.id);
+  if (!entry || entry.expires < Date.now()) { resetCodes.delete(user.id); throw new HttpError(401, 'Invalid or expired reset code'); }
+  if (entry.attempts >= 5) { resetCodes.delete(user.id); throw new HttpError(429, 'Too many incorrect attempts. Request a new code.'); }
+  if (entry.codeHash !== hashSetupCode(code)) { entry.attempts += 1; throw new HttpError(401, 'Invalid or expired reset code'); }
+  resetCodes.delete(user.id);
+  run('UPDATE users SET password_hash = ? WHERE id = ?', [hashPassword(password), user.id]);
+  audit(user.id, 'PASSWORD_RESET_COMPLETED', 'user', user.id);
+  res.json(200, { ok: true });
+});
+
 authRouter.post('/api/auth/login', async (req, res, params) => {
   const { identifier, password } = req.body; // identifier = email or phone
   const key = String(identifier || '').trim().toLowerCase();
   const state = loginAttempts.get(key);
   if (state?.lockedUntil > Date.now()) throw new HttpError(429, 'Too many failed login attempts. Try again later.');
-  const user = get('SELECT * FROM users WHERE email = ? OR phone = ?', [identifier, identifier]);
+  const user = get('SELECT * FROM users WHERE lower(email) = lower(?) OR phone = ?', [identifier, identifier]);
   if (!user || !verifyPassword(password, user.password_hash)) {
     const current = loginAttempts.get(key) || { count: 0, lockedUntil: 0 };
     current.count += 1;
