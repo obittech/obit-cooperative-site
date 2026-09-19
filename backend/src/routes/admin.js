@@ -112,7 +112,7 @@ adminRouter.post('/api/admin/withdrawals/:id/initiate-payout', requireAuth('admi
 
   if (!bank?.recipient_code) throw new HttpError(409, 'A verified Paystack transfer recipient is required');
   const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
-  if (!account || Number(account.balance) < Number(w.amount)) throw new HttpError(409, 'Insufficient current savings balance');
+  if (!account || Number(account.balance_kobo ?? Math.round(account.balance * 100)) < Number(w.amount_kobo ?? Math.round(w.amount * 100))) throw new HttpError(409, 'Insufficient current savings balance');
 
   const key = process.env.PAYSTACK_SECRET_KEY;
   if (!key) throw new HttpError(503, 'Paystack transfers are not configured');
@@ -124,7 +124,7 @@ adminRouter.post('/api/admin/withdrawals/:id/initiate-payout', requireAuth('admi
   });
   const payload = await response.json();
   if (!response.ok || !payload.status) throw new HttpError(502, payload.message || 'Could not initiate payout');
-  run('UPDATE withdrawal_requests SET transfer_reference = ? WHERE id = ?', [reference, w.id]);
+  run('UPDATE withdrawal_requests SET transfer_reference = ?, provider_status = ? WHERE id = ?', [reference, payload.data?.status || 'pending', w.id]);
   audit(req.user.id, 'WITHDRAWAL_PAYOUT_INITIATED', 'withdrawal_requests', w.id, { reference, paystack_status: payload.data?.status });
   res.json(200, { reference, provider_status: payload.data?.status || 'pending' });
 });
@@ -152,6 +152,7 @@ adminRouter.post('/api/admin/withdrawals/:id/finalize-payout', requireAuth('admi
   });
   const payload = await response.json();
   if (!response.ok || !payload.status) throw new HttpError(502, payload.message || 'Could not finalize payout');
+  run('UPDATE withdrawal_requests SET provider_status = ? WHERE id = ?', [payload.data?.status || 'pending', w.id]);
   audit(req.user.id, 'WITHDRAWAL_PAYOUT_OTP_CONFIRMED', 'withdrawal_requests', w.id, { reference: w.transfer_reference, paystack_status: payload.data?.status });
   res.json(200, { reference: w.transfer_reference, provider_status: payload.data?.status || 'pending' });
 });
@@ -165,7 +166,7 @@ adminRouter.post('/api/admin/withdrawals/:id/reconcile-payout', requireAuth('adm
   const response = await fetch(`https://api.paystack.co/transfer/verify/${encodeURIComponent(w.transfer_reference)}`, { headers: { Authorization: `Bearer ${key}` } });
   const payload = await response.json();
   if (!response.ok || !payload.status) throw new HttpError(502, payload.message || 'Could not verify payout');
-  if (payload.data?.status !== 'success') { res.json(200, { status: w.status, provider_status: payload.data?.status || 'unknown' }); return; }
+  if (payload.data?.status !== 'success') { run('UPDATE withdrawal_requests SET provider_status = ? WHERE id = ?', [payload.data?.status || 'unknown', w.id]); res.json(200, { status: w.status, provider_status: payload.data?.status || 'unknown' }); return; }
 
   const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
   if (!account || Number(account.balance) < Number(w.amount)) throw new HttpError(409, 'Insufficient current savings balance');
@@ -173,12 +174,14 @@ adminRouter.post('/api/admin/withdrawals/:id/reconcile-payout', requireAuth('adm
   atomic(() => {
     let tx = get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'WITHDRAWAL'", [w.transfer_reference]);
     if (!tx) {
-      const created = run(`INSERT INTO transactions (member_id, type, amount, currency, provider_reference, status) VALUES (?, 'WITHDRAWAL', ?, 'NGN', ?, 'VERIFIED')`, [w.member_id, w.amount, w.transfer_reference]);
+      const wk = Number(w.amount_kobo ?? Math.round(w.amount * 100));
+      const created = run(`INSERT INTO transactions (member_id, type, amount, amount_kobo, currency, provider_reference, status) VALUES (?, 'WITHDRAWAL', ?, ?, 'NGN', ?, 'VERIFIED')`, [w.member_id, w.amount, wk, w.transfer_reference]);
       tx = get('SELECT * FROM transactions WHERE id = ?', [Number(created.lastInsertRowid)]);
     }
-    const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount) VALUES (?, ?, 'debit', ?)", [account.id, tx.id, w.amount]);
-    if (Number(entry.changes) > 0) run('UPDATE ledger_accounts SET balance = balance - ? WHERE id = ?', [w.amount, account.id]);
-    run("UPDATE withdrawal_requests SET status = 'PAID', reviewed_at = datetime('now') WHERE id = ?", [w.id]);
+    const wk = Number(w.amount_kobo ?? Math.round(w.amount * 100));
+    const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount, amount_kobo) VALUES (?, ?, 'debit', ?, ?)", [account.id, tx.id, w.amount, wk]);
+    if (Number(entry.changes) > 0) run('UPDATE ledger_accounts SET balance = balance - ?, balance_kobo = COALESCE(balance_kobo, CAST(ROUND(balance * 100) AS INTEGER)) - ? WHERE id = ?', [w.amount, wk, account.id]);
+    run("UPDATE withdrawal_requests SET status = 'PAID', provider_status = 'success', reviewed_at = datetime('now') WHERE id = ?", [w.id]);
     receiptNo = `OBW-${new Date().getUTCFullYear()}-${String(tx.id).padStart(8, '0')}`;
     run('INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)', [tx.id, receiptNo]);
     audit(req.user.id, 'WITHDRAWAL_RECONCILED_FROM_PAYSTACK', 'withdrawal_requests', w.id, { reference: w.transfer_reference, receiptNo });
