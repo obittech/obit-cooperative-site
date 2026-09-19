@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 
 const setupCodes = new Map();
 const adminSetupCodes = new Map(); // userId -> { codeHash, expires, attempts }
+const loginAttempts = new Map();
 
 export const authRouter = new Router();
 
@@ -145,10 +146,18 @@ authRouter.post('/api/auth/set-admin-password', async (req, res) => {
 
 authRouter.post('/api/auth/login', async (req, res, params) => {
   const { identifier, password } = req.body; // identifier = email or phone
+  const key = String(identifier || '').trim().toLowerCase();
+  const state = loginAttempts.get(key);
+  if (state?.lockedUntil > Date.now()) throw new HttpError(429, 'Too many failed login attempts. Try again later.');
   const user = get('SELECT * FROM users WHERE email = ? OR phone = ?', [identifier, identifier]);
   if (!user || !verifyPassword(password, user.password_hash)) {
+    const current = loginAttempts.get(key) || { count: 0, lockedUntil: 0 };
+    current.count += 1;
+    if (current.count >= 5) { current.count = 0; current.lockedUntil = Date.now() + 15 * 60 * 1000; }
+    loginAttempts.set(key, current);
     throw new HttpError(401, 'Incorrect credentials');
   }
+  loginAttempts.delete(key);
   if (user.status !== 'ACTIVE') throw new HttpError(403, 'Account is not active');
 
   const token = issueToken(user);
