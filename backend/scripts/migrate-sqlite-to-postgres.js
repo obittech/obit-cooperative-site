@@ -42,9 +42,15 @@ try {
     }
   }
   for (const table of tables) {
-    const s = source.prepare(`SELECT COUNT(*) n FROM ${table}`).get().n;
+    const s = Number(source.prepare(`SELECT COUNT(*) n FROM ${table}`).get().n);
     const p = Number((await target.query(`SELECT COUNT(*) n FROM ${table}`)).rows[0].n);
-    if (Number(s) !== p) throw new Error(`Parity failed for ${table}: sqlite=${s}, postgres=${p}`);
+    // PostgreSQL may already contain rows from an earlier guarded attempt.
+    // Compare primary-key sets rather than raw counts, and fail on either
+    // missing SQLite rows or unexpected target rows.
+    const sourceIds = source.prepare(`SELECT id FROM ${table} ORDER BY id`).all().map(r => Number(r.id));
+    const targetIds = (await target.query(`SELECT id FROM ${table} ORDER BY id`)).rows.map(r => Number(r.id));
+    const sameIds = sourceIds.length === targetIds.length && sourceIds.every((id, i) => id === targetIds[i]);
+    if (!sameIds) throw new Error(`Parity failed for ${table}: sqlite=${s}, postgres=${p}`);
   }
   const sqliteBalance = Number(source.prepare("SELECT COALESCE(SUM(balance_kobo),0) n FROM ledger_accounts").get().n);
   const pgBalance = Number((await target.query("SELECT COALESCE(SUM(balance_kobo),0) n FROM ledger_accounts")).rows[0].n);
