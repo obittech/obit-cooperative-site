@@ -169,7 +169,7 @@ adminRouter.post('/api/admin/withdrawals/:id/reconcile-payout', requireAuth('adm
   if (payload.data?.status !== 'success') { run('UPDATE withdrawal_requests SET provider_status = ? WHERE id = ?', [payload.data?.status || 'unknown', w.id]); res.json(200, { status: w.status, provider_status: payload.data?.status || 'unknown' }); return; }
 
   const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
-  if (!account || Number(account.balance) < Number(w.amount)) throw new HttpError(409, 'Insufficient current savings balance');
+  if (!account || Number(account.balance_kobo ?? Math.round(account.balance * 100)) < Number(w.amount_kobo ?? Math.round(w.amount * 100))) throw new HttpError(409, 'Insufficient current savings balance');
   let receiptNo;
   atomic(() => {
     let tx = get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'WITHDRAWAL'", [w.transfer_reference]);
@@ -206,9 +206,27 @@ adminRouter.get('/api/admin/reconciliation/exceptions', requireAuth('staff', 'ad
   const balanceMismatch = get(`SELECT COALESCE(SUM(CASE direction WHEN 'credit' THEN amount_kobo ELSE -amount_kobo END),0) AS ledger_total
                                FROM ledger_entries`);
   const storedBalance = get("SELECT COALESCE(SUM(balance_kobo),0) AS total FROM ledger_accounts").total;
+  const missingKobo = {
+    transactions: get("SELECT COUNT(*) AS n FROM transactions WHERE amount IS NOT NULL AND amount_kobo IS NULL").n,
+    ledger_entries: get("SELECT COUNT(*) AS n FROM ledger_entries WHERE amount IS NOT NULL AND amount_kobo IS NULL").n,
+    ledger_accounts: get("SELECT COUNT(*) AS n FROM ledger_accounts WHERE balance_kobo IS NULL").n,
+    withdrawals: get("SELECT COUNT(*) AS n FROM withdrawal_requests WHERE amount IS NOT NULL AND amount_kobo IS NULL").n,
+  };
+  const negativeBalances = get("SELECT COUNT(*) AS n FROM ledger_accounts WHERE COALESCE(balance_kobo,0) < 0").n;
+  const paidWithoutDebit = get(`SELECT COUNT(*) AS n FROM withdrawal_requests w
+    WHERE w.status = 'PAID' AND NOT EXISTS (
+      SELECT 1 FROM transactions t JOIN ledger_entries le ON le.transaction_id=t.id
+      WHERE t.member_id=w.member_id AND t.type='WITHDRAWAL' AND t.provider_reference=w.transfer_reference
+        AND le.ledger_account_id=w.ledger_account_id AND le.direction='debit'
+    )`).n;
+  const integrityOk = Number(balanceMismatch.ledger_total) === Number(storedBalance)
+    && Object.values(missingKobo).every(Number.isFinite) && Object.values(missingKobo).every(n => Number(n) === 0)
+    && Number(negativeBalances) === 0 && Number(paidWithoutDebit) === 0;
   res.json(200, { stuck_webhooks: stuckWebhooks, stale_pending_payments: stuckPayments, stale_pending_contributions: staleContributions,
                   ledger_total: balanceMismatch.ledger_total, stored_balance_total: storedBalance,
-                  ledger_balance_matches: Number(balanceMismatch.ledger_total) === Number(storedBalance) });
+                  ledger_balance_matches: Number(balanceMismatch.ledger_total) === Number(storedBalance),
+                  missing_kobo_fields: missingKobo, negative_balances: negativeBalances,
+                  paid_withdrawals_without_debit: paidWithoutDebit, financial_integrity_ok: integrityOk });
 });
 
 adminRouter.get('/api/admin/audit', requireAuth('staff', 'admin'), async (req, res) => {
