@@ -144,14 +144,25 @@ async function refreshWithdrawals(token) {
     <td>${badge(w.status)}</td><td>${w.status === 'PENDING' ? `
       <button class="btn btn-secondary" data-wid="${w.id}" data-wdecision="APPROVE">Approve</button>
       <button class="btn btn-secondary" data-wid="${w.id}" data-wdecision="REJECT">Reject</button>` :
-      w.status === 'APPROVED' ? (w.transfer_reference
-        ? `<button class="btn btn-primary" data-reconcile-payout="${w.id}">Verify Paystack Status</button>`
-        : `<button class="btn btn-primary" data-payout="${w.id}">Initiate Test Payout</button>`) : '—'}</td>
+      w.status === 'APPROVED' ? (!w.transfer_reference
+        ? `<button class="btn btn-primary" data-payout="${w.id}">Initiate Payout</button>`
+        : w.provider_status === 'otp'
+          ? `<button class="btn btn-primary" data-otp-payout="${w.id}">Enter Paystack OTP</button>`
+          : `<button class="btn btn-primary" data-reconcile-payout="${w.id}">Verify Paystack Status</button>`) : '—'}</td>
   </tr>`).join('') || '<tr><td colspan="5" class="muted-note">No withdrawal requests.</td></tr>';
 
   document.querySelectorAll('[data-wdecision]').forEach(btn => btn.addEventListener('click', async () => {
     try {
       await OBIT.post(`/api/admin/withdrawals/${btn.dataset.wid}/decision`, { decision: btn.dataset.wdecision }, { token });
+      await refreshWithdrawals(token);
+    } catch (err) { alert(err.message); }
+  }));
+  document.querySelectorAll('[data-otp-payout]').forEach(btn => btn.addEventListener('click', async () => {
+    const otp = prompt('Enter the 6-digit Paystack transfer OTP.');
+    if (otp === null) return;
+    try {
+      const r = await OBIT.post(`/api/admin/withdrawals/${btn.dataset.otpPayout}/finalize-payout`, { otp: otp.trim() }, { token });
+      alert(`Paystack OTP submitted. Provider status: ${r.provider_status}. The ledger will debit only after provider success confirmation.`);
       await refreshWithdrawals(token);
     } catch (err) { alert(err.message); }
   }));
@@ -163,7 +174,7 @@ async function refreshWithdrawals(token) {
     } catch (err) { alert(err.message); }
   }));
   document.querySelectorAll('[data-payout]').forEach(btn => btn.addEventListener('click', async () => {
-    if (!confirm('Initiate this Paystack payout? Continue only in the current controlled test environment.')) return;
+    if (!confirm('Initiate this Paystack payout to the verified member bank account?')) return;
     try {
       const r = await OBIT.post(`/api/admin/withdrawals/${btn.dataset.payout}/initiate-payout`, {}, { token });
       alert(`Payout initiated. Provider status: ${r.provider_status}. The member ledger will debit only after transfer.success confirmation.`);
