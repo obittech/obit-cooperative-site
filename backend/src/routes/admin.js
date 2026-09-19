@@ -186,35 +186,10 @@ adminRouter.post('/api/admin/withdrawals/:id/reconcile-payout', requireAuth('adm
   res.json(200, { status: 'PAID', provider_status: payload.data.status, receipt_number: receiptNo });
 });
 
-adminRouter.post('/api/admin/withdrawals/:id/mark-paid', requireAuth('admin'), async (req, res, params) => {
-  const w = get('SELECT * FROM withdrawal_requests WHERE id = ?', [params.id]);
-  if (!w) throw new HttpError(404, 'Withdrawal request not found');
-  if (w.status !== 'APPROVED') throw new HttpError(409, 'Withdrawal must be APPROVED before it can be marked paid');
-
-  const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
-  if (!account || Number(account.balance) < Number(w.amount)) throw new HttpError(409, 'Insufficient current savings balance');
-
-  const providerReference = (req.body?.provider_reference || '').trim();
-  if (!providerReference) throw new HttpError(400, 'Payout reference is required before marking a withdrawal paid');
-
-  const existing = get("SELECT * FROM transactions WHERE provider_reference = ?", [providerReference]);
-  if (existing) throw new HttpError(409, 'Payout reference has already been used');
-
-  const tx = run(`INSERT INTO transactions (member_id, type, amount, currency, provider_reference, status)
-                  VALUES (?, 'WITHDRAWAL', ?, 'NGN', ?, 'VERIFIED')`,
-                 [w.member_id, w.amount, providerReference]);
-  const txId = Number(tx.lastInsertRowid);
-  const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount) VALUES (?, ?, 'debit', ?)",
-                    [account.id, txId, w.amount]);
-  if (Number(entry.changes) !== 1) throw new HttpError(409, 'Withdrawal ledger entry already exists');
-
-  run('UPDATE ledger_accounts SET balance = balance - ? WHERE id = ?', [w.amount, account.id]);
-  run("UPDATE withdrawal_requests SET status = 'PAID', reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?", [req.user.id, w.id]);
-  const receiptNo = `OBW-${new Date().getUTCFullYear()}-${String(txId).padStart(8, '0')}`;
-  run('INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)', [txId, receiptNo]);
-  audit(req.user.id, 'WITHDRAWAL_PAID', 'withdrawal_requests', w.id, { amount: w.amount, provider_reference: providerReference, receipt_number: receiptNo });
-
-  res.json(200, { withdrawal: get('SELECT * FROM withdrawal_requests WHERE id = ?', [w.id]), receipt_number: receiptNo });
+// Manual mark-paid is intentionally disabled in production because it can
+// bypass Paystack provider confirmation. Recovery must use reconcile-payout.
+adminRouter.post('/api/admin/withdrawals/:id/mark-paid', requireAuth('admin'), async (req, res) => {
+  throw new HttpError(403, 'Manual mark-paid is disabled. Verify the payout with Paystack reconciliation.');
 });
 
 adminRouter.get('/api/admin/reconciliation/exceptions', requireAuth('staff', 'admin'), async (req, res) => {
