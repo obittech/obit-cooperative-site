@@ -37,3 +37,17 @@ export function get(sql, params = []) {
 export function all(sql, params = []) {
   return db.prepare(sql).all(...params);
 }
+
+// Execute multi-step financial mutations atomically. Nested callers should
+// keep transactions short and never perform network I/O inside this block.
+export function atomic(fn) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw err;
+  }
+}
