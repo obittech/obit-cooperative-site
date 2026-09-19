@@ -12,6 +12,7 @@ import crypto from 'node:crypto';
 const setupCodes = new Map();
 const adminSetupCodes = new Map(); // userId -> { codeHash, expires, attempts }
 const loginAttempts = new Map();
+const adminLoginCodes = new Map();
 
 export const authRouter = new Router();
 
@@ -49,6 +50,22 @@ async function sendAdminSetupEmail(to, code) {
     }),
   });
   if (!response.ok) throw new HttpError(502, 'We could not send the admin activation email.');
+}
+
+
+async function sendAdminLoginEmail(to, code) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new HttpError(503, 'Admin verification email is not configured');
+  const from = process.env.RESEND_FROM_EMAIL || 'Obit Cooperative <onboarding@resend.dev>';
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from, to: [to], subject: 'Your Obit Admin login code',
+      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto"><h2>Obit Cooperative Society</h2><p>Use this one-time code to complete your Admin Console login:</p><p style="font-size:32px;font-weight:700;letter-spacing:6px">${code}</p><p>This code expires in 10 minutes. Do not share it.</p></div>`,
+    }),
+  });
+  if (!response.ok) throw new HttpError(502, 'We could not send the admin login code.');
 }
 
 function hashSetupCode(code) {
@@ -160,7 +177,39 @@ authRouter.post('/api/auth/login', async (req, res, params) => {
   loginAttempts.delete(key);
   if (user.status !== 'ACTIVE') throw new HttpError(403, 'Account is not active');
 
+  if (user.role === 'admin') {
+    const code = crypto.randomInt(100000, 1000000).toString();
+    adminLoginCodes.set(user.id, { codeHash: hashSetupCode(code), expires: Date.now() + 10 * 60 * 1000, attempts: 0 });
+    try { await sendAdminLoginEmail(user.email, code); } catch (err) { adminLoginCodes.delete(user.id); throw err; }
+    audit(user.id, 'ADMIN_LOGIN_MFA_SENT', 'user', user.id);
+    res.json(200, { mfa_required: true, user_id: user.id, role: user.role });
+    return;
+  }
   const token = issueToken(user);
   audit(user.id, 'LOGIN', 'user', user.id);
+  res.json(200, { token, role: user.role });
+});
+
+
+authRouter.post('/api/auth/admin-mfa', async (req, res) => {
+  const userId = Number(req.body?.user_id);
+  const code = String(req.body?.code || '').trim();
+  const user = get("SELECT * FROM users WHERE id = ? AND role = 'admin' AND status = 'ACTIVE'", [userId]);
+  const entry = adminLoginCodes.get(userId);
+  if (!user || !entry || entry.expires < Date.now()) {
+    adminLoginCodes.delete(userId);
+    throw new HttpError(401, 'Invalid or expired admin login code');
+  }
+  if (entry.attempts >= 5) {
+    adminLoginCodes.delete(userId);
+    throw new HttpError(429, 'Too many incorrect attempts. Sign in again.');
+  }
+  if (entry.codeHash !== hashSetupCode(code)) {
+    entry.attempts += 1;
+    throw new HttpError(401, 'Invalid or expired admin login code');
+  }
+  adminLoginCodes.delete(userId);
+  const token = issueToken(user);
+  audit(user.id, 'ADMIN_LOGIN_MFA_VERIFIED', 'user', user.id);
   res.json(200, { token, role: user.role });
 });
