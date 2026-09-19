@@ -144,19 +144,19 @@ meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => 
   const bank = get('SELECT * FROM member_bank_accounts WHERE id = ? AND member_id = ? AND verified_at IS NOT NULL', [bank_account_id, member.id]);
   if (!bank) throw new HttpError(400, 'Select a verified bank account');
   const account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
-  if (!account || n > Number(account.balance)) throw new HttpError(409, 'Withdrawal amount exceeds available savings balance');
-  const daily = get("SELECT COALESCE(SUM(amount),0) AS total FROM withdrawal_requests WHERE member_id = ? AND status IN ('APPROVED','PAID') AND created_at >= datetime('now','-24 hours')", [member.id]);
-  const dailyLimit = Number(process.env.DAILY_WITHDRAWAL_LIMIT_NGN || 1000000);
-  if (Number(daily.total || 0) + n > dailyLimit) throw new HttpError(409, 'Daily withdrawal limit exceeded. Contact Obit support for review.');
-  const pending = get("SELECT COALESCE(SUM(amount),0) AS total FROM withdrawal_requests WHERE member_id = ? AND status IN ('PENDING','APPROVED')", [member.id]);
-  if (n > Number(account.balance) - Number(pending.total || 0)) throw new HttpError(409, 'Amount exceeds balance available after pending withdrawal requests');
+  if (!account || amountKobo > Number(account.balance_kobo ?? Math.round(account.balance * 100))) throw new HttpError(409, 'Withdrawal amount exceeds available savings balance');
+  const daily = get("SELECT COALESCE(SUM(amount_kobo),0) AS total_kobo FROM withdrawal_requests WHERE member_id = ? AND status IN ('APPROVED','PAID') AND created_at >= datetime('now','-24 hours')", [member.id]);
+  const dailyLimitKobo = Math.round(Number(process.env.DAILY_WITHDRAWAL_LIMIT_NGN || 1000000) * 100);
+  if (Number(daily.total_kobo || 0) + amountKobo > dailyLimitKobo) throw new HttpError(409, 'Daily withdrawal limit exceeded. Contact Obit support for review.');
+  const pending = get("SELECT COALESCE(SUM(amount_kobo),0) AS total_kobo FROM withdrawal_requests WHERE member_id = ? AND status IN ('PENDING','APPROVED')", [member.id]);
+  if (amountKobo > Number(account.balance_kobo ?? Math.round(account.balance * 100)) - Number(pending.total_kobo || 0)) throw new HttpError(409, 'Amount exceeds balance available after pending withdrawal requests');
 
   // Prevent accidental double-click / rapid duplicate withdrawal submissions.
   const recentDuplicate = get(`SELECT id, status FROM withdrawal_requests
-                               WHERE member_id = ? AND bank_account_id = ? AND amount = ?
+                               WHERE member_id = ? AND bank_account_id = ? AND amount_kobo = ?
                                  AND status = 'PENDING'
                                  AND created_at >= datetime('now', '-2 minutes')
-                               ORDER BY id DESC LIMIT 1`, [member.id, bank.id, n]);
+                               ORDER BY id DESC LIMIT 1`, [member.id, bank.id, amountKobo]);
   if (recentDuplicate) {
     res.json(200, { id: recentDuplicate.id, amount: n, status: recentDuplicate.status, duplicate_prevented: true });
     return;
@@ -171,12 +171,13 @@ meRouter.get('/api/me/statement', requireAuth('member'), async (req, res) => {
   const member = memberForUser(req.user.id);
   let account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
   if (!account) {
-    run("INSERT OR IGNORE INTO ledger_accounts (member_id, account_type, balance, currency) VALUES (?, 'SAVINGS', 0, 'NGN')", [member.id]);
+    run("INSERT OR IGNORE INTO ledger_accounts (member_id, account_type, balance, balance_kobo, currency) VALUES (?, 'SAVINGS', 0, 0, 'NGN')", [member.id]);
     account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
   }
   res.json(200, {
     member_code: member.member_code,
-    balance: account?.balance ?? 0,
+    balance: Number(account?.balance_kobo ?? Math.round(Number(account?.balance || 0) * 100)) / 100,
+    balance_kobo: Number(account?.balance_kobo ?? Math.round(Number(account?.balance || 0) * 100)),
     currency: account?.currency ?? 'NGN',
     sandbox_note: 'Savings collection is not enabled yet. This balance is derived only from reconciled ledger entries.',
   });
