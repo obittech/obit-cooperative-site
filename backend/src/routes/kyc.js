@@ -77,12 +77,12 @@ function hasRequiredConsent(applicationId) {
 function identityMatches(application, entity = {}) {
   const normalize = (v) => String(v || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   const nameParts = String(application.full_legal_name || '').trim().split(/\\s+/).filter(Boolean);
-  const first = normalize(entity.first_name || entity.firstname);
-  const last = normalize(entity.last_name || entity.surname);
+  const first = normalize(entity.first_name || entity.firstname || entity.firstName);
+  const last = normalize(entity.last_name || entity.surname || entity.last_name || entity.lastName);
   if (!first || !last) return false;
   const nameBlob = normalize(application.full_legal_name);
   const nameMatch = nameBlob.includes(first) && nameBlob.includes(last);
-  const providerDob = String(entity.dob || entity.date_of_birth || '').slice(0, 10);
+  const providerDob = String(entity.dob || entity.date_of_birth || entity.dateOfBirth || '').slice(0, 10);
   const appDob = String(application.date_of_birth || '').slice(0, 10);
   const dobMatch = !providerDob || !appDob || providerDob === appDob;
   return nameParts.length >= 2 && nameMatch && dobMatch;
@@ -150,7 +150,14 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   }
 
   const entity = providerResponse?.entity || providerResponse?.data?.entity || providerResponse?.data || {};
-  const matched = identityMatches(application, entity);
+  // Dojah sandbox payloads may use upper-case identity field names.
+  const normalizedEntity = {
+    ...entity,
+    first_name: entity.first_name || entity.firstname || entity.firstName || entity.firstName || entity.first_name,
+    last_name: entity.last_name || entity.surname || entity.lastName || entity.last_name,
+    dob: entity.dob || entity.date_of_birth || entity.dateOfBirth,
+  };
+  const matched = identityMatches(application, normalizedEntity);
   const newStatus = matched ? 'KYC_VERIFIED' : 'KYC_FAILED';
 
   run(
