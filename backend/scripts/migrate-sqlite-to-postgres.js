@@ -7,8 +7,16 @@ import pg from 'pg';
 const { Client } = pg;
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error('DATABASE_URL is required');
-const sqlitePath = process.env.SQLITE_PATH || '/var/data/obit.sqlite';
-if (!fs.existsSync(sqlitePath)) throw new Error(`SQLite source not found: ${sqlitePath}`);
+const candidates = [
+  process.env.SQLITE_PATH,
+  process.env.DB_PATH,
+  '/var/data/obit.db',
+  '/var/data/obit.sqlite',
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'obit.db')
+].filter(Boolean);
+const sqlitePath = candidates.find((p) => fs.existsSync(p));
+if (!sqlitePath) throw new Error(`SQLite source not found. Checked: ${candidates.join(', ')}`);
+console.log(`Using SQLite source: ${sqlitePath}`);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const schema = fs.readFileSync(path.join(here, '..', 'migrations', 'postgres.sql'), 'utf8');
