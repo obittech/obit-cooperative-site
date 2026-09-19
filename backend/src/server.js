@@ -37,10 +37,20 @@ const WEBHOOK_PATTERN = /^\/api\/webhooks\/payments\/([^/]+)\/?$/;
 
 const server = http.createServer(async (req, res) => {
   res.json = (status, body) => sendJson(res, status, body);
+  const corsOrigin = process.env.CORS_ORIGIN || 'https://obitcooperative.com';
+  const origin = req.headers.origin;
+  if (origin && origin === corsOrigin) res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+  if (process.env.NODE_ENV === 'production') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*',
+      'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || 'https://obitcooperative.com',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-sandbox-signature',
       'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
     });
