@@ -23,6 +23,27 @@ export function migrate() {
   const withdrawalCols = all('PRAGMA table_info(withdrawal_requests)').map((r) => r.name);
   if (!withdrawalCols.includes('bank_account_id')) db.exec('ALTER TABLE withdrawal_requests ADD COLUMN bank_account_id INTEGER REFERENCES member_bank_accounts(id)');
   if (!withdrawalCols.includes('transfer_reference')) db.exec('ALTER TABLE withdrawal_requests ADD COLUMN transfer_reference TEXT');
+  // Money v2: canonical integer-kobo mirrors. Existing naira columns remain
+  // temporarily for backwards compatibility while routes migrate safely.
+  const moneyTables = [
+    ['transactions', 'amount'],
+    ['ledger_accounts', 'balance'],
+    ['ledger_entries', 'amount'],
+    ['withdrawal_requests', 'amount'],
+    ['membership_payments', 'amount'],
+    ['contribution_plans', 'amount'],
+    ['contribution_plans', 'target_amount'],
+  ];
+  for (const [table, source] of moneyTables) {
+    const cols = all(`PRAGMA table_info(${table})`).map((r) => r.name);
+    const target = source + '_kobo';
+    if (!cols.includes(target)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${target} INTEGER`);
+    // ROUND is intentional only for the one-time conversion of legacy REAL
+    // naira values. New writes must supply integer kobo directly.
+    db.exec(`UPDATE ${table} SET ${target} = CAST(ROUND(${source} * 100) AS INTEGER)
+             WHERE ${source} IS NOT NULL AND ${target} IS NULL`);
+  }
+
 }
 
 // Small helpers so route files read like plain SQL, not ORM boilerplate.
