@@ -65,7 +65,7 @@ function hasRequiredConsent(applicationId) {
 
 function identityMatches(application, entity = {}) {
   const normalize = (v) => String(v || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  const names = normalize(application.full_legal_name).split(/\s+/).filter(Boolean);
+  const nameParts = String(application.full_legal_name || '').trim().split(/\\s+/).filter(Boolean);
   const first = normalize(entity.first_name || entity.firstname);
   const last = normalize(entity.last_name || entity.surname);
   if (!first || !last) return false;
@@ -74,7 +74,7 @@ function identityMatches(application, entity = {}) {
   const providerDob = String(entity.dob || entity.date_of_birth || '').slice(0, 10);
   const appDob = String(application.date_of_birth || '').slice(0, 10);
   const dobMatch = !providerDob || !appDob || providerDob === appDob;
-  return names.length >= 2 && nameMatch && dobMatch;
+  return nameParts.length >= 2 && nameMatch && dobMatch;
 }
 
 kycRouter.post('/api/kyc/session', async (req, res) => {
