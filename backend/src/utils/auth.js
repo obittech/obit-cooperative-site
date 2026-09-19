@@ -9,7 +9,8 @@ const TOKEN_SECRET = process.env.AUTH_TOKEN_SECRET;
 if (!TOKEN_SECRET) {
   throw new Error('AUTH_TOKEN_SECRET is not set. Copy .env.example to .env and set a real secret.');
 }
-const TOKEN_TTL_SECONDS = 60 * 60 * 12; // 12h session
+const MEMBER_TOKEN_TTL_SECONDS = 60 * 60 * 4; // 4h member session
+const ADMIN_TOKEN_TTL_SECONDS = 60 * 30; // 30m privileged admin session
 
 export function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -32,7 +33,8 @@ export function issueToken(user) {
   const payload = {
     uid: user.id,
     role: user.role,
-    exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS,
+    exp: Math.floor(Date.now() / 1000) + (user.role === 'admin' ? ADMIN_TOKEN_TTL_SECONDS : MEMBER_TOKEN_TTL_SECONDS),
+    iat: Math.floor(Date.now() / 1000),
   };
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url');
