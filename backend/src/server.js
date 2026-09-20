@@ -27,12 +27,13 @@ const { kycRouter } = await import('./routes/kyc.js');
 const { paymentsRouter } = await import('./routes/payments.js');
 const { meRouter } = await import('./routes/me.js');
 const { adminRouter } = await import('./routes/admin.js');
+const { systemRouter } = await import('./routes/system.js');
 const { devRouter } = await import('./routes/dev.js');
 const { handlePaymentWebhook } = await import('./routes/webhooks.js');
 
 migrate();
 
-const routers = [authRouter, applicationsRouter, kycRouter, paymentsRouter, meRouter, adminRouter];
+const routers = [systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, meRouter, adminRouter];
 if (process.env.ENABLE_DEV_ROUTES === 'true') routers.push(devRouter);
 
 const allowedOrigins = new Set(
