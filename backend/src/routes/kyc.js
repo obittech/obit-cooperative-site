@@ -135,7 +135,16 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   const path = type === 'bvn' ? '/api/v1/kyc/bvn' : '/api/v1/kyc/nin';
   let providerResponse;
   try {
-    providerResponse = await dojahGet(path, { [type]: idNumber });
+    const legalParts = String(application.full_legal_name || '').trim().split(/\s+/).filter(Boolean);
+    const providerParams = type === 'bvn'
+      ? {
+          bvn: idNumber,
+          first_name: legalParts[0] || undefined,
+          last_name: legalParts.length > 1 ? legalParts[legalParts.length - 1] : undefined,
+          dob: canonicalDate(application.date_of_birth) || undefined,
+        }
+      : { nin: idNumber };
+    providerResponse = await dojahGet(path, providerParams);
   } catch (error) {
     run(
       "UPDATE kyc_checks SET raw_status_detail = ? WHERE id = ?",
@@ -181,7 +190,25 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
       },
     }));
   }
-  const match = identityMatchDetails(application, normalizedEntity);
+  let match;
+  // Current Dojah BVN validation responses return match objects rather than
+  // raw identity strings. Prefer the provider's explicit boolean results.
+  if (type === 'bvn'
+      && typeof entity?.first_name === 'object'
+      && typeof entity?.last_name === 'object'
+      && typeof entity?.date_of_birth === 'object') {
+    const nameMatch = entity.first_name?.status === true && entity.last_name?.status === true;
+    const dobMatch = entity.date_of_birth?.status === true;
+    match = {
+      matched: nameMatch && dobMatch,
+      nameMatch,
+      dobMatch,
+      providerDobPresent: true,
+      appDobPresent: Boolean(application.date_of_birth),
+    };
+  } else {
+    match = identityMatchDetails(application, normalizedEntity);
+  }
   const matched = match.matched;
   const newStatus = matched ? 'KYC_VERIFIED' : 'KYC_FAILED';
 
