@@ -17,7 +17,7 @@ const STATUS_TO_STEP = {
 // Allow a clean test/application start without manually clearing browser storage.
 // Example: apply.html?new=1
 const launchParams = new URLSearchParams(window.location.search);
-if (launchParams.get('new') === '1') {
+if (launchParams.has('new')) {
   localStorage.removeItem('obit_application_id');
   localStorage.removeItem('obit_kyc_session_ref');
   localStorage.removeItem('obit_payment_reference');
