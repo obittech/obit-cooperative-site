@@ -94,15 +94,6 @@ server.listen(PORT, () => {
   console.log(`Obit Membership MVP API listening on http://localhost:${PORT}`);
   console.log(`Mode: ${process.env.WEBHOOK_SANDBOX_MODE === 'true' ? 'SANDBOX' : 'LIVE-SIGNATURE (requires real provider secret keys)'}`);
 
-  // One-time guarded migration runner for controlled full-data parity checks.
-  // This does not switch live runtime reads/writes away from SQLite.
-  if (process.env.RUN_FULL_PG_MIGRATION_ON_START === 'true') {
-    setTimeout(() => {
-      import('../scripts/migrate-sqlite-to-postgres.js')
-        .then(() => console.log('FULL_PG_MIGRATION_COMPLETE'))
-        .catch((error) => console.error('FULL_PG_MIGRATION_ERROR', error.message));
-    }, 1500);
-  }
 });
 
 export default server;
