@@ -179,17 +179,7 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
     last_name: pick('last_name', 'lastname', 'lastName', 'surname', 'family_name'),
     dob: pick('dob', 'date_of_birth', 'dateOfBirth', 'birthdate', 'birth_date'),
   };
-  if (DOJAH_ENV === 'sandbox') {
-    console.log('KYC_SANDBOX_PROVIDER_SHAPE', JSON.stringify({
-      top_level_keys: Object.keys(providerResponse || {}),
-      entity_keys: Object.keys(entity || {}),
-      normalized: {
-        first_name: normalizedEntity.first_name || null,
-        last_name: normalizedEntity.last_name || null,
-        dob: normalizedEntity.dob || null,
-      },
-    }));
-  }
+
   let match;
   // Current Dojah BVN validation responses return match objects rather than
   // raw identity strings. Prefer the provider's explicit boolean results.
