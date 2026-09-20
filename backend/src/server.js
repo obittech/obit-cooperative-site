@@ -94,64 +94,6 @@ server.listen(PORT, () => {
   console.log(`Obit Membership MVP API listening on http://localhost:${PORT}`);
   console.log(`Mode: ${process.env.WEBHOOK_SANDBOX_MODE === 'true' ? 'SANDBOX' : 'LIVE-SIGNATURE (requires real provider secret keys)'}`);
 
-  // Temporary internal E2E harness. Runs only when explicitly enabled and only
-  // against Dojah sandbox test data. It drives the same HTTP routes as the UI.
-  if (process.env.RUN_KYC_E2E_ON_START === 'true' && (process.env.DOJAH_ENV || 'sandbox').toLowerCase() === 'sandbox') {
-    setTimeout(async () => {
-      const base = `http://127.0.0.1:${PORT}`;
-      const stamp = Date.now();
-      const call = async (method, route, body) => {
-        const r = await fetch(base + route, {
-          method,
-          headers: body ? { 'Content-Type': 'application/json' } : {},
-          body: body ? JSON.stringify(body) : undefined,
-        });
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(`${method} ${route}: ${data.error || r.status}`);
-        return data;
-      };
-      try {
-        const app = await call('POST', '/api/applications', { campaign: 'internal-dojah-e2e' });
-        await call('PATCH', `/api/applications/${app.id}`, {
-          full_legal_name: 'John Doe',
-          date_of_birth: '1990-01-01',
-          gender: 'Male',
-          phone: `0809${String(stamp).slice(-7)}`,
-          whatsapp: `0809${String(stamp).slice(-7)}`,
-          email: `john.doe.e2e.${stamp}@example.com`,
-          address: '1 Test Street, Abuja',
-          state: 'FCT',
-          lga: 'Abuja Municipal',
-          occupation_category: 'Salary Earner',
-          membership_type: 'Individual',
-          next_of_kin_name: 'Jane Doe',
-          next_of_kin_phone: '08000000002',
-          intended_savings_amount: 10000,
-          intended_savings_frequency: 'Monthly',
-          interests: ['savings'],
-        });
-        await call('POST', `/api/applications/${app.id}/submit`, {
-          consents: { terms: true, privacy: true, marketing: false },
-        });
-        const session = await call('POST', '/api/kyc/session', { application_id: app.id });
-        const verification = await call('POST', `/api/kyc/session/${session.session_ref}/verify`, {
-          type: 'bvn',
-          id_number: '22222222222',
-        });
-        const finalApp = await call('GET', `/api/applications/${app.id}`);
-        console.log('KYC_E2E_RESULT', JSON.stringify({
-          ok: verification.status === 'KYC_VERIFIED',
-          application_id: app.id,
-          application_status: finalApp.status,
-          kyc_status: verification.status,
-          sandbox_match: verification.sandbox_match || null,
-          message: verification.message,
-        }));
-      } catch (error) {
-        console.error('KYC_E2E_ERROR', error.message);
-      }
-    }, 1500);
-  }
 });
 
 export default server;
