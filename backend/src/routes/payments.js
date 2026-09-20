@@ -19,9 +19,22 @@ export const paymentsRouter = new Router();
 
 const MEMBERSHIP_FEE_NGN = Number(process.env.MEMBERSHIP_FEE_NGN || 2000);
 
+function assertPaystackModeSafe() {
+  const key = String(process.env.PAYSTACK_SECRET_KEY || '');
+  const isLiveKey = key.startsWith('sk_live_');
+  if (isLiveKey && process.env.PAYSTACK_LIVE_ENABLED !== 'true') {
+    throw new HttpError(503, 'Live Paystack processing is not enabled yet.');
+  }
+  if (process.env.PAYSTACK_LIVE_ENABLED === 'true' && !isLiveKey) {
+    throw new HttpError(503, 'Paystack live mode requires a live secret key.');
+  }
+  return isLiveKey ? 'live' : 'test';
+}
+
 // Real call to Paystack's "initialize transaction" API. Secret key stays
 // server-side only — never sent to or exposed in the browser.
 function initializePaystackTransaction({ email, amountNaira, reference }) {
+  assertPaystackModeSafe();
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({
       email,
