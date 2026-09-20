@@ -172,7 +172,10 @@ async function verifyDojahKyc() {
       state.application = await OBIT.get(`/api/applications/${state.applicationId}`);
       setTimeout(() => goToStep('payment'), 700);
     } else {
-      showAlert(result.message || 'Identity verification was not successful.');
+      const diagnostic = result.sandbox_match
+        ? ` Sandbox check: name ${result.sandbox_match.name_match ? 'matched' : 'did not match'}, date of birth ${result.sandbox_match.dob_match ? 'matched' : 'did not match'}.`
+        : '';
+      showAlert((result.message || 'Identity verification was not successful.') + diagnostic);
     }
   } catch (err) {
     input.value = '';
