@@ -181,9 +181,8 @@
           <p class="muted-note" style="margin-bottom:18px">Payment status is only ever confirmed by a signed webhook from the provider — never by this page. Refreshing or closing this tab will not fake a successful payment.</p>
           <div id="paymentStatusBox"></div>
           <div class="btn-row">
-            <select id="providerSelect" style="max-width:200px" class="field" >
+            <select id="providerSelect" style="max-width:200px" class="field" aria-label="Payment provider">
               <option value="paystack">Paystack</option>
-              <option value="monnify">Monnify</option>
             </select>
             <button class="btn btn-primary" id="btnInitPayment">Pay Membership Fee</button>
           </div>
@@ -210,6 +209,6 @@
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
   <script src="js/api.js"></script>
-  <script src="js/apply.js?v=20260920-4"></script>
+  <script src="js/apply.js?v=20260920-5"></script>
 </body>
 </html>
