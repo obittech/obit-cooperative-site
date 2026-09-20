@@ -41,7 +41,7 @@ function initializePaystackTransaction({ email, amountNaira, reference }) {
       amount: Math.round(amountNaira * 100), // Paystack expects kobo
       reference,
       currency: 'NGN',
-      callback_url: process.env.PAYSTACK_CALLBACK_URL || 'https://obitcooperative.com/portal.html?payment=return',
+      callback_url: process.env.PAYSTACK_CALLBACK_URL || 'https://obitcooperative.com/apply.html?payment=return',
     });
 
     const req = https.request(
