@@ -281,4 +281,17 @@ document.getElementById('btnStartKyc').addEventListener('click', startKyc);
 document.getElementById('btnVerifyDojah').addEventListener('click', verifyDojahKyc);
 document.getElementById('btnInitPayment').addEventListener('click', initPayment);
 
-restoreExistingApplication();
+async function initializeApplicationPage() {
+  await restoreExistingApplication();
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('payment') === 'return' && state.applicationId) {
+    await pollApplicationStatus();
+    params.delete('payment');
+    const cleanQuery = params.toString();
+    const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : '') + window.location.hash;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+}
+
+initializeApplicationPage();
