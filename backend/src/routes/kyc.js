@@ -45,9 +45,8 @@ async function dojahGet(path, params) {
   let body = {};
   try { body = await response.json(); } catch {}
   if (!response.ok) {
-    const providerMessage = body?.error || body?.message || `Dojah returned HTTP ${response.status}`;
     const error = new HttpError(response.status === 404 ? 422 : 502, 'Identity verification could not be completed.');
-    error.providerDetail = String(providerMessage).slice(0, 300);
+    error.providerStatus = response.status;
     throw error;
   }
   return body;
@@ -126,10 +125,27 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   const application = get('SELECT * FROM member_applications WHERE id = ?', [check.application_id]);
   if (!application) throw new HttpError(404, 'Application not found');
 
+  // Provider calls cost money and process sensitive identity data. Limit repeated
+  // verification attempts persistently across sessions for the same application.
+  const recentAttempts = get(
+    "SELECT COALESCE(SUM(attempt_count), 0) AS total FROM kyc_checks WHERE application_id = ? AND created_at >= datetime('now', '-24 hours')",
+    [check.application_id]
+  );
+  if (Number(recentAttempts?.total || 0) >= 5) {
+    audit(null, 'KYC_RATE_LIMITED', 'member_applications', check.application_id, {
+      provider: 'DOJAH', environment: DOJAH_ENV, sessionRef: check.session_ref,
+    });
+    throw new HttpError(429, 'Too many identity verification attempts. Try again later or contact support.');
+  }
+
   const type = String(req.body?.type || 'nin').toLowerCase();
   const idNumber = String(req.body?.id_number || '').trim();
   if (!['nin', 'bvn'].includes(type)) throw new HttpError(400, 'KYC type must be nin or bvn.');
   if (!validIdNumber(idNumber)) throw new HttpError(400, 'Enter a valid 11-digit NIN or BVN.');
+
+  // Count the attempt before contacting the provider so failures and timeouts
+  // cannot be used to bypass the limit. The raw identifier is never stored.
+  run("UPDATE kyc_checks SET attempt_count = COALESCE(attempt_count, 0) + 1, last_attempt_at = datetime('now') WHERE id = ?", [check.id]);
 
   // The identifier is used only for this provider request. It is never persisted.
   const path = type === 'bvn' ? '/api/v1/kyc/bvn' : '/api/v1/kyc/nin';
@@ -148,7 +164,7 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   } catch (error) {
     run(
       "UPDATE kyc_checks SET raw_status_detail = ? WHERE id = ?",
-      [JSON.stringify({ environment: DOJAH_ENV, outcome: 'PROVIDER_ERROR', detail: error.providerDetail || null }), check.id]
+      [JSON.stringify({ environment: DOJAH_ENV, outcome: 'PROVIDER_ERROR', provider_status: error.providerStatus || null }), check.id]
     );
     audit(null, 'KYC_PROVIDER_ERROR', 'member_applications', check.application_id, {
       provider: 'DOJAH', environment: DOJAH_ENV, sessionRef: check.session_ref,
