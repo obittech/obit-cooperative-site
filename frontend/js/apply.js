@@ -21,6 +21,13 @@ if (launchParams.has('new')) {
   localStorage.removeItem('obit_application_id');
   localStorage.removeItem('obit_kyc_session_ref');
   localStorage.removeItem('obit_payment_reference');
+
+  // The clean-start flag is one-time only. Remove it immediately so a refresh
+  // restores the newly created application instead of clearing it again.
+  launchParams.delete('new');
+  const cleanQuery = launchParams.toString();
+  const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : '') + window.location.hash;
+  window.history.replaceState({}, document.title, cleanUrl);
 }
 
 const state = {
