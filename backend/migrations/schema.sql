@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS kyc_checks (
   status             TEXT NOT NULL DEFAULT 'KYC_PENDING' CHECK (status IN ('KYC_PENDING','KYC_VERIFIED','KYC_FAILED')),
   raw_status_detail  TEXT,
   verified_at        TEXT,
+  attempt_count      INTEGER NOT NULL DEFAULT 0,
+  last_attempt_at    TEXT,
   created_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
