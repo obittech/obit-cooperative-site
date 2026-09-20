@@ -24,7 +24,7 @@ const source = new DatabaseSync(sqlitePath);
 const target = new Client({ connectionString: url, ssl: process.env.PGSSL === 'disable' ? false : { rejectUnauthorized: false } });
 await target.connect();
 
-const tables = ['users','member_applications','members','ledger_accounts','transactions','ledger_entries','member_bank_accounts','withdrawal_requests'];
+const tables = ['users','member_applications','consents','kyc_checks','membership_payments','members','community_onboarding','contribution_plans','payment_identities','ledger_accounts','transactions','ledger_entries','member_bank_accounts','withdrawal_requests','receipts','webhook_events','referrals','audit_events'];
 const cols = (table) => source.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
 
 try {
@@ -55,6 +55,13 @@ try {
     const targetIds = (await target.query(`SELECT id FROM ${table} ORDER BY id`)).rows.map(r => Number(r.id));
     const sameIds = sourceIds.length === targetIds.length && sourceIds.every((id, i) => id === targetIds[i]);
     if (!sameIds) throw new Error(`Parity failed for ${table}: sqlite=${s}, postgres=${p}`);
+  }
+  // Preserve future inserts after explicit ID migration by advancing every
+  // PostgreSQL identity sequence to the current maximum ID.
+  for (const table of tables) {
+    await target.query(
+      `SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE((SELECT MAX(id) FROM ${table}), 1), (SELECT COUNT(*) > 0 FROM ${table}))`
+    );
   }
   const sqliteBalance = Number(source.prepare("SELECT COALESCE(SUM(balance_kobo),0) n FROM ledger_accounts").get().n);
   const pgBalance = Number((await target.query("SELECT COALESCE(SUM(balance_kobo),0) n FROM ledger_accounts")).rows[0].n);
