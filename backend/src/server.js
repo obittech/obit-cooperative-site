@@ -32,14 +32,22 @@ const { handlePaymentWebhook } = await import('./routes/webhooks.js');
 
 migrate();
 
-const routers = [authRouter, applicationsRouter, kycRouter, paymentsRouter, meRouter, adminRouter, devRouter];
+const routers = [authRouter, applicationsRouter, kycRouter, paymentsRouter, meRouter, adminRouter];
+if (process.env.ENABLE_DEV_ROUTES === 'true') routers.push(devRouter);
+
+const allowedOrigins = new Set(
+  (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || 'https://obitcooperative.com,https://www.obitcooperative.com')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
 const WEBHOOK_PATTERN = /^\/api\/webhooks\/payments\/([^/]+)\/?$/;
 
 const server = http.createServer(async (req, res) => {
   res.json = (status, body) => sendJson(res, status, body);
-  const corsOrigin = process.env.CORS_ORIGIN || 'https://obitcooperative.com';
   const origin = req.headers.origin;
-  if (origin && origin === corsOrigin) res.setHeader('Access-Control-Allow-Origin', origin);
+  const allowedOrigin = origin && allowedOrigins.has(origin) ? origin : null;
+  if (allowedOrigin) res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Vary', 'Origin');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -49,10 +57,15 @@ const server = http.createServer(async (req, res) => {
   if (process.env.NODE_ENV === 'production') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
 
   if (req.method === 'OPTIONS') {
+    if (!allowedOrigin) {
+      res.writeHead(403);
+      return res.end();
+    }
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || 'https://obitcooperative.com',
+      'Access-Control-Allow-Origin': allowedOrigin,
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-sandbox-signature',
       'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
+      'Access-Control-Max-Age': '600',
     });
     return res.end();
   }
