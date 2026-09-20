@@ -24,6 +24,9 @@ export function migrate() {
   if (!withdrawalCols.includes('bank_account_id')) db.exec('ALTER TABLE withdrawal_requests ADD COLUMN bank_account_id INTEGER REFERENCES member_bank_accounts(id)');
   if (!withdrawalCols.includes('transfer_reference')) db.exec('ALTER TABLE withdrawal_requests ADD COLUMN transfer_reference TEXT');
   if (!withdrawalCols.includes('provider_status')) db.exec("ALTER TABLE withdrawal_requests ADD COLUMN provider_status TEXT DEFAULT 'not_started'");
+  const kycCols = all('PRAGMA table_info(kyc_checks)').map((r) => r.name);
+  if (!kycCols.includes('attempt_count')) db.exec('ALTER TABLE kyc_checks ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0');
+  if (!kycCols.includes('last_attempt_at')) db.exec('ALTER TABLE kyc_checks ADD COLUMN last_attempt_at TEXT');
   // Money v2: canonical integer-kobo mirrors. Existing naira columns remain
   // temporarily for backwards compatibility while routes migrate safely.
   const moneyTables = [
