@@ -148,12 +148,27 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   }
 
   const entity = providerResponse?.entity || providerResponse?.data?.entity || providerResponse?.data || {};
-  // Dojah sandbox payloads may use upper-case identity field names.
+  // Normalize Dojah field-name variants without depending on letter case.
+  // Some provider payloads use firstname/surname/birthdate while others use
+  // first_name/last_name/dob.
+  const entityByKey = Object.fromEntries(
+    Object.entries(entity || {}).map(([key, value]) => [
+      String(key).toLowerCase().replace(/[^a-z0-9]/g, ''),
+      value,
+    ])
+  );
+  const pick = (...keys) => {
+    for (const key of keys) {
+      const value = entityByKey[String(key).toLowerCase().replace(/[^a-z0-9]/g, '')];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return '';
+  };
   const normalizedEntity = {
     ...entity,
-    first_name: entity.first_name || entity.firstname || entity.firstName || entity.firstName || entity.first_name,
-    last_name: entity.last_name || entity.surname || entity.lastName || entity.last_name,
-    dob: entity.dob || entity.date_of_birth || entity.dateOfBirth,
+    first_name: pick('first_name', 'firstname', 'firstName', 'first'),
+    last_name: pick('last_name', 'lastname', 'lastName', 'surname', 'family_name'),
+    dob: pick('dob', 'date_of_birth', 'dateOfBirth', 'birthdate', 'birth_date'),
   };
   const match = identityMatchDetails(application, normalizedEntity);
   const matched = match.matched;
