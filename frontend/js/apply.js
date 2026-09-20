@@ -14,6 +14,15 @@ const STATUS_TO_STEP = {
   REJECTED: 'review', SUSPENDED: 'done', CLOSED: 'done',
 };
 
+// Allow a clean test/application start without manually clearing browser storage.
+// Example: apply.html?new=1
+const launchParams = new URLSearchParams(window.location.search);
+if (launchParams.get('new') === '1') {
+  localStorage.removeItem('obit_application_id');
+  localStorage.removeItem('obit_kyc_session_ref');
+  localStorage.removeItem('obit_payment_reference');
+}
+
 const state = {
   applicationId: localStorage.getItem('obit_application_id') || null,
   application: null,
