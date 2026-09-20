@@ -63,18 +63,27 @@ function hasRequiredConsent(applicationId) {
   return Boolean(terms?.accepted && privacy?.accepted);
 }
 
-function identityMatches(application, entity = {}) {
+function canonicalDate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dmy = raw.match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})/);
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  return raw.slice(0, 10);
+}
+
+function identityMatchDetails(application, entity = {}) {
   const normalize = (v) => String(v || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   const nameParts = String(application.full_legal_name || '').trim().split(/\s+/).filter(Boolean);
   const first = normalize(entity.first_name || entity.firstname || entity.firstName);
   const last = normalize(entity.last_name || entity.surname || entity.last_name || entity.lastName);
-  if (!first || !last) return false;
   const nameBlob = normalize(application.full_legal_name);
-  const nameMatch = nameBlob.includes(first) && nameBlob.includes(last);
-  const providerDob = String(entity.dob || entity.date_of_birth || entity.dateOfBirth || '').slice(0, 10);
-  const appDob = String(application.date_of_birth || '').slice(0, 10);
+  const nameMatch = Boolean(first && last && nameParts.length >= 2 && nameBlob.includes(first) && nameBlob.includes(last));
+  const providerDob = canonicalDate(entity.dob || entity.date_of_birth || entity.dateOfBirth);
+  const appDob = canonicalDate(application.date_of_birth);
   const dobMatch = !providerDob || !appDob || providerDob === appDob;
-  return nameParts.length >= 2 && nameMatch && dobMatch;
+  return { matched: nameMatch && dobMatch, nameMatch, dobMatch, providerDobPresent: Boolean(providerDob), appDobPresent: Boolean(appDob) };
 }
 
 kycRouter.post('/api/kyc/session', async (req, res) => {
@@ -146,7 +155,8 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
     last_name: entity.last_name || entity.surname || entity.lastName || entity.last_name,
     dob: entity.dob || entity.date_of_birth || entity.dateOfBirth,
   };
-  const matched = identityMatches(application, normalizedEntity);
+  const match = identityMatchDetails(application, normalizedEntity);
+  const matched = match.matched;
   const newStatus = matched ? 'KYC_VERIFIED' : 'KYC_FAILED';
 
   run(
@@ -163,6 +173,12 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
     provider: 'DOJAH',
     environment: DOJAH_ENV,
     message: matched ? 'Identity details matched.' : 'Identity details did not match the application.',
+    ...(DOJAH_ENV === 'sandbox' ? { sandbox_match: {
+      name_match: match.nameMatch,
+      dob_match: match.dobMatch,
+      provider_dob_present: match.providerDobPresent,
+      application_dob_present: match.appDobPresent,
+    }} : {}),
   });
 });
 
