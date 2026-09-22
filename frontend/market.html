@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Obit Market & SafePay | Obit Cooperative</title>
+  <meta name="description" content="Buy and sell with verified Obit Cooperative members using Obit SafePay protected transactions.">
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="safepay.css">
+</head>
+<body>
+<header class="site-header"><div class="container nav-wrap">
+  <a class="brand" href="index.html"><img src="assets/obit-logo.png" alt="Obit Cooperative"><span>Obit Cooperative</span></a>
+  <nav><a href="index.html">Home</a><a href="portal.html">Member Portal</a><a href="market.html" class="active">Obit Market</a></nav>
+</div></header>
+<main class="app-main">
+<div class="container">
+  <section class="safepay-hero">
+    <div><span class="eyebrow">OBIT MARKET</span><h1>Buy and sell with <span>Obit SafePay</span></h1>
+    <p>Protected member-to-member commerce. Buyer funds are held by a regulated third-party payment partner and released only according to the agreed transaction outcome.</p>
+    <div class="trust-row"><span>✓ Verified members</span><span>✓ Protected payment</span><span>✓ Dispute trail</span><span>✓ Auditable settlement</span></div></div>
+    <div class="safe-card"><div class="shield">✓</div><h2>Pay Securely.<br>Trade Confidently.</h2><p>Obit does not hold customer funds.</p></div>
+  </section>
+
+  <div id="pilotNotice" class="sandbox-banner"><strong>SafePay pilot:</strong> Marketplace development is active. Real escrow funding remains disabled until provider sandbox credentials, signed webhook rules and commercial approval are completed.</div>
+
+  <section class="market-toolbar"><div><h2>Obit Market</h2><p class="muted-note">Products and services from Cooperative members.</p></div>
+    <div class="market-actions"><button class="btn btn-secondary" id="btnRefresh">Refresh</button><a class="btn" href="portal.html">Member Login</a></div>
+  </section>
+  <div id="marketAlert"></div>
+  <section id="listingGrid" class="listing-grid"></section>
+
+  <section class="how-safe card">
+    <h2>How Obit SafePay works</h2>
+    <div class="safe-steps">
+      <div><b>1</b><strong>Deal created</strong><span>Buyer chooses a verified member's listing.</span></div>
+      <div><b>2</b><strong>Payment secured</strong><span>Funds go to the regulated partner, not Obit.</span></div>
+      <div><b>3</b><strong>Seller delivers</strong><span>Delivery evidence and status are recorded.</span></div>
+      <div><b>4</b><strong>Buyer confirms</strong><span>Buyer confirms delivery or raises a dispute.</span></div>
+      <div><b>5</b><strong>Seller paid</strong><span>Partner releases funds after the approved outcome.</span></div>
+    </div>
+  </section>
+</div>
+</main>
+<footer><div class="container footer-bottom"><span>© 2026 Obit Cooperative Multipurpose Society Limited.</span><span>People. Trade. Prosper Together.</span></div></footer>
+<script src="js/config.js"></script><script src="js/api.js"></script><script src="js/market.js"></script>
+</body></html>
