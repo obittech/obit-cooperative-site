@@ -1,8 +1,10 @@
 // routes/safepay.js
 // Obit Market + Obit SafePay MVP.
-// Obit never marks funds as secured from the browser. Provider-funded state
-// will only be accepted through a verified provider webhook once EscrowPay
-// supplies the signed webhook contract.
+// Technology infrastructure: Obit Technologies Limited.
+// Community partner: Obit Technologies Multipurpose Cooperative Society Limited.
+// Neither Obit entity marks funds as secured from the browser. Provider-funded
+// state will only be accepted through a verified provider webhook after the
+// provider supplies the signed webhook/authentication contract.
 
 import crypto from 'node:crypto';
 import { Router, HttpError } from '../router.js';
@@ -32,7 +34,15 @@ safePayRouter.get('/api/market/listings', async (req, res) => {
 });
 
 safePayRouter.get('/api/safepay/status', async (req, res) => {
-  res.json(200, { product: 'Obit SafePay', custody: 'third_party_regulated_partner', ...safePayProviderStatus() });
+  res.json(200, {
+    product: 'Obit SafePay',
+    platform: 'Obit Market',
+    technology_operator: 'Obit Technologies Limited',
+    community_partner: 'Obit Technologies Multipurpose Cooperative Society Limited',
+    custody: 'approved_third_party_financial_provider',
+    obit_custody: false,
+    ...safePayProviderStatus()
+  });
 });
 
 safePayRouter.post('/api/market/listings', requireAuth('member'), async (req, res) => {
@@ -107,7 +117,7 @@ safePayRouter.post('/api/safepay/orders/:id/confirm-delivery', requireAuth('memb
   const order=get('SELECT * FROM market_orders WHERE id=? AND buyer_member_id=?',[Number(params.id),buyer.id]);
   if(!order) throw new HttpError(404,'Order not found');
   if(order.status!=='DELIVERED') throw new HttpError(409,'Delivery must be recorded before buyer confirmation');
-  // Release remains deliberately disabled until signed provider webhook + sandbox contract are configured.
+  // Release remains disabled until signed provider webhook/auth contract and sandbox E2E are complete.
   run("UPDATE market_orders SET status='DELIVERY_CONFIRMED',updated_at=datetime('now') WHERE id=?",[order.id]);
   audit(req.user.id,'SAFEPAY_DELIVERY_CONFIRMED','market_orders',order.id,{reference:order.reference});
   res.json(200,{id:order.id,status:'DELIVERY_CONFIRMED',release_pending:true});
