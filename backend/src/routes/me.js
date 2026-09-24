@@ -11,7 +11,7 @@ import { parseNgnToKobo, koboToNgn } from '../utils/money.js';
 
 export const meRouter = new Router();
 
-async function await memberForUser(userId) {
+async function memberForUser(userId) {
   const member = await get('SELECT * FROM members WHERE user_id = ?', [userId]);
   if (!member) throw new HttpError(404, 'No activated membership found for this account yet');
   return member;
