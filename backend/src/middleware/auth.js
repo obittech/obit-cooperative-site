@@ -12,8 +12,11 @@ export function requireAuth(...allowedRoles) {
     const payload = token ? verifyToken(token) : null;
     if (!payload) throw new HttpError(401, 'Missing or invalid session token');
 
-    const user = get('SELECT id, role, status FROM users WHERE id = ?', [payload.uid]);
+    const user = get('SELECT id, role, status, session_version FROM users WHERE id = ?', [payload.uid]);
     if (!user || user.status !== 'ACTIVE') throw new HttpError(401, 'Account is not active');
+    if (Number(payload.sv || 0) !== Number(user.session_version || 0)) {
+      throw new HttpError(401, 'Session has been revoked. Please sign in again.');
+    }
 
     if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
       throw new HttpError(403, 'Not permitted for this role');
