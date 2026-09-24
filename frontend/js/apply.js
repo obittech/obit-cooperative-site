@@ -5,6 +5,15 @@
 // page is always just reflecting server state, never inventing its own.
 
 const STEPS = ['profile', 'review', 'kyc', 'payment', 'done'];
+const MEMBERSHIP_PATHS = {
+  salary: { label: 'Salary earner', membership_type: 'Individual', occupation_category: 'Salary Earner', interests: ['Savings'] },
+  msme: { label: 'Trader / MSME', membership_type: 'MSME / Business', occupation_category: 'MSME Owner', interests: ['Business Support'] },
+  artisan: { label: 'Artisan / professional', membership_type: 'Individual', occupation_category: 'Artisan', interests: ['Training', 'Business Support'] },
+  transport: { label: 'Transport worker', membership_type: 'Individual', occupation_category: 'Driver', interests: ['Savings'] },
+  farmer: { label: 'Farmer / agribusiness', membership_type: 'MSME / Business', occupation_category: 'Farmer / Agribusiness', interests: ['Agriculture'] },
+  guided: { label: 'Guided membership', membership_type: 'Individual', occupation_category: '', interests: [] },
+};
+
 const STATUS_TO_STEP = {
   LEAD: 'profile', APPLICATION_STARTED: 'profile', NEEDS_INFORMATION: 'profile',
   APPLICATION_SUBMITTED: 'kyc',
@@ -28,6 +37,21 @@ if (launchParams.has('new')) {
   const cleanQuery = launchParams.toString();
   const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : '') + window.location.hash;
   window.history.replaceState({}, document.title, cleanUrl);
+}
+
+function applyMembershipPathPreset() {
+  const params = new URLSearchParams(window.location.search);
+  const key = params.get('path');
+  const preset = MEMBERSHIP_PATHS[key];
+  if (!preset || localStorage.getItem('obit_application_id')) return;
+  const type = document.getElementById('membership_type');
+  const occupation = document.getElementById('occupation_category');
+  if (type && preset.membership_type) type.value = preset.membership_type;
+  if (occupation && preset.occupation_category) occupation.value = preset.occupation_category;
+  const interests = document.getElementById('interests');
+  if (interests) Array.from(interests.options).forEach(o => { o.selected = preset.interests.includes(o.value); });
+  const alert = document.getElementById('alertBox');
+  if (alert) alert.innerHTML = `<div class="alert alert-success">Selected path: <strong>${preset.label}</strong>. We have pre-filled the closest membership options. You can change them before continuing.</div>`;
 }
 
 const state = {
@@ -97,7 +121,7 @@ async function saveProfileAndContinue() {
       const params = new URLSearchParams(window.location.search);
       const created = await OBIT.post('/api/applications', {
         referral_source: params.get('ref') || undefined,
-        campaign: params.get('campaign') || undefined,
+        campaign: params.get('campaign') || (params.get('path') ? `membership-path:${params.get('path')}` : undefined),
       });
       state.applicationId = created.id;
       localStorage.setItem('obit_application_id', created.id);
@@ -282,6 +306,7 @@ document.getElementById('btnVerifyDojah').addEventListener('click', verifyDojahK
 document.getElementById('btnInitPayment').addEventListener('click', initPayment);
 
 async function initializeApplicationPage() {
+  applyMembershipPathPreset();
   await restoreExistingApplication();
 
   const params = new URLSearchParams(window.location.search);
