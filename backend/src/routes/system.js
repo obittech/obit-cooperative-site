@@ -14,7 +14,7 @@ systemRouter.get('/api/health', async (_req, res) => {
 systemRouter.get('/api/readiness', async (_req, res) => {
   let databaseOk = false;
   try {
-    databaseOk = Number(await get('SELECT 1 AS ok')?.ok) === 1;
+    databaseOk = Number((await get('SELECT 1 AS ok'))?.ok) === 1;
   } catch {
     databaseOk = false;
   }
