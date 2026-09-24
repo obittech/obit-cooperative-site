@@ -96,3 +96,7 @@ table.app-table tr:hover td{background:#fafcfb}
 .opportunity-detail h3{font-size:14px;margin-bottom:5px;color:var(--ink)}
 .opportunity-detail p{white-space:pre-line;color:var(--muted);line-height:1.6}
 @media(max-width:700px){.opportunity-access{grid-template-columns:1fr}.opportunity-card{padding:22px}.opportunity-topline{align-items:flex-start}}
+
+.digital-member-card{display:grid;grid-template-columns:1.5fr 1fr .7fr;gap:18px;align-items:center;padding:22px;border:1px solid rgba(0,0,0,.12);border-radius:18px;background:linear-gradient(135deg,rgba(255,255,255,.98),rgba(245,247,246,.96));box-shadow:0 10px 30px rgba(0,0,0,.06)}
+.digital-member-card>div{display:flex;flex-direction:column;gap:6px}.digital-member-card small{font-size:11px;letter-spacing:.08em;opacity:.65}.digital-member-card strong{font-size:20px}
+@media(max-width:680px){.digital-member-card{grid-template-columns:1fr}.digital-member-card>div{padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,.08)}.digital-member-card>div:last-child{border-bottom:0}}
