@@ -49,6 +49,12 @@ jobs:
         run: |
           node --experimental-sqlite --input-type=module -e "const d=await import('./src/db.js'); await d.migrate(); const r=await d.run('INSERT INTO users (email,role) VALUES (?,?)',['pg-ci@example.com','member']); const u=await d.get('SELECT email FROM users WHERE id=?',[r.lastInsertRowid]); if(u.email!=='pg-ci@example.com') process.exit(1); await d.atomic(async()=>{await d.run('UPDATE users SET status=? WHERE id=?',['ACTIVE',r.lastInsertRowid]);}); console.log('postgres adapter smoke ok')"
 
+      - name: SQLite to PostgreSQL migration rehearsal
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
+          PGSSL: disable
+        run: node --experimental-sqlite scripts/validate-postgres-migration.js
+
       - name: PostgreSQL API boot smoke
         env:
           AUTH_TOKEN_SECRET: ci-only-secret
