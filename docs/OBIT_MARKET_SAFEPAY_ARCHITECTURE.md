@@ -6,10 +6,10 @@
 Obit Technologies Limited is the technology infrastructure owner and operator for Obit Market and Obit SafePay. It develops and maintains the software, APIs, integrations, platform operations and associated technology intellectual property.
 
 ### Obit Technologies Multipurpose Cooperative Society Limited
-The Cooperative is the member-owned community partner. It manages cooperative membership, governance, member programmes and the relationship with its members. Access to Obit Market may initially be offered to eligible verified Cooperative members and may later be extended to other approved communities under separate commercial arrangements.
+The Cooperative is the member-owned community partner. It manages cooperative membership, governance, member programmes and the relationship with its members. Obit Cooperative is the anchor community/first tenant. The platform data model uses a community tenancy layer so Obit Technologies can later serve other approved cooperatives, associations and communities under separate commercial arrangements without transferring product ownership.
 
 ### Approved financial providers
-Payment, escrow, custody and settlement functions are performed only by approved third-party financial providers under their own regulatory permissions and contractual terms. Neither Obit Technologies Limited nor the Cooperative should represent itself as holding customer funds under the SafePay model unless a future licensed structure expressly permits that activity.
+Payment, escrow, custody and settlement functions are performed only by approved third-party financial providers under their own regulatory permissions. Consistent with the inter-company framework, such providers are selected or approved, integrated and technically managed through Obit Technologies to the fullest extent legally permissible; where law or provider rules require direct Cooperative contracting, Obit Technologies remains lead technical integrator where lawful. Neither Obit Technologies Limited nor the Cooperative should represent itself as holding customer funds under the SafePay model unless a future licensed structure expressly permits that activity.
 
 ## Product ownership
 - Obit Market: technology product/infrastructure of Obit Technologies Limited.
@@ -43,3 +43,14 @@ Before production, execute an inter-company Technology Infrastructure & Strategi
 
 ## Deployment
 This architecture document records the intended operating model. It does not itself transfer IP, personal data, licences or regulatory responsibility. Those effects require signed agreements and applicable approvals.
+
+
+## Multi-community tenancy
+- `communities` is the tenant boundary for Obit Market.
+- `obit-cooperative` is seeded as the anchor tenant.
+- Listings and orders carry `community_id`.
+- Cooperative membership remains the current pilot access model; future community identity adapters must be introduced deliberately rather than hard-coding ownership into the Market product.
+- Cross-community access is disabled until tenant authorization, privacy and commercial controls are implemented.
+
+## Webhook safety
+SafePay webhooks are fail-closed. A provider must supply the exact signature contract before production activation. The handler requires an explicitly configured signature mode, secret, signature header and funded-event name. Unknown or unmatched events are recorded without changing money state. Only a verified configured funded event can move an order from AWAITING_FUNDING to FUNDED.
