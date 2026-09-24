@@ -25,3 +25,21 @@ jobs:
           DB_PATH: /tmp/obit-ci.db
         run: |
           node --experimental-sqlite --input-type=module -e "const d=await import('./src/db.js'); await d.migrate(); const r=await d.run('INSERT INTO users (email,role) VALUES (?,?)',['ci@example.com','member']); const u=await d.get('SELECT email FROM users WHERE id=?',[r.lastInsertRowid]); if(u.email!=='ci@example.com') process.exit(1); await d.atomic(async()=>{await d.run('UPDATE users SET status=? WHERE id=?',['ACTIVE',r.lastInsertRowid]);}); console.log('sqlite adapter smoke ok')"
+
+      - name: API boot smoke
+        env:
+          AUTH_TOKEN_SECRET: ci-only-secret
+          DB_ENGINE: sqlite
+          DB_PATH: /tmp/obit-api-ci.db
+          NODE_ENV: test
+          PORT: 10001
+        run: |
+          node --experimental-sqlite src/server.js > /tmp/obit-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill $API_PID || true' EXIT
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:10001/api/health >/tmp/health.json; then break; fi
+            sleep 0.5
+          done
+          curl -fsS http://127.0.0.1:10001/api/health
+          curl -fsS http://127.0.0.1:10001/api/readiness
