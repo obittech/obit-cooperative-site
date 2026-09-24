@@ -1,0 +1,29 @@
+name: PostgreSQL Runtime Validation
+on:
+  push:
+    branches: [feature/postgres-runtime]
+  pull_request:
+    branches: [main]
+jobs:
+  syntax-and-sqlite-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Syntax check
+        run: find src scripts -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: SQLite adapter smoke
+        env:
+          AUTH_TOKEN_SECRET: ci-only-secret
+          DB_ENGINE: sqlite
+          DB_PATH: /tmp/obit-ci.db
+        run: |
+          node --experimental-sqlite --input-type=module -e "const d=await import('./src/db.js'); await d.migrate(); const r=await d.run('INSERT INTO users (email,role) VALUES (?,?)',['ci@example.com','member']); const u=await d.get('SELECT email FROM users WHERE id=?',[r.lastInsertRowid]); if(u.email!=='ci@example.com') process.exit(1); await d.atomic(async()=>{await d.run('UPDATE users SET status=? WHERE id=?',['ACTIVE',r.lastInsertRowid]);}); console.log('sqlite adapter smoke ok')"
