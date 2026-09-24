@@ -189,7 +189,7 @@ authRouter.post('/api/auth/reset-password', async (req, res) => {
   if (entry.attempts >= 5) { resetCodes.delete(user.id); throw new HttpError(429, 'Too many incorrect attempts. Request a new code.'); }
   if (entry.codeHash !== hashSetupCode(code)) { entry.attempts += 1; throw new HttpError(401, 'Invalid or expired reset code'); }
   resetCodes.delete(user.id);
-  run('UPDATE users SET password_hash = ? WHERE id = ?', [hashPassword(password), user.id]);
+  run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [hashPassword(password), user.id]);
   audit(user.id, 'PASSWORD_RESET_COMPLETED', 'user', user.id);
   res.json(200, { ok: true });
 });
