@@ -15,7 +15,7 @@ Use the approved Scenes 1–11 presentation logic as a UX and conversion bluepri
 - [x] Cover salary earners, traders/MSMEs, artisans/professionals, transport workers and farmers/agribusiness
 - [x] Route every path into the existing membership application
 - [x] Present Create Profile → Verify Identity → Activate → Portal/Participate flow
-- [ ] Add optional path preselection to the application record after product review
+- [x] Add path preselection to the membership application and capture the selected path in campaign attribution
 
 ## Member value
 - [x] Structured savings
@@ -42,14 +42,14 @@ Use the approved Scenes 1–11 presentation logic as a UX and conversion bluepri
 - [x] Clean Scene 11-inspired closing block
 
 ## Production checks before merge
-- [ ] Confirm all internal links resolve
+- [x] Confirm all internal HTML links resolve (static repository scan)
 - [ ] Check mobile navigation at 360px/390px/430px
 - [ ] Check tablet at 768px/1024px
 - [ ] Check desktop at 1280px/1440px
 - [ ] Verify application and portal remain functional
 - [ ] Verify Opportunity Hub public/member states
-- [ ] Run accessibility/semantic pass
-- [ ] Run SEO/meta pass
+- [x] Run accessibility/semantic pass: skip links, focus-visible states, navigation labels, reduced-motion handling
+- [x] Run SEO/meta pass: canonical URLs, descriptions, sitemap and robots coverage
 - [ ] Deploy and verify live Render build
 
 ## Standing workflow
