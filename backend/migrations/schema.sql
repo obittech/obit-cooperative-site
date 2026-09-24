@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash   TEXT,               -- scrypt hash, set once member activates portal access
   role            TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member','staff','admin')),
   status          TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','SUSPENDED','CLOSED')),
+  session_version INTEGER NOT NULL DEFAULT 0,
   created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
