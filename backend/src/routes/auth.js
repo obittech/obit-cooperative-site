@@ -91,11 +91,11 @@ authRouter.post('/api/auth/request-portal-setup', async (req, res) => {
 
   if (!application.email) throw new HttpError(409, 'This membership has no email address. Please contact Obit support.');
   const code = crypto.randomInt(100000, 1000000).toString();
-  setupCodes.set(user.id, { codeHash: hashSetupCode(code), expires: Date.now() + 15 * 60 * 1000, attempts: 0 });
+  setupCodes.set(Number(user.id), { codeHash: hashSetupCode(code), expires: Date.now() + 15 * 60 * 1000, attempts: 0 });
   try {
     await sendSetupEmail(application.email, code);
   } catch (err) {
-    setupCodes.delete(user.id);
+    setupCodes.delete(Number(user.id));
     throw err;
   }
   await audit(user.id, 'PORTAL_SETUP_CODE_SENT', 'user', user.id);
@@ -142,8 +142,8 @@ authRouter.post('/api/auth/request-admin-setup', async (req, res) => {
   }
 
   const code = crypto.randomInt(100000, 1000000).toString();
-  adminSetupCodes.set(user.id, { codeHash: hashSetupCode(code), expires: Date.now() + 15 * 60 * 1000, attempts: 0 });
-  try { await sendAdminSetupEmail(email, code); } catch (err) { adminSetupCodes.delete(user.id); throw err; }
+  adminSetupCodes.set(Number(user.id), { codeHash: hashSetupCode(code), expires: Date.now() + 15 * 60 * 1000, attempts: 0 });
+  try { await sendAdminSetupEmail(email, code); } catch (err) { adminSetupCodes.delete(Number(user.id)); throw err; }
   await audit(user.id, 'ADMIN_SETUP_CODE_SENT', 'user', user.id);
   res.json(200, { user_id: user.id, message: 'Admin activation code sent to the authorized email.' });
 });
@@ -170,8 +170,8 @@ authRouter.post('/api/auth/request-password-reset', async (req, res) => {
   const user = await get("SELECT * FROM users WHERE lower(email) = lower(?) AND status = 'ACTIVE'", [identifier]);
   if (!user?.email) { res.json(200, generic); return; }
   const code = crypto.randomInt(100000, 1000000).toString();
-  resetCodes.set(user.id, { codeHash: hashSetupCode(code), expires: Date.now() + 15 * 60 * 1000, attempts: 0 });
-  try { await sendSetupEmail(user.email, code); } catch (err) { resetCodes.delete(user.id); throw err; }
+  resetCodes.set(Number(user.id), { codeHash: hashSetupCode(code), expires: Date.now() + 15 * 60 * 1000, attempts: 0 });
+  try { await sendSetupEmail(user.email, code); } catch (err) { resetCodes.delete(Number(user.id)); throw err; }
   await audit(user.id, 'PASSWORD_RESET_CODE_SENT', 'user', user.id);
   res.json(200, generic);
 });
@@ -184,11 +184,11 @@ authRouter.post('/api/auth/reset-password', async (req, res) => {
   if (!user) throw new HttpError(401, 'Invalid or expired reset code');
   const minLength = user.role === 'admin' ? 12 : 8;
   if (password.length < minLength) throw new HttpError(400, `Password must be at least ${minLength} characters`);
-  const entry = resetCodes.get(user.id);
-  if (!entry || entry.expires < Date.now()) { resetCodes.delete(user.id); throw new HttpError(401, 'Invalid or expired reset code'); }
-  if (entry.attempts >= 5) { resetCodes.delete(user.id); throw new HttpError(429, 'Too many incorrect attempts. Request a new code.'); }
+  const entry = resetCodes.get(Number(user.id));
+  if (!entry || entry.expires < Date.now()) { resetCodes.delete(Number(user.id)); throw new HttpError(401, 'Invalid or expired reset code'); }
+  if (entry.attempts >= 5) { resetCodes.delete(Number(user.id)); throw new HttpError(429, 'Too many incorrect attempts. Request a new code.'); }
   if (entry.codeHash !== hashSetupCode(code)) { entry.attempts += 1; throw new HttpError(401, 'Invalid or expired reset code'); }
-  resetCodes.delete(user.id);
+  resetCodes.delete(Number(user.id));
   await run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [hashPassword(password), user.id]);
   await audit(user.id, 'PASSWORD_RESET_COMPLETED', 'user', user.id);
   res.json(200, { ok: true });
@@ -212,8 +212,8 @@ authRouter.post('/api/auth/login', async (req, res, params) => {
 
   if (user.role === 'admin') {
     const code = crypto.randomInt(100000, 1000000).toString();
-    adminLoginCodes.set(user.id, { codeHash: hashSetupCode(code), expires: Date.now() + 10 * 60 * 1000, attempts: 0 });
-    try { await sendAdminLoginEmail(user.email, code); } catch (err) { adminLoginCodes.delete(user.id); throw err; }
+    adminLoginCodes.set(Number(user.id), { codeHash: hashSetupCode(code), expires: Date.now() + 10 * 60 * 1000, attempts: 0 });
+    try { await sendAdminLoginEmail(user.email, code); } catch (err) { adminLoginCodes.delete(Number(user.id)); throw err; }
     await audit(user.id, 'ADMIN_LOGIN_MFA_SENT', 'user', user.id);
     res.json(200, { mfa_required: true, user_id: user.id, role: user.role });
     return;
