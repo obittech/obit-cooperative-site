@@ -5,7 +5,7 @@ import { audit } from '../utils/audit.js';
 
 export const opportunitiesRouter = new Router();
 
-async function await memberForUser(userId) {
+async function memberForUser(userId) {
   const member = await get('SELECT * FROM members WHERE user_id = ?', [userId]);
   if (!member || member.status !== 'ACTIVE') throw new HttpError(403, 'Active cooperative membership is required');
   return member;
