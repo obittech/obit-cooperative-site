@@ -53,7 +53,7 @@ export async function handlePaymentWebhook(req, res, params) {
   }
 
   if (!verified) {
-    audit(null, 'WEBHOOK_SIGNATURE_REJECTED', 'webhook_events', null, { provider });
+    await audit(null, 'WEBHOOK_SIGNATURE_REJECTED', 'webhook_events', null, { provider });
     throw new HttpError(401, 'Signature verification failed');
   }
 
@@ -61,12 +61,12 @@ export async function handlePaymentWebhook(req, res, params) {
   try { event = JSON.parse(raw); } catch { throw new HttpError(400, 'Invalid JSON'); }
 
   const eventId = event.id || event.data?.id || event.reference || event.data?.reference || crypto.randomUUID();
-  const alreadyProcessed = get('SELECT * FROM webhook_events WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+  const alreadyProcessed = await get('SELECT * FROM webhook_events WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
   if (alreadyProcessed) {
     res.json(200, { ok: true, idempotent_replay: true });
     return;
   }
-  run(
+  await run(
     `INSERT INTO webhook_events (provider, event_id, payload_json, processed) VALUES (?, ?, ?, 0)`,
     [provider, String(eventId), raw]
   );
@@ -78,55 +78,55 @@ export async function handlePaymentWebhook(req, res, params) {
 
   // Transfer events use the same signed Paystack webhook endpoint but are not membership payments.
   if (provider === 'paystack' && ['transfer.success', 'transfer.failed', 'transfer.reversed'].includes(event.event)) {
-    const withdrawal = get('SELECT * FROM withdrawal_requests WHERE transfer_reference = ?', [reference]);
+    const withdrawal = await get('SELECT * FROM withdrawal_requests WHERE transfer_reference = ?', [reference]);
     if (!withdrawal) {
-      run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
-      audit(null, 'TRANSFER_UNKNOWN_REFERENCE', 'webhook_events', null, { reference, event: event.event });
+      await run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+      await audit(null, 'TRANSFER_UNKNOWN_REFERENCE', 'webhook_events', null, { reference, event: event.event });
       res.json(200, { ok: true });
       return;
     }
 
     if (event.event === 'transfer.success' && withdrawal.status === 'APPROVED') {
-      const account = get('SELECT * FROM ledger_accounts WHERE id = ?', [withdrawal.ledger_account_id]);
+      const account = await get('SELECT * FROM ledger_accounts WHERE id = ?', [withdrawal.ledger_account_id]);
       if (!account || Number(account.balance_kobo ?? Math.round(account.balance * 100)) < Number(withdrawal.amount_kobo ?? Math.round(withdrawal.amount * 100))) throw new HttpError(409, 'Insufficient current savings balance');
 
-      atomic(() => {
-        let tx = get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'WITHDRAWAL'", [reference]);
+      await atomic(async () => {
+        let tx = await get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'WITHDRAWAL'", [reference]);
         if (!tx) {
           const withdrawalKobo = Number(withdrawal.amount_kobo ?? Math.round(withdrawal.amount * 100));
-          const created = run(`INSERT INTO transactions (member_id, type, amount, amount_kobo, currency, provider_reference, status)
+          const created = await run(`INSERT INTO transactions (member_id, type, amount, amount_kobo, currency, provider_reference, status)
                                VALUES (?, 'WITHDRAWAL', ?, ?, 'NGN', ?, 'VERIFIED')`,
                               [withdrawal.member_id, withdrawal.amount, withdrawalKobo, reference]);
-          tx = get('SELECT * FROM transactions WHERE id = ?', [Number(created.lastInsertRowid)]);
+          tx = await get('SELECT * FROM transactions WHERE id = ?', [Number(created.lastInsertRowid)]);
         }
         const withdrawalKobo = Number(withdrawal.amount_kobo ?? Math.round(withdrawal.amount * 100));
-        const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount, amount_kobo) VALUES (?, ?, 'debit', ?, ?)",
+        const entry = await run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount, amount_kobo) VALUES (?, ?, 'debit', ?, ?)",
                           [account.id, tx.id, withdrawal.amount, withdrawalKobo]);
-        if (Number(entry.changes) > 0) run('UPDATE ledger_accounts SET balance = balance - ?, balance_kobo = COALESCE(balance_kobo, CAST(ROUND(balance * 100) AS INTEGER)) - ? WHERE id = ?', [withdrawal.amount, withdrawalKobo, account.id]);
-        run("UPDATE withdrawal_requests SET status = 'PAID', reviewed_at = datetime('now') WHERE id = ?", [withdrawal.id]);
+        if (Number(entry.changes) > 0) await run('UPDATE ledger_accounts SET balance = balance - ?, balance_kobo = COALESCE(balance_kobo, CAST(ROUND(balance * 100) AS INTEGER)) - ? WHERE id = ?', [withdrawal.amount, withdrawalKobo, account.id]);
+        await run("UPDATE withdrawal_requests SET status = 'PAID', reviewed_at = datetime('now') WHERE id = ?", [withdrawal.id]);
         const receiptNo = `OBW-${new Date().getUTCFullYear()}-${String(tx.id).padStart(8, '0')}`;
-        run('INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)', [tx.id, receiptNo]);
-        audit(null, 'WITHDRAWAL_TRANSFER_CONFIRMED', 'withdrawal_requests', withdrawal.id, { reference, receiptNo });
+        await run('INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)', [tx.id, receiptNo]);
+        await audit(null, 'WITHDRAWAL_TRANSFER_CONFIRMED', 'withdrawal_requests', withdrawal.id, { reference, receiptNo });
       });
     } else if (event.event !== 'transfer.success') {
-      audit(null, event.event === 'transfer.reversed' ? 'WITHDRAWAL_TRANSFER_REVERSED' : 'WITHDRAWAL_TRANSFER_FAILED', 'withdrawal_requests', withdrawal.id, { reference });
+      await audit(null, event.event === 'transfer.reversed' ? 'WITHDRAWAL_TRANSFER_REVERSED' : 'WITHDRAWAL_TRANSFER_FAILED', 'withdrawal_requests', withdrawal.id, { reference });
     }
 
-    run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+    await run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
     res.json(200, { ok: true });
     return;
   }
 
-  const payment = get('SELECT * FROM membership_payments WHERE reference = ?', [reference]);
-  const contribution = !payment ? get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'CONTRIBUTION'", [reference]) : null;
+  const payment = await get('SELECT * FROM membership_payments WHERE reference = ?', [reference]);
+  const contribution = !payment ? await get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'CONTRIBUTION'", [reference]) : null;
   if (!payment && !contribution) {
-    audit(null, 'WEBHOOK_UNKNOWN_REFERENCE', 'webhook_events', null, { provider, reference });
+    await audit(null, 'WEBHOOK_UNKNOWN_REFERENCE', 'webhook_events', null, { provider, reference });
     throw new HttpError(404, 'Unknown payment reference');
   }
 
   if (contribution) {
     if (contribution.status === 'VERIFIED') {
-      run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+      await run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
       res.json(200, { ok: true, idempotent_replay: true });
       return;
     }
@@ -137,26 +137,26 @@ export async function handlePaymentWebhook(req, res, params) {
     const contributionSuccess = ['success', 'PAID', 'successful'].includes(status);
 
     if (!contributionAmountMatches || !contributionCurrencyMatches || !contributionSuccess) {
-      run("UPDATE transactions SET status = 'FAILED' WHERE id = ?", [contribution.id]);
-      run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
-      audit(null, 'CONTRIBUTION_FAILED', 'transactions', contribution.id, { reference, status, amountKobo });
+      await run("UPDATE transactions SET status = 'FAILED' WHERE id = ?", [contribution.id]);
+      await run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+      await audit(null, 'CONTRIBUTION_FAILED', 'transactions', contribution.id, { reference, status, amountKobo });
       if (!contributionAmountMatches || !contributionCurrencyMatches) throw new HttpError(422, 'Amount or currency mismatch');
       res.json(200, { ok: true });
       return;
     }
 
-    run("INSERT OR IGNORE INTO ledger_accounts (member_id, account_type, balance, balance_kobo, currency) VALUES (?, 'SAVINGS', 0, 0, 'NGN')", [contribution.member_id]);
-    const account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [contribution.member_id]);
-    run("UPDATE transactions SET status = 'VERIFIED' WHERE id = ?", [contribution.id]);
+    await run("INSERT OR IGNORE INTO ledger_accounts (member_id, account_type, balance, balance_kobo, currency) VALUES (?, 'SAVINGS', 0, 0, 'NGN')", [contribution.member_id]);
+    const account = await get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [contribution.member_id]);
+    await run("UPDATE transactions SET status = 'VERIFIED' WHERE id = ?", [contribution.id]);
     const contributionKobo = Number(contribution.amount_kobo ?? Math.round(contribution.amount * 100));
-    const entry = run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount, amount_kobo) VALUES (?, ?, 'credit', ?, ?)", [account.id, contribution.id, contribution.amount, contributionKobo]);
+    const entry = await run("INSERT OR IGNORE INTO ledger_entries (ledger_account_id, transaction_id, direction, amount, amount_kobo) VALUES (?, ?, 'credit', ?, ?)", [account.id, contribution.id, contribution.amount, contributionKobo]);
     if (Number(entry.changes) > 0) {
-      run("UPDATE ledger_accounts SET balance = balance + ?, balance_kobo = COALESCE(balance_kobo, CAST(ROUND(balance * 100) AS INTEGER)) + ? WHERE id = ?", [contribution.amount, contributionKobo, account.id]);
+      await run("UPDATE ledger_accounts SET balance = balance + ?, balance_kobo = COALESCE(balance_kobo, CAST(ROUND(balance * 100) AS INTEGER)) + ? WHERE id = ?", [contribution.amount, contributionKobo, account.id]);
     }
     const receiptNo = `OBR-${new Date().getUTCFullYear()}-${String(contribution.id).padStart(8, '0')}`;
-    run("INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)", [contribution.id, receiptNo]);
-    run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
-    audit(null, 'CONTRIBUTION_VERIFIED', 'transactions', contribution.id, { reference, receiptNo });
+    await run("INSERT OR IGNORE INTO receipts (transaction_id, receipt_number) VALUES (?, ?)", [contribution.id, receiptNo]);
+    await run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+    await audit(null, 'CONTRIBUTION_VERIFIED', 'transactions', contribution.id, { reference, receiptNo });
     res.json(200, { ok: true });
     return;
   }
@@ -167,7 +167,7 @@ export async function handlePaymentWebhook(req, res, params) {
   // an application from bouncing back to UNDER_REVIEW after admin has
   // already acted on it.
   if (payment.status === 'PAYMENT_VERIFIED') {
-    run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+    await run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
     res.json(200, { ok: true, idempotent_replay: true });
     return;
   }
@@ -178,24 +178,24 @@ export async function handlePaymentWebhook(req, res, params) {
   const success = ['success', 'PAID', 'successful'].includes(status);
 
   if (!amountMatches || !currencyMatches) {
-    run("UPDATE membership_payments SET status = 'PAYMENT_FAILED' WHERE id = ?", [payment.id]);
-    run("UPDATE member_applications SET status = 'PAYMENT_FAILED', updated_at = datetime('now') WHERE id = ?", [payment.application_id]);
-    run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
-    audit(null, 'PAYMENT_AMOUNT_MISMATCH', 'membership_payments', payment.id, { amountKobo, expectedAmountKobo, currency });
+    await run("UPDATE membership_payments SET status = 'PAYMENT_FAILED' WHERE id = ?", [payment.id]);
+    await run("UPDATE member_applications SET status = 'PAYMENT_FAILED', updated_at = datetime('now') WHERE id = ?", [payment.application_id]);
+    await run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+    await audit(null, 'PAYMENT_AMOUNT_MISMATCH', 'membership_payments', payment.id, { amountKobo, expectedAmountKobo, currency });
     throw new HttpError(422, 'Amount or currency mismatch');
   }
 
   if (success) {
-    run("UPDATE membership_payments SET status = 'PAYMENT_VERIFIED', verified_at = datetime('now') WHERE id = ?", [payment.id]);
-    run("UPDATE member_applications SET status = 'UNDER_REVIEW', updated_at = datetime('now') WHERE id = ?", [payment.application_id]);
-    audit(null, 'PAYMENT_VERIFIED', 'membership_payments', payment.id, { reference });
+    await run("UPDATE membership_payments SET status = 'PAYMENT_VERIFIED', verified_at = datetime('now') WHERE id = ?", [payment.id]);
+    await run("UPDATE member_applications SET status = 'UNDER_REVIEW', updated_at = datetime('now') WHERE id = ?", [payment.application_id]);
+    await audit(null, 'PAYMENT_VERIFIED', 'membership_payments', payment.id, { reference });
   } else {
-    run("UPDATE membership_payments SET status = 'PAYMENT_FAILED' WHERE id = ?", [payment.id]);
-    run("UPDATE member_applications SET status = 'PAYMENT_FAILED', updated_at = datetime('now') WHERE id = ?", [payment.application_id]);
-    audit(null, 'PAYMENT_FAILED', 'membership_payments', payment.id, { reference, status });
+    await run("UPDATE membership_payments SET status = 'PAYMENT_FAILED' WHERE id = ?", [payment.id]);
+    await run("UPDATE member_applications SET status = 'PAYMENT_FAILED', updated_at = datetime('now') WHERE id = ?", [payment.application_id]);
+    await audit(null, 'PAYMENT_FAILED', 'membership_payments', payment.id, { reference, status });
   }
 
-  run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
+  await run('UPDATE webhook_events SET processed = 1 WHERE provider = ? AND event_id = ?', [provider, String(eventId)]);
   res.json(200, { ok: true });
 }
 
