@@ -38,7 +38,7 @@ const routers = [systemRouter, authRouter, applicationsRouter, kycRouter, paymen
 if (process.env.ENABLE_DEV_ROUTES === 'true') routers.push(devRouter);
 
 const allowedOrigins = new Set(
-  (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || 'https://obitcooperative.com,https://www.obitcooperative.com')
+  (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || 'https://obitcooperative.com,https://www.obitcooperative.com,https://obit-cooperative-site.onrender.com')
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean)
