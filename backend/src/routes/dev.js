@@ -18,12 +18,12 @@ devRouter.post('/api/dev/seed-admin', async (req, res) => {
   }
   if (!email || !password) throw new HttpError(400, 'email and password required');
 
-  const existing = get('SELECT id FROM users WHERE email = ?', [email]);
+  const existing = await get('SELECT id FROM users WHERE email = ?', [email]);
   if (existing) {
-    run('UPDATE users SET password_hash = ?, role = ?, status = ? WHERE id = ?',
+    await run('UPDATE users SET password_hash = ?, role = ?, status = ? WHERE id = ?',
       [hashPassword(password), role || 'admin', 'ACTIVE', existing.id]);
   } else {
-    run('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)',
+    await run('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)',
       [email, hashPassword(password), role || 'admin']);
   }
   res.json(200, { ok: true });
