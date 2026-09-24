@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://obitcooperative.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://obitcooperative.com/apply.html</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://obitcooperative.com/news.html</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://obitcooperative.com/market.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://obitcooperative.com/privacy.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://obitcooperative.com/terms.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://obitcooperative.com/member-policies.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://obitcooperative.com/market-terms.html</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
+  <url><loc>https://obitcooperative.com/market-privacy.html</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
+</urlset>
