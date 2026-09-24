@@ -345,7 +345,96 @@ INSERT OR IGNORE INTO opportunities (
   1,
   0,
   '2026-09-24 08:00:00'
+),
+(
+  '3mtt-partner-network-2026',
+  '3MTT Partner Network is accepting organisations on a rolling basis',
+  'Technology partnership and skills',
+  'The Federal Government''s 3MTT Partner Network accepts expressions of interest from registered organisations that can deliver training, hire talent, support innovation, provide funding or extend programme reach. Applications are reviewed on a rolling basis.',
+  'The 3MTT Partner Network has six participation tiers. Obit Technologies could truthfully explore the Delivery Network, Employer and Talent Network, Innovation and Enterprise Network, or Amplification Network, subject to evidence of actual capacity and agreement with the programme team.',
+  'For Nigerians, the programme can widen access to digital training, internships, jobs and practical technology support. Participation by an organisation does not guarantee grants, contracts or automatic selection.',
+  '3 Million Technical Talent Programme',
+  'https://3mtt.nitda.gov.ng/partnership/',
+  'Registered organisations may apply. Each tier requires evidence matching the contribution offered, such as training delivery, technology platforms, hiring commitments, incubation support, funding or media reach.',
+  NULL,
+  'Nigeria',
+  'Possible partner recognition, access to programme tools and talent, training resources, grants or contract consideration where applicable. No guaranteed cash award is stated.',
+  'No application fee is stated. The applicant must commit credible staff time, facilities, tools, placements, programme support or reach appropriate to the chosen tier.',
+  'The application is followed by a scope-alignment call and, if accepted, a memorandum of understanding. Obit must not promise facilities, jobs, funding, cohorts or nationwide delivery that it cannot evidence.',
+  '1. Select only the partnership tier Obit can presently support.\n2. Prepare a one-page capability statement and evidence list.\n3. Complete the official expression-of-interest form.\n4. Attend the alignment call if invited.\n5. Review any proposed memorandum of understanding before acceptance.',
+  'CAC certificate; company profile; website; primary contact details; service and programme description; team profiles; evidence of training, technology, recruitment, incubation or community reach; proposed contribution; locations; measurable outcomes; references where available.',
+  'Selection is not guaranteed. Overstating facilities, trainees, jobs, reach or funding capacity would create reputational and contractual risk. Any memorandum of understanding requires legal and management review.',
+  'Strong fit for Obit Technologies Limited. The best initial case is technology-enabled delivery and amplification, with FFK or the Cooperative mentioned only where verified and relevant.',
+  88,
+  'DO_TODAY',
+  'CONFIRMED',
+  'PUBLISHED',
+  1,
+  1,
+  '2026-09-24 09:30:00'
+),
+(
+  'nitda-iicp-registration-2026',
+  'NITDA registration can strengthen Obit Technologies for government ICT work',
+  'Technology compliance and procurement readiness',
+  'NITDA maintains a registration process for indigenous IT service providers and consultants seeking to serve Federal Ministries, Departments and Agencies. Registration requires an online application, supporting documents and a signed letter to the Director-General.',
+  'Registration places qualified firms in the national database of indigenous IT companies. NITDA states that a satisfactory applicant may first receive a six-month provisional certificate and later a substantive certificate valid for two years, subject to verification.',
+  'For Nigerian businesses, stronger registration of local technology providers can improve accountability and local participation in public ICT projects. Registration itself does not award a contract.',
+  'National Information Technology Development Agency',
+  'https://nitda.gov.ng/registration-of-contractors-service-providers/',
+  'Nigerian IT service providers or consultants that can prove their corporate status, technical service areas, personnel capacity and supporting records.',
+  NULL,
+  'Nigeria',
+  'Possible entry in NITDA''s national database of indigenous IT companies, a provisional certificate for six months and, after verification, a substantive certificate valid for two years.',
+  'The official information reviewed does not state the applicable fee. Preparation and physical submission costs may arise.',
+  'Information and documents are verified. Fabricated or unsupported documents can lead to refusal or revocation. Renewal should be submitted at least three months before expiry.',
+  '1. Review the official NITDA requirements and service categories.\n2. Audit Obit''s corporate, tax, personnel and project evidence.\n3. Complete the IICP portal application.\n4. Prepare a signed application letter addressed to the Director-General of NITDA.\n5. Submit the form and stipulated documents through the official route.\n6. Track provisional review and respond to any compliance recommendations.',
+  'CAC certificate and company records; tax and statutory compliance records requested by the form; company profile; office and contact details; service categories; technical staff CVs and qualifications; project evidence and references; signed application letter; any required financial or infrastructure evidence.',
+  'Obit may not yet have enough completed-project evidence or every statutory certificate. Registration does not guarantee procurement awards, and inaccurate capability claims could cause refusal.',
+  'Very strong foundational fit for Obit Technologies Limited, especially before pursuing more Federal Government ICT tenders.',
+  90,
+  'PREPARE_THIS_WEEK',
+  'CONFIRMED',
+  'PUBLISHED',
+  1,
+  1,
+  '2026-09-24 09:30:00'
+),
+(
+  'nitda-naccima-msme-digital-partnership-2026',
+  'NITDA and NACCIMA begin an MSME digital-transformation partnership',
+  'MSME digital transformation',
+  'NITDA and NACCIMA announced a formal partnership on 15 September 2026 covering MSME digital transformation, capacity building, technology adoption and a collaborative digital ecosystem. No public application window was announced in the official release.',
+  'The memorandum of understanding is intended to connect government, organised private-sector bodies, technology companies, investors and development partners. Implementation is expected to begin, but specific beneficiary and vendor selection routes are not yet published.',
+  'Traders and small businesses may later gain access to digital-skills, technology-adoption or market-support activities. These benefits remain prospective until implementation details are officially released.',
+  'National Information Technology Development Agency',
+  'https://nitda.gov.ng/nitda-naccima-seal-strategic-partnership-to-accelerate-nigerias-digital-economy-msme-digital-transformation/9803/',
+  'No public application eligibility was announced. Future participation may involve NACCIMA members, MSMEs, technology companies, training providers or ecosystem partners, subject to later official guidance.',
+  NULL,
+  'Nigeria',
+  'Prospective access to capacity building, digital adoption, innovation support, market linkages and ecosystem collaboration. No funding amount or guaranteed benefit is stated.',
+  'Not stated because no application route has been announced.',
+  'This is confirmed news but only a prospective opportunity. Do not contact unofficial agents or present Obit as an implementing partner.',
+  '1. Monitor NITDA and NACCIMA official channels.\n2. Prepare a short MSME digitisation capability note.\n3. Identify a realistic pilot for Abuja MSMEs.\n4. Wait for an official implementation, vendor or beneficiary route.\n5. Seek approval before sending a partnership approach.',
+  'Company profile; CAC certificate; MSME digitisation service description; team profiles; pilot concept; verifiable client or project evidence; data-protection approach; proposed outcomes and delivery locations.',
+  'There is presently no open application and no stated funding. Pursuing unofficial invitations or claiming programme affiliation would be misleading.',
+  'Good watch-list fit for Obit Technologies Limited and a possible future member-benefit channel for Obit Cooperative.',
+  72,
+  'WATCH',
+  'PROSPECTIVE',
+  'PUBLISHED',
+  1,
+  0,
+  '2026-09-24 09:30:00'
 );
+
+UPDATE opportunities
+SET source_url = 'https://credicorp-register.ng/vendor-application', updated_at = datetime('now')
+WHERE slug = 'credicorp-partnership-route-2026';
+
+UPDATE opportunities
+SET source_url = 'https://smedan.gov.ng/our-programs/ssp/', updated_at = datetime('now')
+WHERE slug = 'smedan-registration-route-2026';
 
 
 -- Obit Market + SafePay multi-community infrastructure
