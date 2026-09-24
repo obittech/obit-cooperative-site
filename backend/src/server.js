@@ -29,7 +29,7 @@ if (process.env.DB_CUTOVER_SYNC === 'true') {
   console.log('Final PostgreSQL parity sync completed');
 }
 
-const { migrate } = await import('./db.js');
+const { migrate, DB_ENGINE } = await import('./db.js');
 const { sendJson, readJsonBody, HttpError } = await import('./router.js');
 const { authRouter } = await import('./routes/auth.js');
 const { applicationsRouter } = await import('./routes/applications.js');
@@ -45,6 +45,7 @@ const { safePayRouter } = await import('./routes/safepay.js');
 const { handleSafePayWebhook } = await import('./routes/safepay-webhook.js');
 
 await migrate();
+console.log(`Database runtime: ${DB_ENGINE}`);
 
 const routers = [systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, opportunitiesRouter, safePayRouter, meRouter, adminRouter];
 if (process.env.ENABLE_DEV_ROUTES === 'true') routers.push(devRouter);
