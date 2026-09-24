@@ -6,8 +6,18 @@ toggle?.addEventListener("click", () => {
   toggle.setAttribute("aria-expanded", String(open));
 });
 
+function closeNav() {
+  nav?.classList.remove("open");
+  toggle?.setAttribute("aria-expanded", "false");
+}
 document.querySelectorAll(".main-nav a").forEach(link => {
-  link.addEventListener("click", () => nav.classList.remove("open"));
+  link.addEventListener("click", closeNav);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeNav();
+    toggle?.focus();
+  }
 });
 
 const observer = new IntersectionObserver((entries) => {
