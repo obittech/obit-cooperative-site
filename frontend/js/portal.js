@@ -51,8 +51,10 @@ document.getElementById('btnLogin').addEventListener('click', async () => {
   } catch (err) { showAlert(err.message); }
 });
 
-document.getElementById('logoutLink').addEventListener('click', (e) => {
+document.getElementById('logoutLink').addEventListener('click', async (e) => {
   e.preventDefault();
+  const token = OBIT.getSession('member');
+  try { if (token) await OBIT.post('/api/auth/logout', {}, { token }); } catch {}
   OBIT.clearSession('member');
   document.getElementById('loggedInView').style.display = 'none';
   document.getElementById('loggedOutView').style.display = '';
@@ -71,6 +73,9 @@ async function loadDashboard() {
   if (!token) return;
   try {
     const membership = await OBIT.get('/api/me/membership', { token });
+    document.getElementById('digitalMemberName').textContent = membership.full_legal_name || 'Member';
+    document.getElementById('digitalMemberId').textContent = membership.digital_membership_id || membership.member_code;
+    document.getElementById('digitalMemberStatus').innerHTML = badge(membership.status);
     document.getElementById('membershipSummary').innerHTML = `
       <dt>Member ID</dt><dd><span class="member-code">${membership.member_code}</span></dd>
       <dt>Name</dt><dd>${membership.full_legal_name || '—'}</dd>
@@ -123,7 +128,7 @@ async function loadBanks(token) {
 async function refreshBankAccounts(token) {
   const rows = await OBIT.get('/api/me/bank-accounts', { token });
   document.getElementById('withdrawBankAccount').innerHTML = '<option value="">Select verified account</option>' +
-    rows.map(r => `<option value="${r.id}">${r.bank_name} • ${r.account_number} • ${r.account_name}</option>`).join('');
+    rows.map(r => `<option value="${r.id}">${r.bank_name} • ${r.account_number_masked || r.account_number} • ${r.account_name}</option>`).join('');
 }
 
 async function refreshWithdrawals(token) {
