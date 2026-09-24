@@ -7,6 +7,7 @@
 import { Router, HttpError } from '../router.js';
 import { get, all, run } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { parseNgnToKobo, koboToNgn } from '../utils/money.js';
 
 export const meRouter = new Router();
 
@@ -148,9 +149,10 @@ meRouter.get('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
 meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
   const member = memberForUser(req.user.id);
   const { amount, bank_account_id } = req.body || {};
-  const n = Number(amount);
-  const amountKobo = Math.round(n * 100);
-  if (!Number.isFinite(n) || n <= 0 || !Number.isSafeInteger(amountKobo)) throw new HttpError(400, 'Enter a valid withdrawal amount');
+  let amountKobo;
+  try { amountKobo = parseNgnToKobo(amount); }
+  catch { throw new HttpError(400, 'Enter a valid withdrawal amount with no more than two decimal places'); }
+  const n = koboToNgn(amountKobo);
   const minWithdrawal = Number(process.env.MIN_WITHDRAWAL_NGN || 100);
   const maxWithdrawal = Number(process.env.MAX_WITHDRAWAL_NGN || 500000);
   if (n < minWithdrawal || n > maxWithdrawal) throw new HttpError(400, `Withdrawal must be between ₦${minWithdrawal.toLocaleString()} and ₦${maxWithdrawal.toLocaleString()}`);
