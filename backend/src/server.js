@@ -19,6 +19,16 @@ if (fs.existsSync(envPath)) {
   }
 }
 
+// One-time guarded SQLite -> PostgreSQL cutover hook.
+if (process.env.DB_CUTOVER_SYNC === 'true') {
+  if (String(process.env.DB_ENGINE || '').toLowerCase() !== 'postgres') {
+    throw new Error('DB_CUTOVER_SYNC requires DB_ENGINE=postgres');
+  }
+  console.log('Running guarded final SQLite -> PostgreSQL parity sync before startup');
+  await import('../scripts/migrate-sqlite-to-postgres.js');
+  console.log('Final PostgreSQL parity sync completed');
+}
+
 const { migrate } = await import('./db.js');
 const { sendJson, readJsonBody, HttpError } = await import('./router.js');
 const { authRouter } = await import('./routes/auth.js');
