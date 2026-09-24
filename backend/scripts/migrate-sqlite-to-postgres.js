@@ -24,7 +24,7 @@ const source = new DatabaseSync(sqlitePath);
 const target = new Client({ connectionString: url, ssl: process.env.PGSSL === 'disable' ? false : { rejectUnauthorized: false } });
 await target.connect();
 
-const tables = ['users','member_applications','consents','kyc_checks','membership_payments','members','community_onboarding','contribution_plans','payment_identities','ledger_accounts','transactions','ledger_entries','member_bank_accounts','withdrawal_requests','receipts','webhook_events','referrals','audit_events'];
+const tables = ['users','member_applications','consents','kyc_checks','membership_payments','members','community_onboarding','contribution_plans','payment_identities','ledger_accounts','transactions','ledger_entries','member_bank_accounts','withdrawal_requests','receipts','webhook_events','referrals','audit_events','opportunities'];
 const cols = (table) => source.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
 
 try {

@@ -1,0 +1,87 @@
+name: PostgreSQL Runtime Validation
+on:
+  push:
+    branches: [feature/postgres-runtime]
+  pull_request:
+    branches: [main]
+jobs:
+  syntax-and-sqlite-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: obit_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d obit_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - name: Syntax check
+        run: find src scripts -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: SQLite adapter smoke
+        env:
+          AUTH_TOKEN_SECRET: ci-only-secret
+          DB_ENGINE: sqlite
+          DB_PATH: /tmp/obit-ci.db
+        run: |
+          node --experimental-sqlite --input-type=module -e "const d=await import('./src/db.js'); await d.migrate(); const r=await d.run('INSERT INTO users (email,role) VALUES (?,?)',['ci@example.com','member']); const u=await d.get('SELECT email FROM users WHERE id=?',[r.lastInsertRowid]); if(u.email!=='ci@example.com') process.exit(1); await d.atomic(async()=>{await d.run('UPDATE users SET status=? WHERE id=?',['ACTIVE',r.lastInsertRowid]);}); console.log('sqlite adapter smoke ok')"
+
+      - name: PostgreSQL adapter smoke
+        env:
+          AUTH_TOKEN_SECRET: ci-only-secret
+          DB_ENGINE: postgres
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
+          PGSSL: disable
+        run: |
+          node --experimental-sqlite --input-type=module -e "const d=await import('./src/db.js'); await d.migrate(); const r=await d.run('INSERT INTO users (email,role) VALUES (?,?)',['pg-ci@example.com','member']); const u=await d.get('SELECT email FROM users WHERE id=?',[r.lastInsertRowid]); if(u.email!=='pg-ci@example.com') process.exit(1); await d.atomic(async()=>{await d.run('UPDATE users SET status=? WHERE id=?',['ACTIVE',r.lastInsertRowid]);}); console.log('postgres adapter smoke ok')"
+
+      - name: PostgreSQL API boot smoke
+        env:
+          AUTH_TOKEN_SECRET: ci-only-secret
+          DB_ENGINE: postgres
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
+          PGSSL: disable
+          NODE_ENV: test
+          PORT: 10002
+        run: |
+          node --experimental-sqlite src/server.js > /tmp/obit-pg-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill $API_PID || true' EXIT
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:10002/api/readiness >/tmp/pg-readiness.json; then break; fi
+            sleep 0.5
+          done
+          cat /tmp/pg-readiness.json
+          grep -q '"runtime":"postgres"' /tmp/pg-readiness.json
+
+      - name: API boot smoke
+        env:
+          AUTH_TOKEN_SECRET: ci-only-secret
+          DB_ENGINE: sqlite
+          DB_PATH: /tmp/obit-api-ci.db
+          NODE_ENV: test
+          PORT: 10001
+        run: |
+          node --experimental-sqlite src/server.js > /tmp/obit-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill $API_PID || true' EXIT
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:10001/api/health >/tmp/health.json; then break; fi
+            sleep 0.5
+          done
+          curl -fsS http://127.0.0.1:10001/api/health
+          curl -fsS http://127.0.0.1:10001/api/readiness

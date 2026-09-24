@@ -1,5 +1,5 @@
 import { Router } from '../router.js';
-import { get } from '../db.js';
+import { get, DB_ENGINE } from '../db.js';
 
 export const systemRouter = new Router();
 
@@ -14,7 +14,7 @@ systemRouter.get('/api/health', async (_req, res) => {
 systemRouter.get('/api/readiness', async (_req, res) => {
   let databaseOk = false;
   try {
-    databaseOk = Number(get('SELECT 1 AS ok')?.ok) === 1;
+    databaseOk = Number((await get('SELECT 1 AS ok'))?.ok) === 1;
   } catch {
     databaseOk = false;
   }
@@ -31,7 +31,7 @@ systemRouter.get('/api/readiness', async (_req, res) => {
     ok: ready,
     database: {
       ok: databaseOk,
-      runtime: 'sqlite',
+      runtime: DB_ENGINE,
     },
     paystack: {
       mode: paystackMode,

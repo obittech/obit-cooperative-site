@@ -5,8 +5,8 @@ import { audit } from '../utils/audit.js';
 
 export const opportunitiesRouter = new Router();
 
-function memberForUser(userId) {
-  const member = get('SELECT * FROM members WHERE user_id = ?', [userId]);
+async function memberForUser(userId) {
+  const member = await get('SELECT * FROM members WHERE user_id = ?', [userId]);
   if (!member || member.status !== 'ACTIVE') throw new HttpError(403, 'Active cooperative membership is required');
   return member;
 }
@@ -31,22 +31,22 @@ function publicFields(row) {
 }
 
 opportunitiesRouter.get('/api/opportunities', async (_req, res) => {
-  const rows = all(`SELECT * FROM opportunities
+  const rows = await all(`SELECT * FROM opportunities
                     WHERE publication_status = 'PUBLISHED'
                     ORDER BY featured DESC, COALESCE(deadline, '9999-12-31') ASC, published_at DESC`);
   res.json(200, rows.map(publicFields));
 });
 
 opportunitiesRouter.post('/api/me/opportunities/unlock', requireAuth('member'), async (req, res) => {
-  const member = memberForUser(req.user.id);
+  const member = await memberForUser(req.user.id);
   const accessCode = String(req.body?.access_code || '').trim().toUpperCase();
   if (!accessCode) throw new HttpError(400, 'Enter your member access code');
   if (accessCode !== String(member.member_code).trim().toUpperCase()) {
-    audit(req.user.id, 'OPPORTUNITY_ACCESS_DENIED', 'members', member.id);
+    await audit(req.user.id, 'OPPORTUNITY_ACCESS_DENIED', 'members', member.id);
     throw new HttpError(403, 'The access code does not match this member account');
   }
 
-  const rows = all(`SELECT id, slug, headline, category, public_summary, full_summary,
+  const rows = await all(`SELECT id, slug, headline, category, public_summary, full_summary,
                            why_it_matters, source_name, source_url, eligibility, deadline,
                            location, funding_benefit, required_contribution, conditions,
                            application_steps, documents_required, risks, fit_verdict,
@@ -54,12 +54,12 @@ opportunitiesRouter.post('/api/me/opportunities/unlock', requireAuth('member'), 
                     FROM opportunities
                     WHERE publication_status = 'PUBLISHED'
                     ORDER BY featured DESC, COALESCE(deadline, '9999-12-31') ASC, published_at DESC`);
-  audit(req.user.id, 'OPPORTUNITY_HUB_UNLOCKED', 'members', member.id);
+  await audit(req.user.id, 'OPPORTUNITY_HUB_UNLOCKED', 'members', member.id);
   res.json(200, { member_code: member.member_code, opportunities: rows });
 });
 
 opportunitiesRouter.get('/api/admin/opportunities', requireAuth('staff', 'admin'), async (_req, res) => {
-  res.json(200, all('SELECT * FROM opportunities ORDER BY updated_at DESC'));
+  res.json(200, await all('SELECT * FROM opportunities ORDER BY updated_at DESC'));
 });
 
 opportunitiesRouter.post('/api/admin/opportunities', requireAuth('staff', 'admin'), async (req, res) => {
@@ -69,7 +69,7 @@ opportunitiesRouter.post('/api/admin/opportunities', requireAuth('staff', 'admin
   }
   if (!/^https:\/\//i.test(body.source_url)) throw new HttpError(400, 'source_url must use HTTPS');
 
-  const result = run(`INSERT INTO opportunities (
+  const result = await run(`INSERT INTO opportunities (
       slug, headline, category, public_summary, full_summary, why_it_matters,
       source_name, source_url, eligibility, deadline, location, funding_benefit,
       required_contribution, conditions, application_steps, documents_required,
@@ -87,12 +87,12 @@ opportunitiesRouter.post('/api/admin/opportunities', requireAuth('staff', 'admin
       body.publication_status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT',
       body.members_only === false ? 0 : 1, body.featured ? 1 : 0, req.user.id
     ]);
-  audit(req.user.id, 'OPPORTUNITY_CREATED', 'opportunities', result.lastInsertRowid);
-  res.json(201, get('SELECT * FROM opportunities WHERE id = ?', [result.lastInsertRowid]));
+  await audit(req.user.id, 'OPPORTUNITY_CREATED', 'opportunities', result.lastInsertRowid);
+  res.json(201, await get('SELECT * FROM opportunities WHERE id = ?', [result.lastInsertRowid]));
 });
 
 opportunitiesRouter.patch('/api/admin/opportunities/:id', requireAuth('staff', 'admin'), async (req, res, params) => {
-  const current = get('SELECT * FROM opportunities WHERE id = ?', [params.id]);
+  const current = await get('SELECT * FROM opportunities WHERE id = ?', [params.id]);
   if (!current) throw new HttpError(404, 'Opportunity not found');
   const allowed = ['headline','category','public_summary','full_summary','why_it_matters','source_name',
     'source_url','eligibility','deadline','location','funding_benefit','required_contribution',
@@ -111,7 +111,7 @@ opportunitiesRouter.patch('/api/admin/opportunities/:id', requireAuth('staff', '
   if (!updates.length) throw new HttpError(400, 'No supported fields supplied');
   updates.push("updated_at = datetime('now')");
   values.push(params.id);
-  run(`UPDATE opportunities SET ${updates.join(', ')} WHERE id = ?`, values);
-  audit(req.user.id, 'OPPORTUNITY_UPDATED', 'opportunities', params.id, { fields: updates });
-  res.json(200, get('SELECT * FROM opportunities WHERE id = ?', [params.id]));
+  await run(`UPDATE opportunities SET ${updates.join(', ')} WHERE id = ?`, values);
+  await audit(req.user.id, 'OPPORTUNITY_UPDATED', 'opportunities', params.id, { fields: updates });
+  res.json(200, await get('SELECT * FROM opportunities WHERE id = ?', [params.id]));
 });

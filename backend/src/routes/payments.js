@@ -87,31 +87,31 @@ paymentsRouter.post('/api/payments/contributions/initialize', requireAuth('membe
   const amountNaira = koboToNgn(amountKobo);
   if (amountNaira > Number(process.env.MAX_CONTRIBUTION_NGN || 5000000)) throw new HttpError(400, 'Contribution amount exceeds the permitted online limit');
 
-  const member = get('SELECT * FROM members WHERE user_id = ?', [req.user.id]);
+  const member = await get('SELECT * FROM members WHERE user_id = ?', [req.user.id]);
   if (!member || member.status !== 'ACTIVE') throw new HttpError(403, 'Active membership required');
 
-  const user = get('SELECT email FROM users WHERE id = ?', [req.user.id]);
-  const application = get('SELECT email FROM member_applications WHERE id = ?', [member.application_id]);
+  const user = await get('SELECT email FROM users WHERE id = ?', [req.user.id]);
+  const application = await get('SELECT email FROM member_applications WHERE id = ?', [member.application_id]);
   const email = user?.email || application?.email;
   if (!email) throw new HttpError(400, 'Member email is required');
 
   if (plan_id) {
-    const plan = get('SELECT * FROM contribution_plans WHERE id = ? AND member_id = ?', [plan_id, member.id]);
+    const plan = await get('SELECT * FROM contribution_plans WHERE id = ? AND member_id = ?', [plan_id, member.id]);
     if (!plan) throw new HttpError(404, 'Savings goal not found');
   }
 
   const reference = `OBIT-SAV-${member.id}-${crypto.randomBytes(6).toString('hex')}`;
-  run(`INSERT INTO transactions (member_id, type, amount, amount_kobo, currency, provider_reference, status)
+  await run(`INSERT INTO transactions (member_id, type, amount, amount_kobo, currency, provider_reference, status)
        VALUES (?, 'CONTRIBUTION', ?, ?, 'NGN', ?, 'PENDING')`,
       [member.id, amountNaira, amountKobo, reference]);
 
   try {
     const paystackData = await initializePaystackTransaction({ email, amountNaira, reference });
-    audit(req.user.id, 'CONTRIBUTION_INITIALIZED', 'members', member.id, { reference, amount: amountNaira, plan_id: plan_id || null });
+    await audit(req.user.id, 'CONTRIBUTION_INITIALIZED', 'members', member.id, { reference, amount: amountNaira, plan_id: plan_id || null });
     return res.json(201, { reference, amount: amountNaira, currency: 'NGN', checkout_url: paystackData.authorization_url });
   } catch (err) {
-    run("UPDATE transactions SET status = 'FAILED' WHERE provider_reference = ?", [reference]);
-    audit(req.user.id, 'CONTRIBUTION_INIT_FAILED', 'members', member.id, { reference, error: err.message });
+    await run("UPDATE transactions SET status = 'FAILED' WHERE provider_reference = ?", [reference]);
+    await audit(req.user.id, 'CONTRIBUTION_INIT_FAILED', 'members', member.id, { reference, error: err.message });
     throw new HttpError(502, `Could not start contribution checkout: ${err.message}`);
   }
 });
@@ -122,20 +122,20 @@ paymentsRouter.post('/api/payments/membership/initialize', async (req, res) => {
     throw new HttpError(400, "provider must be 'paystack' or 'monnify'");
   }
 
-  const application = get('SELECT * FROM member_applications WHERE id = ?', [application_id]);
+  const application = await get('SELECT * FROM member_applications WHERE id = ?', [application_id]);
   if (!application) throw new HttpError(404, 'Application not found');
   if (!['KYC_VERIFIED', 'PAYMENT_PENDING', 'PAYMENT_FAILED'].includes(application.status)) {
     throw new HttpError(409, `Application must be KYC_VERIFIED before payment (currently ${application.status})`);
   }
 
   const reference = `OBIT-${application_id}-${crypto.randomBytes(6).toString('hex')}`;
-  run(
+  await run(
     `INSERT INTO membership_payments (application_id, provider, reference, amount, currency, status)
      VALUES (?, ?, ?, ?, 'NGN', 'PAYMENT_PENDING')`,
     [application_id, provider, reference, MEMBERSHIP_FEE_NGN]
   );
-  run("UPDATE member_applications SET status = 'PAYMENT_PENDING', updated_at = datetime('now') WHERE id = ?", [application_id]);
-  audit(null, 'PAYMENT_INITIALIZED', 'member_applications', application_id, { reference, provider });
+  await run("UPDATE member_applications SET status = 'PAYMENT_PENDING', updated_at = datetime('now') WHERE id = ?", [application_id]);
+  await audit(null, 'PAYMENT_INITIALIZED', 'member_applications', application_id, { reference, provider });
 
   // Paystack: real integration, live once PAYSTACK_SECRET_KEY is set.
   if (provider === 'paystack' && process.env.PAYSTACK_SECRET_KEY) {
@@ -152,7 +152,7 @@ paymentsRouter.post('/api/payments/membership/initialize', async (req, res) => {
         checkout_url: paystackData.authorization_url,
       });
     } catch (err) {
-      audit(null, 'PAYSTACK_INIT_FAILED', 'member_applications', application_id, { error: err.message });
+      await audit(null, 'PAYSTACK_INIT_FAILED', 'member_applications', application_id, { error: err.message });
       throw new HttpError(502, `Could not start Paystack checkout: ${err.message}`);
     }
   }
