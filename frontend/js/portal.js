@@ -236,16 +236,37 @@ document.getElementById('btnWithdraw').addEventListener('click', async () => {
 });
 
 document.getElementById('btnCreatePlan').addEventListener('click', async () => {
+  const btn = document.getElementById('btnCreatePlan');
+  if (btn.disabled) return;
   const token = OBIT.getSession('member');
-  const amount = Number(document.getElementById('planAmount').value);
+  const amountInput = document.getElementById('planAmount');
+  const amount = Number(amountInput.value);
   const frequency = document.getElementById('planFrequency').value;
   const purpose = document.getElementById('planPurpose').value;
-  const target_amount = document.getElementById('planTarget').value ? Number(document.getElementById('planTarget').value) : undefined;
-  if (!amount) return alert('Enter an amount.');
+  const targetInput = document.getElementById('planTarget');
+  const target_amount = targetInput.value ? Number(targetInput.value) : undefined;
+  const box = document.getElementById('planAlert');
+  box.textContent = '';
+  if (!amountInput.value || !Number.isFinite(amount) || amount <= 0) {
+    box.textContent = 'Enter an amount greater than zero.';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Saving plan…';
+  box.textContent = 'Saving your plan…';
   try {
     await OBIT.post('/api/me/contribution-plans', { amount, frequency, purpose, target_amount }, { token });
+    amountInput.value = '';
+    targetInput.value = '';
+    box.textContent = 'Plan saved. No money was collected.';
     await refreshPlans(token);
-  } catch (err) { alert(err.message); }
+  } catch (err) {
+    if (amountInput.value) box.textContent = `Plan could not be saved: ${err.message}`;
+    else box.textContent = 'Plan saved, but the list could not be refreshed. Reload the page to see it.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Plan';
+  }
 });
 
 // A page refresh must not briefly expose the login form while an existing
