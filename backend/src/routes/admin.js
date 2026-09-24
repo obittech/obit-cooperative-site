@@ -16,7 +16,7 @@ adminRouter.get('/api/admin/dashboard', requireAuth('staff', 'admin'), async (re
   const counts = {};
   const rows = await all(`SELECT status, COUNT(*) as n FROM member_applications GROUP BY status`);
   rows.forEach((r) => { counts[r.status] = r.n; });
-  const activeMembers = await get(`SELECT COUNT(*) as n FROM members WHERE status = 'ACTIVE'`).n;
+  const activeMembers = (await get(`SELECT COUNT(*) as n FROM members WHERE status = 'ACTIVE'`)).n;
   res.json(200, { applications_by_status: counts, active_members: activeMembers });
 });
 
@@ -205,14 +205,14 @@ adminRouter.get('/api/admin/reconciliation/exceptions', requireAuth('staff', 'ad
   const staleContributions = await all("SELECT * FROM transactions WHERE type = 'CONTRIBUTION' AND status = 'PENDING' AND created_at < datetime('now', '-1 hour')");
   const balanceMismatch = await get(`SELECT COALESCE(SUM(CASE direction WHEN 'credit' THEN amount_kobo ELSE -amount_kobo END),0) AS ledger_total
                                FROM ledger_entries`);
-  const storedBalance = await get("SELECT COALESCE(SUM(balance_kobo),0) AS total FROM ledger_accounts").total;
+  const storedBalance = (await get("SELECT COALESCE(SUM(balance_kobo),0) AS total FROM ledger_accounts")).total;
   const missingKobo = {
-    transactions: await get("SELECT COUNT(*) AS n FROM transactions WHERE amount IS NOT NULL AND amount_kobo IS NULL").n,
-    ledger_entries: await get("SELECT COUNT(*) AS n FROM ledger_entries WHERE amount IS NOT NULL AND amount_kobo IS NULL").n,
-    ledger_accounts: await get("SELECT COUNT(*) AS n FROM ledger_accounts WHERE balance_kobo IS NULL").n,
-    withdrawals: await get("SELECT COUNT(*) AS n FROM withdrawal_requests WHERE amount IS NOT NULL AND amount_kobo IS NULL").n,
+    transactions: (await get("SELECT COUNT(*) AS n FROM transactions WHERE amount IS NOT NULL AND amount_kobo IS NULL")).n,
+    ledger_entries: (await get("SELECT COUNT(*) AS n FROM ledger_entries WHERE amount IS NOT NULL AND amount_kobo IS NULL")).n,
+    ledger_accounts: (await get("SELECT COUNT(*) AS n FROM ledger_accounts WHERE balance_kobo IS NULL")).n,
+    withdrawals: (await get("SELECT COUNT(*) AS n FROM withdrawal_requests WHERE amount IS NOT NULL AND amount_kobo IS NULL")).n,
   };
-  const negativeBalances = await get("SELECT COUNT(*) AS n FROM ledger_accounts WHERE COALESCE(balance_kobo,0) < 0").n;
+  const negativeBalances = (await get("SELECT COUNT(*) AS n FROM ledger_accounts WHERE COALESCE(balance_kobo,0) < 0")).n;
   const paidWithoutDebit = await get(`SELECT COUNT(*) AS n FROM withdrawal_requests w
     WHERE w.status = 'PAID' AND NOT EXISTS (
       SELECT 1 FROM transactions t JOIN ledger_entries le ON le.transaction_id=t.id
