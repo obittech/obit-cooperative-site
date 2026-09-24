@@ -17,13 +17,13 @@ import { parseNgnToKobo } from '../utils/money.js';
 export const safePayRouter = new Router();
 
 const ANCHOR_COMMUNITY_SLUG = 'obit-cooperative';
-async function await anchorCommunity() {
+async function anchorCommunity() {
   const community = await get('SELECT * FROM communities WHERE slug = ?', [ANCHOR_COMMUNITY_SLUG]);
   if (!community || community.status !== 'ACTIVE') throw new HttpError(503, 'Anchor community is not configured');
   return community;
 }
 
-async function await memberForUser(userId) {
+async function memberForUser(userId) {
   const member = await get('SELECT * FROM members WHERE user_id = ?', [userId]);
   if (!member || member.status !== 'ACTIVE') throw new HttpError(403, 'Active cooperative membership required');
   return member;
