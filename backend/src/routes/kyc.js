@@ -56,7 +56,7 @@ function validIdNumber(value) {
   return typeof value === 'string' && /^\d{11}$/.test(value.trim());
 }
 
-async function await hasRequiredConsent(applicationId) {
+async function hasRequiredConsent(applicationId) {
   const terms = await get("SELECT accepted FROM consents WHERE application_id = ? AND type = 'terms' ORDER BY id DESC LIMIT 1", [applicationId]);
   const privacy = await get("SELECT accepted FROM consents WHERE application_id = ? AND type = 'privacy' ORDER BY id DESC LIMIT 1", [applicationId]);
   return Boolean(terms?.accepted && privacy?.accepted);
