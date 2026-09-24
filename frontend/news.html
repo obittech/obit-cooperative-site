@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>News | Obit Cooperative Society</title>
+  <title>Member Opportunity Hub | Obit Cooperative Society</title>
+  <meta name="description" content="Verified Nigerian business, funding and development opportunities curated by Obit Cooperative Society, with detailed application guidance for activated members." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -35,15 +36,40 @@
   </header>
 
   <main class="app-main">
-    <div class="container" style="max-width:760px">
+    <div class="container" style="max-width:980px">
       <div class="app-header">
-        <div class="eyebrow green">NEWS & UPDATES</div>
-        <h1>Obit news is coming soon</h1>
-        <p>This page is reserved for verified cooperative announcements, programme launches and community updates. No news items have been published yet — nothing below is a placeholder for an actual event, partnership or figure.</p>
+        <div class="eyebrow green">OBIT MEMBER OPPORTUNITY HUB</div>
+        <h1>Useful opportunities, verified and explained</h1>
+        <p>We screen Nigerian grants, programmes, finance, tenders, technology and business opportunities. Everyone can see the verified headline and official source. Activated members receive the full eligibility check, application steps, document list, risks and recommended action.</p>
       </div>
-      <div class="card">
-        <p class="muted-note">Check back after Release 1 launches, or follow the official WhatsApp community once you're an activated member.</p>
+
+      <section class="card opportunity-access" id="memberAccessPanel" aria-labelledby="memberAccessTitle">
+        <div>
+          <div class="eyebrow green">MEMBER BENEFIT</div>
+          <h2 id="memberAccessTitle">Unlock the complete application briefing</h2>
+          <p>Use the permanent member code attached to your logged-in account. Codes cannot unlock another person's account.</p>
+        </div>
+        <div id="memberLoggedOut">
+          <a class="btn btn-primary" href="portal.html">Member Login</a>
+          <a class="btn btn-secondary" href="apply.html">Become a Member</a>
+        </div>
+        <div id="memberLoggedIn" style="display:none">
+          <label class="field">Member access code
+            <input id="memberAccessCode" autocomplete="off" placeholder="Example: OBT-2026-000123" />
+            <small>Your code appears in the Membership section of your portal.</small>
+          </label>
+          <button class="btn btn-primary" id="btnUnlockOpportunities">Unlock Member Briefings</button>
+        </div>
+        <div id="accessAlert" class="access-alert"></div>
+      </section>
+
+      <div class="opportunity-disclaimer">
+        <strong>Important:</strong> Publication is information, not a promise of funding, selection or partnership. Always confirm terms on the linked official page. Obit will clearly mark confirmed, prospective and closed opportunities.
       </div>
+
+      <section id="opportunityList" class="opportunity-list" aria-live="polite">
+        <div class="card muted-note">Loading verified opportunities…</div>
+      </section>
     </div>
   </main>
 
@@ -56,5 +82,7 @@
 
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/news.js"></script>
 </body>
 </html>
