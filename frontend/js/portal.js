@@ -148,10 +148,28 @@ async function refreshTransactions(token) {
 
 async function refreshPlans(token) {
   const plans = await OBIT.get('/api/me/contribution-plans', { token });
-  document.getElementById('plansBody').innerHTML = plans.length
-    ? plans.map((p) => `<tr><td>₦${p.amount}</td><td>${p.frequency}</td><td>${p.purpose}</td><td>${badge(p.status)}</td></tr>`).join('')
-    : `<tr><td colspan="4" class="muted-note">No contribution plans proposed yet.</td></tr>`;
+  const current = plans.filter(p => p.status !== 'CLOSED');
+  document.getElementById('plansBody').innerHTML = current.length
+    ? current.map((p) => `<tr><td>₦${p.amount}</td><td>${p.frequency}</td><td>${p.purpose}</td><td>${badge(p.status)}</td><td>${p.status === 'PROPOSED' ? `<button type="button" class="btn btn-ghost" data-cancel-plan="${Number(p.id)}">Cancel</button>` : ''}</td></tr>`).join('')
+    : `<tr><td colspan="5" class="muted-note">No contribution plans proposed yet.</td></tr>`;
 }
+
+document.getElementById('plansBody').addEventListener('click', async (event) => {
+  const btn = event.target.closest('[data-cancel-plan]');
+  if (!btn || btn.disabled || !confirm('Cancel this proposed savings goal? No money will move.')) return;
+  btn.disabled = true;
+  btn.textContent = 'Cancelling…';
+  const box = document.getElementById('planAlert');
+  try {
+    await OBIT.patch(`/api/me/contribution-plans/${btn.dataset.cancelPlan}/cancel`, {}, { token: OBIT.getSession('member') });
+    box.textContent = 'Plan cancelled. No money was moved.';
+    await refreshPlans(OBIT.getSession('member'));
+  } catch (err) {
+    box.textContent = `Could not cancel the plan: ${err.message}`;
+    btn.disabled = false;
+    btn.textContent = 'Cancel';
+  }
+});
 
 document.getElementById('btnSaveNow').addEventListener('click', async () => {
   const token = OBIT.getSession('member');

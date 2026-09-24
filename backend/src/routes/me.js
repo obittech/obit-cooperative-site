@@ -5,9 +5,10 @@
 // ships real provider collection + reconciliation.
 
 import { Router, HttpError } from '../router.js';
-import { get, all, run } from '../db.js';
+import { get, all, run, atomic } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { parseNgnToKobo, koboToNgn } from '../utils/money.js';
+import { audit } from '../utils/audit.js';
 
 export const meRouter = new Router();
 
@@ -70,6 +71,21 @@ meRouter.get('/api/me/contribution-plans', requireAuth('member'), async (req, re
   const member = await memberForUser(req.user.id);
   const plans = await all('SELECT * FROM contribution_plans WHERE member_id = ? ORDER BY created_at DESC', [member.id]);
   res.json(200, plans);
+});
+
+meRouter.patch('/api/me/contribution-plans/:id/cancel', requireAuth('member'), async (req, res, params) => {
+  const member = await memberForUser(req.user.id);
+  const id = Number(params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, 'Invalid plan ID');
+  await atomic(async () => {
+    const result = await run(
+      "UPDATE contribution_plans SET status = 'CLOSED' WHERE id = ? AND member_id = ? AND status = 'PROPOSED'",
+      [id, member.id]
+    );
+    if (result.changes !== 1) throw new HttpError(409, 'Only your proposed plans can be cancelled');
+    await audit(req.user.id, 'CONTRIBUTION_PLAN_CANCELLED', 'contribution_plans', id);
+  });
+  res.json(200, { id, status: 'CLOSED' });
 });
 
 meRouter.get('/api/me/receipts', requireAuth('member'), async (req, res) => {
