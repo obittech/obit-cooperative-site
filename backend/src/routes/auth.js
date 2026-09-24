@@ -7,6 +7,7 @@ import { Router, HttpError } from '../router.js';
 import { get, run } from '../db.js';
 import { hashPassword, verifyPassword, issueToken } from '../utils/auth.js';
 import { audit } from '../utils/audit.js';
+import { requireAuth } from '../middleware/auth.js';
 import crypto from 'node:crypto';
 
 const setupCodes = new Map();
@@ -120,7 +121,7 @@ authRouter.post('/api/auth/set-password', async (req, res, params) => {
   }
   setupCodes.delete(Number(user_id));
 
-  run('UPDATE users SET password_hash = ? WHERE id = ?', [hashPassword(password), user_id]);
+  run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [hashPassword(password), user_id]);
   audit(user_id, 'PORTAL_PASSWORD_SET', 'user', user_id);
   res.json(200, { ok: true });
 });
@@ -157,7 +158,7 @@ authRouter.post('/api/auth/set-admin-password', async (req, res) => {
   if (entry.attempts >= 5) { adminSetupCodes.delete(Number(user_id)); throw new HttpError(429, 'Too many incorrect attempts. Request a new code.'); }
   if (entry.codeHash !== hashSetupCode(setup_code)) { entry.attempts += 1; throw new HttpError(401, 'Invalid or expired activation code'); }
   adminSetupCodes.delete(Number(user_id));
-  run('UPDATE users SET password_hash = ? WHERE id = ?', [hashPassword(password), user.id]);
+  run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [hashPassword(password), user.id]);
   audit(user.id, 'ADMIN_PASSWORD_SET', 'user', user.id);
   res.json(200, { ok: true });
 });
@@ -244,4 +245,11 @@ authRouter.post('/api/auth/admin-mfa', async (req, res) => {
   const token = issueToken(user);
   audit(user.id, 'ADMIN_LOGIN_MFA_VERIFIED', 'user', user.id);
   res.json(200, { token, role: user.role });
+});
+
+
+authRouter.post('/api/auth/logout', requireAuth(), async (req, res) => {
+  run('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [req.user.id]);
+  audit(req.user.id, 'LOGOUT_ALL_SESSIONS', 'user', req.user.id);
+  res.json(200, { ok: true });
 });
