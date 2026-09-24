@@ -31,10 +31,12 @@ const { systemRouter } = await import('./routes/system.js');
 const { opportunitiesRouter } = await import('./routes/opportunities.js');
 const { devRouter } = await import('./routes/dev.js');
 const { handlePaymentWebhook } = await import('./routes/webhooks.js');
+const { safePayRouter } = await import('./routes/safepay.js');
+const { handleSafePayWebhook } = await import('./routes/safepay-webhook.js');
 
 await migrate();
 
-const routers = [systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, opportunitiesRouter, meRouter, adminRouter];
+const routers = [systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, opportunitiesRouter, safePayRouter, meRouter, adminRouter];
 if (process.env.ENABLE_DEV_ROUTES === 'true') routers.push(devRouter);
 
 const allowedOrigins = new Set(
@@ -44,6 +46,7 @@ const allowedOrigins = new Set(
     .filter(Boolean)
 );
 const WEBHOOK_PATTERN = /^\/api\/webhooks\/payments\/([^/]+)\/?$/;
+const SAFEPAY_WEBHOOK_PATTERN = /^\/api\/webhooks\/safepay\/([^/]+)\/?$/;
 
 const server = http.createServer(async (req, res) => {
   res.json = (status, body) => sendJson(res, status, body);
@@ -80,6 +83,11 @@ const server = http.createServer(async (req, res) => {
     const webhookMatch = WEBHOOK_PATTERN.exec(pathname);
     if (webhookMatch && req.method === 'POST') {
       await handlePaymentWebhook(req, res, { provider: webhookMatch[1] });
+      return;
+    }
+    const safePayWebhookMatch = SAFEPAY_WEBHOOK_PATTERN.exec(pathname);
+    if (safePayWebhookMatch && req.method === 'POST') {
+      await handleSafePayWebhook(req, res, { provider: safePayWebhookMatch[1] });
       return;
     }
 
