@@ -35,6 +35,7 @@ export function issueToken(user) {
     role: user.role,
     exp: Math.floor(Date.now() / 1000) + (user.role === 'admin' ? ADMIN_TOKEN_TTL_SECONDS : MEMBER_TOKEN_TTL_SECONDS),
     iat: Math.floor(Date.now() / 1000),
+    sv: Number(user.session_version || 0),
   };
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url');
@@ -50,7 +51,7 @@ export function verifyToken(token) {
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
   if (payload.exp < Math.floor(Date.now() / 1000)) return null;
-  return payload; // { uid, role, exp }
+  return payload; // { uid, role, exp, sv }
 }
 
 export function generateMemberCode(sequence) {
