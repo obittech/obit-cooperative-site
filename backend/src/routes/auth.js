@@ -77,16 +77,16 @@ function hashSetupCode(code) {
 authRouter.post('/api/auth/request-portal-setup', async (req, res) => {
   const identifier = String(req.body?.identifier || '').trim();
   if (!identifier) throw new HttpError(400, 'Enter your registered email address');
-  const application = get('SELECT * FROM member_applications WHERE lower(email) = lower(?) OR phone = ?', [identifier, identifier]);
+  const application = await get('SELECT * FROM member_applications WHERE lower(email) = lower(?) OR phone = ?', [identifier, identifier]);
   if (!application) throw new HttpError(404, 'No membership application matches that email or phone');
   if (application.status !== 'ACTIVE') {
     throw new HttpError(409, 'Portal setup opens after your membership application is approved and activated');
   }
 
-  let user = get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
+  let user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
   if (!user) {
-    run('INSERT INTO users (email, phone, role) VALUES (?, ?, ?)', [application.email, application.phone, 'member']);
-    user = get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
+    await run('INSERT INTO users (email, phone, role) VALUES (?, ?, ?)', [application.email, application.phone, 'member']);
+    user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
   }
 
   if (!application.email) throw new HttpError(409, 'This membership has no email address. Please contact Obit support.');
@@ -98,7 +98,7 @@ authRouter.post('/api/auth/request-portal-setup', async (req, res) => {
     setupCodes.delete(user.id);
     throw err;
   }
-  audit(user.id, 'PORTAL_SETUP_CODE_SENT', 'user', user.id);
+  await audit(user.id, 'PORTAL_SETUP_CODE_SENT', 'user', user.id);
   res.json(200, { user_id: user.id, message: 'Verification code sent to your registered email.' });
 });
 
@@ -121,8 +121,8 @@ authRouter.post('/api/auth/set-password', async (req, res, params) => {
   }
   setupCodes.delete(Number(user_id));
 
-  run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [hashPassword(password), user_id]);
-  audit(user_id, 'PORTAL_PASSWORD_SET', 'user', user_id);
+  await run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [hashPassword(password), user_id]);
+  await audit(user_id, 'PORTAL_PASSWORD_SET', 'user', user_id);
   res.json(200, { ok: true });
 });
 
@@ -132,34 +132,34 @@ authRouter.post('/api/auth/request-admin-setup', async (req, res) => {
   if (!bootstrapEmail) throw new HttpError(503, 'Super Admin activation is not configured');
   if (!email || email !== bootstrapEmail) throw new HttpError(403, 'This email is not authorized for Super Admin activation');
 
-  let user = get('SELECT * FROM users WHERE lower(email) = lower(?)', [email]);
+  let user = await get('SELECT * FROM users WHERE lower(email) = lower(?)', [email]);
   if (user && user.role === 'member') throw new HttpError(409, 'Use a separate administrator email. Member and administrator identities must remain separate.');
   if (!user) {
-    run("INSERT INTO users (email, role, status) VALUES (?, 'admin', 'ACTIVE')", [email]);
-    user = get('SELECT * FROM users WHERE lower(email) = lower(?)', [email]);
+    await run("INSERT INTO users (email, role, status) VALUES (?, 'admin', 'ACTIVE')", [email]);
+    user = await get('SELECT * FROM users WHERE lower(email) = lower(?)', [email]);
   } else if (user.role !== 'admin') {
-    run("UPDATE users SET role = 'admin' WHERE id = ?", [user.id]);
+    await run("UPDATE users SET role = 'admin' WHERE id = ?", [user.id]);
   }
 
   const code = crypto.randomInt(100000, 1000000).toString();
   adminSetupCodes.set(user.id, { codeHash: hashSetupCode(code), expires: Date.now() + 15 * 60 * 1000, attempts: 0 });
   try { await sendAdminSetupEmail(email, code); } catch (err) { adminSetupCodes.delete(user.id); throw err; }
-  audit(user.id, 'ADMIN_SETUP_CODE_SENT', 'user', user.id);
+  await audit(user.id, 'ADMIN_SETUP_CODE_SENT', 'user', user.id);
   res.json(200, { user_id: user.id, message: 'Admin activation code sent to the authorized email.' });
 });
 
 authRouter.post('/api/auth/set-admin-password', async (req, res) => {
   const { user_id, setup_code, password } = req.body || {};
   if (!password || password.length < 12) throw new HttpError(400, 'Admin password must be at least 12 characters');
-  const user = get("SELECT * FROM users WHERE id = ? AND role = 'admin' AND status = 'ACTIVE'", [user_id]);
+  const user = await get("SELECT * FROM users WHERE id = ? AND role = 'admin' AND status = 'ACTIVE'", [user_id]);
   if (!user) throw new HttpError(403, 'Admin account not authorized');
   const entry = adminSetupCodes.get(Number(user_id));
   if (!entry || entry.expires < Date.now()) { adminSetupCodes.delete(Number(user_id)); throw new HttpError(401, 'Invalid or expired activation code'); }
   if (entry.attempts >= 5) { adminSetupCodes.delete(Number(user_id)); throw new HttpError(429, 'Too many incorrect attempts. Request a new code.'); }
   if (entry.codeHash !== hashSetupCode(setup_code)) { entry.attempts += 1; throw new HttpError(401, 'Invalid or expired activation code'); }
   adminSetupCodes.delete(Number(user_id));
-  run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [hashPassword(password), user.id]);
-  audit(user.id, 'ADMIN_PASSWORD_SET', 'user', user.id);
+  await run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [hashPassword(password), user.id]);
+  await audit(user.id, 'ADMIN_PASSWORD_SET', 'user', user.id);
   res.json(200, { ok: true });
 });
 
@@ -167,12 +167,12 @@ authRouter.post('/api/auth/request-password-reset', async (req, res) => {
   const identifier = String(req.body?.identifier || '').trim();
   const generic = { message: 'If an active account matches that email, a password reset code has been sent.' };
   if (!identifier) { res.json(200, generic); return; }
-  const user = get("SELECT * FROM users WHERE lower(email) = lower(?) AND status = 'ACTIVE'", [identifier]);
+  const user = await get("SELECT * FROM users WHERE lower(email) = lower(?) AND status = 'ACTIVE'", [identifier]);
   if (!user?.email) { res.json(200, generic); return; }
   const code = crypto.randomInt(100000, 1000000).toString();
   resetCodes.set(user.id, { codeHash: hashSetupCode(code), expires: Date.now() + 15 * 60 * 1000, attempts: 0 });
   try { await sendSetupEmail(user.email, code); } catch (err) { resetCodes.delete(user.id); throw err; }
-  audit(user.id, 'PASSWORD_RESET_CODE_SENT', 'user', user.id);
+  await audit(user.id, 'PASSWORD_RESET_CODE_SENT', 'user', user.id);
   res.json(200, generic);
 });
 
@@ -180,7 +180,7 @@ authRouter.post('/api/auth/reset-password', async (req, res) => {
   const identifier = String(req.body?.identifier || '').trim();
   const code = String(req.body?.code || '').trim();
   const password = String(req.body?.password || '');
-  const user = get("SELECT * FROM users WHERE lower(email) = lower(?) AND status = 'ACTIVE'", [identifier]);
+  const user = await get("SELECT * FROM users WHERE lower(email) = lower(?) AND status = 'ACTIVE'", [identifier]);
   if (!user) throw new HttpError(401, 'Invalid or expired reset code');
   const minLength = user.role === 'admin' ? 12 : 8;
   if (password.length < minLength) throw new HttpError(400, `Password must be at least ${minLength} characters`);
@@ -189,8 +189,8 @@ authRouter.post('/api/auth/reset-password', async (req, res) => {
   if (entry.attempts >= 5) { resetCodes.delete(user.id); throw new HttpError(429, 'Too many incorrect attempts. Request a new code.'); }
   if (entry.codeHash !== hashSetupCode(code)) { entry.attempts += 1; throw new HttpError(401, 'Invalid or expired reset code'); }
   resetCodes.delete(user.id);
-  run('UPDATE users SET password_hash = ? WHERE id = ?', [hashPassword(password), user.id]);
-  audit(user.id, 'PASSWORD_RESET_COMPLETED', 'user', user.id);
+  await run('UPDATE users SET password_hash = ? WHERE id = ?', [hashPassword(password), user.id]);
+  await audit(user.id, 'PASSWORD_RESET_COMPLETED', 'user', user.id);
   res.json(200, { ok: true });
 });
 
@@ -199,7 +199,7 @@ authRouter.post('/api/auth/login', async (req, res, params) => {
   const key = String(identifier || '').trim().toLowerCase();
   const state = loginAttempts.get(key);
   if (state?.lockedUntil > Date.now()) throw new HttpError(429, 'Too many failed login attempts. Try again later.');
-  const user = get('SELECT * FROM users WHERE lower(email) = lower(?) OR phone = ?', [identifier, identifier]);
+  const user = await get('SELECT * FROM users WHERE lower(email) = lower(?) OR phone = ?', [identifier, identifier]);
   if (!user || !verifyPassword(password, user.password_hash)) {
     const current = loginAttempts.get(key) || { count: 0, lockedUntil: 0 };
     current.count += 1;
@@ -214,12 +214,12 @@ authRouter.post('/api/auth/login', async (req, res, params) => {
     const code = crypto.randomInt(100000, 1000000).toString();
     adminLoginCodes.set(user.id, { codeHash: hashSetupCode(code), expires: Date.now() + 10 * 60 * 1000, attempts: 0 });
     try { await sendAdminLoginEmail(user.email, code); } catch (err) { adminLoginCodes.delete(user.id); throw err; }
-    audit(user.id, 'ADMIN_LOGIN_MFA_SENT', 'user', user.id);
+    await audit(user.id, 'ADMIN_LOGIN_MFA_SENT', 'user', user.id);
     res.json(200, { mfa_required: true, user_id: user.id, role: user.role });
     return;
   }
   const token = issueToken(user);
-  audit(user.id, 'LOGIN', 'user', user.id);
+  await audit(user.id, 'LOGIN', 'user', user.id);
   res.json(200, { token, role: user.role });
 });
 
@@ -227,7 +227,7 @@ authRouter.post('/api/auth/login', async (req, res, params) => {
 authRouter.post('/api/auth/admin-mfa', async (req, res) => {
   const userId = Number(req.body?.user_id);
   const code = String(req.body?.code || '').trim();
-  const user = get("SELECT * FROM users WHERE id = ? AND role = 'admin' AND status = 'ACTIVE'", [userId]);
+  const user = await get("SELECT * FROM users WHERE id = ? AND role = 'admin' AND status = 'ACTIVE'", [userId]);
   const entry = adminLoginCodes.get(userId);
   if (!user || !entry || entry.expires < Date.now()) {
     adminLoginCodes.delete(userId);
@@ -243,13 +243,13 @@ authRouter.post('/api/auth/admin-mfa', async (req, res) => {
   }
   adminLoginCodes.delete(userId);
   const token = issueToken(user);
-  audit(user.id, 'ADMIN_LOGIN_MFA_VERIFIED', 'user', user.id);
+  await audit(user.id, 'ADMIN_LOGIN_MFA_VERIFIED', 'user', user.id);
   res.json(200, { token, role: user.role });
 });
 
 
 authRouter.post('/api/auth/logout', requireAuth(), async (req, res) => {
-  run('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [req.user.id]);
-  audit(req.user.id, 'LOGOUT_ALL_SESSIONS', 'user', req.user.id);
+  await run('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [req.user.id]);
+  await audit(req.user.id, 'LOGOUT_ALL_SESSIONS', 'user', req.user.id);
   res.json(200, { ok: true });
 });
