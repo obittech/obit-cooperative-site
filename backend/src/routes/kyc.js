@@ -56,9 +56,9 @@ function validIdNumber(value) {
   return typeof value === 'string' && /^\d{11}$/.test(value.trim());
 }
 
-function hasRequiredConsent(applicationId) {
-  const terms = get("SELECT accepted FROM consents WHERE application_id = ? AND type = 'terms' ORDER BY id DESC LIMIT 1", [applicationId]);
-  const privacy = get("SELECT accepted FROM consents WHERE application_id = ? AND type = 'privacy' ORDER BY id DESC LIMIT 1", [applicationId]);
+async function await hasRequiredConsent(applicationId) {
+  const terms = await get("SELECT accepted FROM consents WHERE application_id = ? AND type = 'terms' ORDER BY id DESC LIMIT 1", [applicationId]);
+  const privacy = await get("SELECT accepted FROM consents WHERE application_id = ? AND type = 'privacy' ORDER BY id DESC LIMIT 1", [applicationId]);
   return Boolean(terms?.accepted && privacy?.accepted);
 }
 
@@ -87,22 +87,22 @@ function identityMatchDetails(application, entity = {}) {
 
 kycRouter.post('/api/kyc/session', async (req, res) => {
   const { application_id } = req.body || {};
-  const application = get('SELECT * FROM member_applications WHERE id = ?', [application_id]);
+  const application = await get('SELECT * FROM member_applications WHERE id = ?', [application_id]);
   if (!application) throw new HttpError(404, 'Application not found');
   if (application.status !== 'APPLICATION_SUBMITTED' && application.status !== 'KYC_FAILED') {
     throw new HttpError(409, `Application must be submitted to start KYC (currently ${application.status})`);
   }
-  if (!hasRequiredConsent(application_id)) {
+  if (!await hasRequiredConsent(application_id)) {
     throw new HttpError(409, 'Terms and privacy consent are required before KYC.');
   }
 
   const sessionRef = `dojah_${DOJAH_ENV}_${crypto.randomUUID()}`;
-  run(
+  await run(
     "INSERT INTO kyc_checks (application_id, provider, session_ref, status, raw_status_detail) VALUES (?, 'DOJAH', ?, 'KYC_PENDING', ?)",
     [application_id, sessionRef, JSON.stringify({ environment: DOJAH_ENV })]
   );
-  run("UPDATE member_applications SET status = 'KYC_PENDING', updated_at = datetime('now') WHERE id = ?", [application_id]);
-  audit(null, 'KYC_SESSION_STARTED', 'member_applications', application_id, {
+  await run("UPDATE member_applications SET status = 'KYC_PENDING', updated_at = datetime('now') WHERE id = ?", [application_id]);
+  await audit(null, 'KYC_SESSION_STARTED', 'member_applications', application_id, {
     provider: 'DOJAH', environment: DOJAH_ENV, sessionRef,
   });
 
@@ -118,21 +118,21 @@ kycRouter.post('/api/kyc/session', async (req, res) => {
 });
 
 kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
-  const check = get('SELECT * FROM kyc_checks WHERE session_ref = ?', [params.ref]);
+  const check = await get('SELECT * FROM kyc_checks WHERE session_ref = ?', [params.ref]);
   if (!check) throw new HttpError(404, 'KYC session not found');
   if (check.status === 'KYC_VERIFIED') return res.json(200, { status: 'KYC_VERIFIED' });
 
-  const application = get('SELECT * FROM member_applications WHERE id = ?', [check.application_id]);
+  const application = await get('SELECT * FROM member_applications WHERE id = ?', [check.application_id]);
   if (!application) throw new HttpError(404, 'Application not found');
 
   // Provider calls cost money and process sensitive identity data. Limit repeated
   // verification attempts persistently across sessions for the same application.
-  const recentAttempts = get(
+  const recentAttempts = await get(
     "SELECT COALESCE(SUM(attempt_count), 0) AS total FROM kyc_checks WHERE application_id = ? AND created_at >= datetime('now', '-24 hours')",
     [check.application_id]
   );
   if (Number(recentAttempts?.total || 0) >= 5) {
-    audit(null, 'KYC_RATE_LIMITED', 'member_applications', check.application_id, {
+    await audit(null, 'KYC_RATE_LIMITED', 'member_applications', check.application_id, {
       provider: 'DOJAH', environment: DOJAH_ENV, sessionRef: check.session_ref,
     });
     throw new HttpError(429, 'Too many identity verification attempts. Try again later or contact support.');
@@ -145,7 +145,7 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
 
   // Count the attempt before contacting the provider so failures and timeouts
   // cannot be used to bypass the limit. The raw identifier is never stored.
-  run("UPDATE kyc_checks SET attempt_count = COALESCE(attempt_count, 0) + 1, last_attempt_at = datetime('now') WHERE id = ?", [check.id]);
+  await run("UPDATE kyc_checks SET attempt_count = COALESCE(attempt_count, 0) + 1, last_attempt_at = datetime('now') WHERE id = ?", [check.id]);
 
   // The identifier is used only for this provider request. It is never persisted.
   const path = type === 'bvn' ? '/api/v1/kyc/bvn' : '/api/v1/kyc/nin';
@@ -162,11 +162,11 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
       : { nin: idNumber };
     providerResponse = await dojahGet(path, providerParams);
   } catch (error) {
-    run(
+    await run(
       "UPDATE kyc_checks SET raw_status_detail = ? WHERE id = ?",
       [JSON.stringify({ environment: DOJAH_ENV, outcome: 'PROVIDER_ERROR', provider_status: error.providerStatus || null }), check.id]
     );
-    audit(null, 'KYC_PROVIDER_ERROR', 'member_applications', check.application_id, {
+    await audit(null, 'KYC_PROVIDER_ERROR', 'member_applications', check.application_id, {
       provider: 'DOJAH', environment: DOJAH_ENV, sessionRef: check.session_ref,
     });
     throw error;
@@ -218,12 +218,12 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   const matched = match.matched;
   const newStatus = matched ? 'KYC_VERIFIED' : 'KYC_FAILED';
 
-  run(
+  await run(
     "UPDATE kyc_checks SET status = ?, raw_status_detail = ?, verified_at = CASE WHEN ? = 'KYC_VERIFIED' THEN datetime('now') ELSE verified_at END WHERE id = ?",
     [newStatus, JSON.stringify({ environment: DOJAH_ENV, outcome: matched ? 'MATCH' : 'MISMATCH', id_type: type }), newStatus, check.id]
   );
-  run("UPDATE member_applications SET status = ?, updated_at = datetime('now') WHERE id = ?", [newStatus, check.application_id]);
-  audit(null, matched ? 'KYC_VERIFIED' : 'KYC_FAILED', 'member_applications', check.application_id, {
+  await run("UPDATE member_applications SET status = ?, updated_at = datetime('now') WHERE id = ?", [newStatus, check.application_id]);
+  await audit(null, matched ? 'KYC_VERIFIED' : 'KYC_FAILED', 'member_applications', check.application_id, {
     provider: 'DOJAH', environment: DOJAH_ENV, sessionRef: check.session_ref, idType: type,
   });
 
@@ -242,7 +242,7 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
 });
 
 kycRouter.get('/api/kyc/:id/status', async (req, res, params) => {
-  const check = get('SELECT * FROM kyc_checks WHERE session_ref = ? OR application_id = ? ORDER BY id DESC LIMIT 1', [params.id, params.id]);
+  const check = await get('SELECT * FROM kyc_checks WHERE session_ref = ? OR application_id = ? ORDER BY id DESC LIMIT 1', [params.id, params.id]);
   if (!check) throw new HttpError(404, 'KYC session not found');
   res.json(200, {
     status: check.status,
@@ -260,11 +260,11 @@ kycRouter.post('/api/kyc/session/:ref/simulate', async (req, res, params) => {
     throw new HttpError(404, 'Not found');
   }
   const { outcome } = req.body || {};
-  const check = get('SELECT * FROM kyc_checks WHERE session_ref = ?', [params.ref]);
+  const check = await get('SELECT * FROM kyc_checks WHERE session_ref = ?', [params.ref]);
   if (!check) throw new HttpError(404, 'KYC session not found');
   const newStatus = outcome === 'FAILED' ? 'KYC_FAILED' : 'KYC_VERIFIED';
-  run("UPDATE kyc_checks SET status = ?, verified_at = datetime('now') WHERE id = ?", [newStatus, check.id]);
-  run("UPDATE member_applications SET status = ?, updated_at = datetime('now') WHERE id = ?", [newStatus, check.application_id]);
-  audit(null, 'KYC_SIMULATED', 'member_applications', check.application_id, { newStatus });
+  await run("UPDATE kyc_checks SET status = ?, verified_at = datetime('now') WHERE id = ?", [newStatus, check.id]);
+  await run("UPDATE member_applications SET status = ?, updated_at = datetime('now') WHERE id = ?", [newStatus, check.application_id]);
+  await audit(null, 'KYC_SIMULATED', 'member_applications', check.application_id, { newStatus });
   res.json(200, { status: newStatus });
 });
