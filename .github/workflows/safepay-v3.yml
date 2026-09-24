@@ -1,0 +1,58 @@
+name: SafePay v3 Validation
+on:
+  push:
+    branches: [feature/obit-market-safepay-v3]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: obit_safepay_ci
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d obit_safepay_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm install
+      - name: Syntax check
+        run: find src scripts -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: SQLite SafePay boot
+        env:
+          AUTH_TOKEN_SECRET: ci-only-secret
+          DB_ENGINE: sqlite
+          DB_PATH: /tmp/obit-safepay.db
+          NODE_ENV: test
+          PORT: 10003
+        run: |
+          node --experimental-sqlite src/server.js >/tmp/sqlite.log 2>&1 &
+          PID=$!; trap 'kill $PID || true' EXIT
+          for i in {1..20}; do curl -fsS http://127.0.0.1:10003/api/safepay/status && break || sleep .5; done
+          curl -fsS http://127.0.0.1:10003/api/readiness
+      - name: PostgreSQL SafePay boot
+        env:
+          AUTH_TOKEN_SECRET: ci-only-secret
+          DB_ENGINE: postgres
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_safepay_ci
+          PGSSL: disable
+          NODE_ENV: test
+          PORT: 10004
+        run: |
+          node --experimental-sqlite src/server.js >/tmp/postgres.log 2>&1 &
+          PID=$!; trap 'kill $PID || true' EXIT
+          for i in {1..20}; do curl -fsS http://127.0.0.1:10004/api/safepay/status && break || sleep .5; done
+          curl -fsS http://127.0.0.1:10004/api/readiness | tee /tmp/readiness.json
+          grep -q '"runtime":"postgres"' /tmp/readiness.json
