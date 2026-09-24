@@ -346,3 +346,59 @@ INSERT OR IGNORE INTO opportunities (
   0,
   '2026-09-24 08:00:00'
 );
+
+
+-- ---------------------------------------------------------------------------
+-- Obit Market + Obit SafePay (multi-community pilot)
+-- Obit Technologies Limited owns/operates the technology infrastructure.
+-- Community tenancy prevents the first Cooperative deployment from hard-coding
+-- the product as Cooperative-owned infrastructure.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS communities (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT NOT NULL UNIQUE,
+  legal_name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  community_type TEXT NOT NULL DEFAULT 'cooperative',
+  status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','SUSPENDED','CLOSED')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT OR IGNORE INTO communities (slug, legal_name, display_name, community_type, status)
+VALUES ('obit-cooperative','Obit Technologies Multipurpose Cooperative Society Limited','Obit Cooperative Society','cooperative','ACTIVE');
+
+CREATE TABLE IF NOT EXISTS market_listings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  community_id INTEGER NOT NULL REFERENCES communities(id),
+  seller_member_id INTEGER NOT NULL REFERENCES members(id),
+  title TEXT NOT NULL, description TEXT, category TEXT NOT NULL DEFAULT 'Other',
+  price_kobo INTEGER NOT NULL CHECK(price_kobo>0), currency TEXT NOT NULL DEFAULT 'NGN',
+  status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('DRAFT','ACTIVE','PAUSED','SOLD','REMOVED')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS market_orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  community_id INTEGER NOT NULL REFERENCES communities(id),
+  reference TEXT NOT NULL UNIQUE, listing_id INTEGER NOT NULL REFERENCES market_listings(id),
+  buyer_member_id INTEGER NOT NULL REFERENCES members(id), seller_member_id INTEGER NOT NULL REFERENCES members(id),
+  amount_kobo INTEGER NOT NULL CHECK(amount_kobo>0), currency TEXT NOT NULL DEFAULT 'NGN',
+  provider TEXT, provider_escrow_id TEXT UNIQUE,
+  status TEXT NOT NULL DEFAULT 'CREATED' CHECK(status IN ('CREATED','AWAITING_FUNDING','FUNDED','DELIVERING','DELIVERED','DELIVERY_CONFIRMED','DISPUTED','RELEASE_PENDING','RELEASED','REFUND_PENDING','REFUNDED','CANCELLED')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS market_disputes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL REFERENCES market_orders(id),
+  opened_by_member_id INTEGER NOT NULL REFERENCES members(id), reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN','UNDER_REVIEW','BUYER_WINS','SELLER_WINS','RESOLVED')),
+  resolution_note TEXT, resolved_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), resolved_at TEXT
+);
+CREATE TABLE IF NOT EXISTS safepay_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, event_id TEXT NOT NULL,
+  order_id INTEGER REFERENCES market_orders(id), event_type TEXT NOT NULL, payload_json TEXT NOT NULL,
+  processed INTEGER NOT NULL DEFAULT 0, received_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(provider,event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_market_listings_community_status ON market_listings(community_id,status);
+CREATE INDEX IF NOT EXISTS idx_market_orders_community ON market_orders(community_id);
+CREATE INDEX IF NOT EXISTS idx_market_orders_buyer ON market_orders(buyer_member_id);
+CREATE INDEX IF NOT EXISTS idx_market_orders_seller ON market_orders(seller_member_id);
