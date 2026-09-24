@@ -239,3 +239,47 @@ CREATE TABLE IF NOT EXISTS audit_events (
   detail_json    TEXT,
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+
+-- ---------------------------------------------------------------------------
+-- Verified opportunity hub
+-- Public visitors receive teaser fields only. Full application guidance is
+-- returned exclusively after an active member authenticates and supplies the
+-- member code tied to that same account.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS opportunities (
+  id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug                  TEXT NOT NULL UNIQUE,
+  headline              TEXT NOT NULL,
+  category              TEXT NOT NULL DEFAULT 'Business opportunity',
+  public_summary        TEXT NOT NULL,
+  full_summary          TEXT,
+  why_it_matters        TEXT,
+  source_name           TEXT NOT NULL,
+  source_url            TEXT NOT NULL,
+  eligibility           TEXT,
+  deadline              TEXT,
+  location              TEXT DEFAULT 'Nigeria',
+  funding_benefit       TEXT,
+  required_contribution TEXT,
+  conditions            TEXT,
+  application_steps     TEXT,
+  documents_required    TEXT,
+  risks                 TEXT,
+  fit_verdict           TEXT,
+  fit_score             INTEGER CHECK (fit_score IS NULL OR (fit_score >= 0 AND fit_score <= 100)),
+  next_action           TEXT NOT NULL DEFAULT 'WATCH' CHECK (next_action IN ('DO_TODAY','PREPARE_THIS_WEEK','WATCH','IGNORE')),
+  status                TEXT NOT NULL DEFAULT 'CONFIRMED' CHECK (status IN ('CONFIRMED','PROSPECTIVE','CLOSED')),
+  publication_status    TEXT NOT NULL DEFAULT 'DRAFT' CHECK (publication_status IN ('DRAFT','PUBLISHED','ARCHIVED')),
+  members_only          INTEGER NOT NULL DEFAULT 1,
+  featured              INTEGER NOT NULL DEFAULT 0,
+  published_at          TEXT,
+  created_by            INTEGER REFERENCES users(id),
+  created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_opportunities_publication
+ON opportunities(publication_status, status, deadline);
+
