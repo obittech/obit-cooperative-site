@@ -32,7 +32,7 @@ const { opportunitiesRouter } = await import('./routes/opportunities.js');
 const { devRouter } = await import('./routes/dev.js');
 const { handlePaymentWebhook } = await import('./routes/webhooks.js');
 
-migrate();
+await migrate();
 
 const routers = [systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, opportunitiesRouter, meRouter, adminRouter];
 if (process.env.ENABLE_DEV_ROUTES === 'true') routers.push(devRouter);
