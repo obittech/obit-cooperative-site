@@ -38,6 +38,7 @@ meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
 
   res.json(200, {
     member_code: member.member_code,
+    digital_membership_id: member.member_code,
     status: member.status,
     activated_at: member.activated_at,
     full_legal_name: application.full_legal_name,
@@ -124,12 +125,24 @@ meRouter.post('/api/me/bank-accounts/verify', requireAuth('member'), async (req,
 
 meRouter.get('/api/me/bank-accounts', requireAuth('member'), async (req, res) => {
   const member = memberForUser(req.user.id);
-  res.json(200, all('SELECT id, bank_name, account_number, account_name, verified_at FROM member_bank_accounts WHERE member_id = ? ORDER BY verified_at DESC', [member.id]));
+  const rows = all('SELECT id, bank_name, account_number, account_name, verified_at FROM member_bank_accounts WHERE member_id = ? ORDER BY verified_at DESC', [member.id]);
+  res.json(200, rows.map((row) => ({
+    id: row.id,
+    bank_name: row.bank_name,
+    account_name: row.account_name,
+    verified_at: row.verified_at,
+    account_number_masked: row.account_number ? '******' + String(row.account_number).slice(-4) : '',
+  })));
 });
 
 meRouter.get('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
   const member = memberForUser(req.user.id);
-  res.json(200, all('SELECT id, amount, bank_name, account_name, account_number, status, reviewed_at, created_at FROM withdrawal_requests WHERE member_id = ? ORDER BY created_at DESC', [member.id]));
+  const rows = all('SELECT id, amount, bank_name, account_name, account_number, status, reviewed_at, created_at FROM withdrawal_requests WHERE member_id = ? ORDER BY created_at DESC', [member.id]);
+  res.json(200, rows.map((row) => ({
+    ...row,
+    account_number: undefined,
+    account_number_masked: row.account_number ? '******' + String(row.account_number).slice(-4) : '',
+  })));
 });
 
 meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
