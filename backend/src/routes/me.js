@@ -11,8 +11,8 @@ import { parseNgnToKobo, koboToNgn } from '../utils/money.js';
 
 export const meRouter = new Router();
 
-function memberForUser(userId) {
-  const member = get('SELECT * FROM members WHERE user_id = ?', [userId]);
+async function await memberForUser(userId) {
+  const member = await get('SELECT * FROM members WHERE user_id = ?', [userId]);
   if (!member) throw new HttpError(404, 'No activated membership found for this account yet');
   return member;
 }
@@ -22,10 +22,10 @@ meRouter.get('/api/me', requireAuth(), async (req, res) => {
 });
 
 meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
-  const member = memberForUser(req.user.id);
-  const application = get('SELECT * FROM member_applications WHERE id = ?', [member.application_id]);
-  const kyc = get('SELECT status, verified_at FROM kyc_checks WHERE application_id = ? ORDER BY id DESC LIMIT 1', [member.application_id]);
-  const payment = get(
+  const member = await memberForUser(req.user.id);
+  const application = await get('SELECT * FROM member_applications WHERE id = ?', [member.application_id]);
+  const kyc = await get('SELECT status, verified_at FROM kyc_checks WHERE application_id = ? ORDER BY id DESC LIMIT 1', [member.application_id]);
+  const payment = await get(
     `SELECT status, verified_at, amount, currency
      FROM membership_payments
      WHERE application_id = ?
@@ -35,7 +35,7 @@ meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
      LIMIT 1`,
     [member.application_id]
   );
-  const onboarding = get('SELECT whatsapp_joined, orientation_completed FROM community_onboarding WHERE member_id = ?', [member.id]);
+  const onboarding = await get('SELECT whatsapp_joined, orientation_completed FROM community_onboarding WHERE member_id = ?', [member.id]);
 
   res.json(200, {
     member_code: member.member_code,
@@ -50,11 +50,11 @@ meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
 });
 
 meRouter.post('/api/me/contribution-plans', requireAuth('member'), async (req, res) => {
-  const member = memberForUser(req.user.id);
+  const member = await memberForUser(req.user.id);
   const { amount, frequency, purpose, target_amount } = req.body || {};
   if (!amount || !frequency || !purpose) throw new HttpError(400, 'amount, frequency and purpose are required');
 
-  const result = run(
+  const result = await run(
     `INSERT INTO contribution_plans (member_id, amount, frequency, purpose, target_amount, status)
      VALUES (?, ?, ?, ?, ?, 'PROPOSED')`,
     [member.id, amount, frequency, purpose, target_amount ?? null]
@@ -67,22 +67,22 @@ meRouter.post('/api/me/contribution-plans', requireAuth('member'), async (req, r
 });
 
 meRouter.get('/api/me/contribution-plans', requireAuth('member'), async (req, res) => {
-  const member = memberForUser(req.user.id);
-  const plans = all('SELECT * FROM contribution_plans WHERE member_id = ? ORDER BY created_at DESC', [member.id]);
+  const member = await memberForUser(req.user.id);
+  const plans = await all('SELECT * FROM contribution_plans WHERE member_id = ? ORDER BY created_at DESC', [member.id]);
   res.json(200, plans);
 });
 
 meRouter.get('/api/me/receipts', requireAuth('member'), async (req, res) => {
-  const member = memberForUser(req.user.id);
-  const rows = all(`SELECT r.receipt_number, r.issued_at, t.type, t.amount, t.currency, t.provider_reference, t.status
+  const member = await memberForUser(req.user.id);
+  const rows = await all(`SELECT r.receipt_number, r.issued_at, t.type, t.amount, t.currency, t.provider_reference, t.status
                     FROM receipts r JOIN transactions t ON t.id = r.transaction_id
                     WHERE t.member_id = ? ORDER BY r.issued_at DESC`, [member.id]);
   res.json(200, rows);
 });
 
 meRouter.get('/api/me/transactions', requireAuth('member'), async (req, res) => {
-  const member = memberForUser(req.user.id);
-  const txns = all('SELECT * FROM transactions WHERE member_id = ? ORDER BY created_at DESC', [member.id]);
+  const member = await memberForUser(req.user.id);
+  const txns = await all('SELECT * FROM transactions WHERE member_id = ? ORDER BY created_at DESC', [member.id]);
   res.json(200, txns);
 });
 
@@ -104,7 +104,7 @@ meRouter.get('/api/me/banks', requireAuth('member'), async (req, res) => {
 });
 
 meRouter.post('/api/me/bank-accounts/verify', requireAuth('member'), async (req, res) => {
-  const member = memberForUser(req.user.id);
+  const member = await memberForUser(req.user.id);
   const { account_number, bank_code, bank_name } = req.body || {};
   if (!/^\d{10}$/.test(String(account_number || ''))) throw new HttpError(400, 'Enter a valid 10-digit Nigerian account number');
   if (!bank_code || !bank_name) throw new HttpError(400, 'Select a bank');
@@ -115,18 +115,18 @@ meRouter.post('/api/me/bank-accounts/verify', requireAuth('member'), async (req,
     body: JSON.stringify({ type: 'nuban', name: resolved.account_name, account_number, bank_code, currency: 'NGN' }),
   });
 
-  run(`INSERT INTO member_bank_accounts (member_id, bank_code, bank_name, account_number, account_name, recipient_code, verified_at)
+  await run(`INSERT INTO member_bank_accounts (member_id, bank_code, bank_name, account_number, account_name, recipient_code, verified_at)
        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(member_id, bank_code, account_number) DO UPDATE SET
        bank_name=excluded.bank_name, account_name=excluded.account_name, recipient_code=excluded.recipient_code, verified_at=datetime('now')`,
       [member.id, bank_code, bank_name, account_number, resolved.account_name, recipient.recipient_code]);
-  const row = get('SELECT * FROM member_bank_accounts WHERE member_id = ? AND bank_code = ? AND account_number = ?', [member.id, bank_code, account_number]);
+  const row = await get('SELECT * FROM member_bank_accounts WHERE member_id = ? AND bank_code = ? AND account_number = ?', [member.id, bank_code, account_number]);
   res.json(200, { id: row.id, bank_name: row.bank_name, account_number: row.account_number, account_name: row.account_name, verified: true });
 });
 
 meRouter.get('/api/me/bank-accounts', requireAuth('member'), async (req, res) => {
-  const member = memberForUser(req.user.id);
-  const rows = all('SELECT id, bank_name, account_number, account_name, verified_at FROM member_bank_accounts WHERE member_id = ? ORDER BY verified_at DESC', [member.id]);
+  const member = await memberForUser(req.user.id);
+  const rows = await all('SELECT id, bank_name, account_number, account_name, verified_at FROM member_bank_accounts WHERE member_id = ? ORDER BY verified_at DESC', [member.id]);
   res.json(200, rows.map((row) => ({
     id: row.id,
     bank_name: row.bank_name,
@@ -137,8 +137,8 @@ meRouter.get('/api/me/bank-accounts', requireAuth('member'), async (req, res) =>
 });
 
 meRouter.get('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
-  const member = memberForUser(req.user.id);
-  const rows = all('SELECT id, amount, bank_name, account_name, account_number, status, reviewed_at, created_at FROM withdrawal_requests WHERE member_id = ? ORDER BY created_at DESC', [member.id]);
+  const member = await memberForUser(req.user.id);
+  const rows = await all('SELECT id, amount, bank_name, account_name, account_number, status, reviewed_at, created_at FROM withdrawal_requests WHERE member_id = ? ORDER BY created_at DESC', [member.id]);
   res.json(200, rows.map((row) => ({
     ...row,
     account_number: undefined,
@@ -147,7 +147,7 @@ meRouter.get('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
 });
 
 meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
-  const member = memberForUser(req.user.id);
+  const member = await memberForUser(req.user.id);
   const { amount, bank_account_id } = req.body || {};
   let amountKobo;
   try { amountKobo = parseNgnToKobo(amount); }
@@ -156,18 +156,18 @@ meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => 
   const minWithdrawal = Number(process.env.MIN_WITHDRAWAL_NGN || 100);
   const maxWithdrawal = Number(process.env.MAX_WITHDRAWAL_NGN || 500000);
   if (n < minWithdrawal || n > maxWithdrawal) throw new HttpError(400, `Withdrawal must be between ₦${minWithdrawal.toLocaleString()} and ₦${maxWithdrawal.toLocaleString()}`);
-  const bank = get('SELECT * FROM member_bank_accounts WHERE id = ? AND member_id = ? AND verified_at IS NOT NULL', [bank_account_id, member.id]);
+  const bank = await get('SELECT * FROM member_bank_accounts WHERE id = ? AND member_id = ? AND verified_at IS NOT NULL', [bank_account_id, member.id]);
   if (!bank) throw new HttpError(400, 'Select a verified bank account');
-  const account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
+  const account = await get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
   if (!account || amountKobo > Number(account.balance_kobo ?? Math.round(account.balance * 100))) throw new HttpError(409, 'Withdrawal amount exceeds available savings balance');
-  const daily = get("SELECT COALESCE(SUM(amount_kobo),0) AS total_kobo FROM withdrawal_requests WHERE member_id = ? AND status IN ('APPROVED','PAID') AND created_at >= datetime('now','-24 hours')", [member.id]);
+  const daily = await get("SELECT COALESCE(SUM(amount_kobo),0) AS total_kobo FROM withdrawal_requests WHERE member_id = ? AND status IN ('APPROVED','PAID') AND created_at >= datetime('now','-24 hours')", [member.id]);
   const dailyLimitKobo = Math.round(Number(process.env.DAILY_WITHDRAWAL_LIMIT_NGN || 1000000) * 100);
   if (Number(daily.total_kobo || 0) + amountKobo > dailyLimitKobo) throw new HttpError(409, 'Daily withdrawal limit exceeded. Contact Obit support for review.');
-  const pending = get("SELECT COALESCE(SUM(amount_kobo),0) AS total_kobo FROM withdrawal_requests WHERE member_id = ? AND status IN ('PENDING','APPROVED')", [member.id]);
+  const pending = await get("SELECT COALESCE(SUM(amount_kobo),0) AS total_kobo FROM withdrawal_requests WHERE member_id = ? AND status IN ('PENDING','APPROVED')", [member.id]);
   if (amountKobo > Number(account.balance_kobo ?? Math.round(account.balance * 100)) - Number(pending.total_kobo || 0)) throw new HttpError(409, 'Amount exceeds balance available after pending withdrawal requests');
 
   // Prevent accidental double-click / rapid duplicate withdrawal submissions.
-  const recentDuplicate = get(`SELECT id, status FROM withdrawal_requests
+  const recentDuplicate = await get(`SELECT id, status FROM withdrawal_requests
                                WHERE member_id = ? AND bank_account_id = ? AND amount_kobo = ?
                                  AND status = 'PENDING'
                                  AND created_at >= datetime('now', '-2 minutes')
@@ -177,17 +177,17 @@ meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => 
     return;
   }
 
-  const result = run(`INSERT INTO withdrawal_requests (member_id, ledger_account_id, amount, amount_kobo, bank_name, account_name, account_number, bank_account_id)
+  const result = await run(`INSERT INTO withdrawal_requests (member_id, ledger_account_id, amount, amount_kobo, bank_name, account_name, account_number, bank_account_id)
                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [member.id, account.id, n, amountKobo, bank.bank_name, bank.account_name, bank.account_number, bank.id]);
   res.json(201, { id: result.lastInsertRowid, amount: n, status: 'PENDING' });
 });
 
 meRouter.get('/api/me/statement', requireAuth('member'), async (req, res) => {
-  const member = memberForUser(req.user.id);
-  let account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
+  const member = await memberForUser(req.user.id);
+  let account = await get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
   if (!account) {
-    run("INSERT OR IGNORE INTO ledger_accounts (member_id, account_type, balance, balance_kobo, currency) VALUES (?, 'SAVINGS', 0, 0, 'NGN')", [member.id]);
-    account = get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
+    await run("INSERT OR IGNORE INTO ledger_accounts (member_id, account_type, balance, balance_kobo, currency) VALUES (?, 'SAVINGS', 0, 0, 'NGN')", [member.id]);
+    account = await get("SELECT * FROM ledger_accounts WHERE member_id = ? AND account_type = 'SAVINGS'", [member.id]);
   }
   res.json(200, {
     member_code: member.member_code,
