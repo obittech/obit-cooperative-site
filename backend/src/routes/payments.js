@@ -14,6 +14,7 @@ import { audit } from '../utils/audit.js';
 import { requireAuth } from '../middleware/auth.js';
 import crypto from 'node:crypto';
 import https from 'node:https';
+import { parseNgnToKobo, koboToNgn } from '../utils/money.js';
 
 export const paymentsRouter = new Router();
 
@@ -80,9 +81,10 @@ function initializePaystackTransaction({ email, amountNaira, reference }) {
 
 paymentsRouter.post('/api/payments/contributions/initialize', requireAuth('member'), async (req, res) => {
   const { amount, plan_id } = req.body || {};
-  const amountNaira = Number(amount);
-  const amountKobo = Math.round(amountNaira * 100);
-  if (!Number.isFinite(amountNaira) || amountNaira < 100 || !Number.isSafeInteger(amountKobo)) throw new HttpError(400, 'Contribution amount must be at least ₦100');
+  let amountKobo;
+  try { amountKobo = parseNgnToKobo(amount, { minKobo: 10000 }); }
+  catch { throw new HttpError(400, 'Contribution amount must be at least ₦100 and use no more than two decimal places'); }
+  const amountNaira = koboToNgn(amountKobo);
   if (amountNaira > Number(process.env.MAX_CONTRIBUTION_NGN || 5000000)) throw new HttpError(400, 'Contribution amount exceeds the permitted online limit');
 
   const member = get('SELECT * FROM members WHERE user_id = ?', [req.user.id]);
