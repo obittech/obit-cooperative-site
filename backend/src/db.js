@@ -20,6 +20,8 @@ export function migrate() {
   const schema = fs.readFileSync(schemaPath, 'utf8');
   db.exec(schema);
   // Forward-compatible SQLite upgrades for existing persistent databases.
+  const userCols = all('PRAGMA table_info(users)').map((r) => r.name);
+  if (!userCols.includes('session_version')) db.exec('ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0');
   const withdrawalCols = all('PRAGMA table_info(withdrawal_requests)').map((r) => r.name);
   if (!withdrawalCols.includes('bank_account_id')) db.exec('ALTER TABLE withdrawal_requests ADD COLUMN bank_account_id INTEGER REFERENCES member_bank_accounts(id)');
   if (!withdrawalCols.includes('transfer_reference')) db.exec('ALTER TABLE withdrawal_requests ADD COLUMN transfer_reference TEXT');
