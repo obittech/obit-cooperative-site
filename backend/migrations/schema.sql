@@ -239,3 +239,109 @@ CREATE TABLE IF NOT EXISTS audit_events (
   detail_json    TEXT,
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+
+-- ---------------------------------------------------------------------------
+-- Verified opportunity hub
+-- Public visitors receive teaser fields only. Full application guidance is
+-- returned exclusively after an active member authenticates and supplies the
+-- member code tied to that same account.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS opportunities (
+  id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug                  TEXT NOT NULL UNIQUE,
+  headline              TEXT NOT NULL,
+  category              TEXT NOT NULL DEFAULT 'Business opportunity',
+  public_summary        TEXT NOT NULL,
+  full_summary          TEXT,
+  why_it_matters        TEXT,
+  source_name           TEXT NOT NULL,
+  source_url            TEXT NOT NULL,
+  eligibility           TEXT,
+  deadline              TEXT,
+  location              TEXT DEFAULT 'Nigeria',
+  funding_benefit       TEXT,
+  required_contribution TEXT,
+  conditions            TEXT,
+  application_steps     TEXT,
+  documents_required    TEXT,
+  risks                 TEXT,
+  fit_verdict           TEXT,
+  fit_score             INTEGER CHECK (fit_score IS NULL OR (fit_score >= 0 AND fit_score <= 100)),
+  next_action           TEXT NOT NULL DEFAULT 'WATCH' CHECK (next_action IN ('DO_TODAY','PREPARE_THIS_WEEK','WATCH','IGNORE')),
+  status                TEXT NOT NULL DEFAULT 'CONFIRMED' CHECK (status IN ('CONFIRMED','PROSPECTIVE','CLOSED')),
+  publication_status    TEXT NOT NULL DEFAULT 'DRAFT' CHECK (publication_status IN ('DRAFT','PUBLISHED','ARCHIVED')),
+  members_only          INTEGER NOT NULL DEFAULT 1,
+  featured              INTEGER NOT NULL DEFAULT 0,
+  published_at          TEXT,
+  created_by            INTEGER REFERENCES users(id),
+  created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_opportunities_publication
+ON opportunities(publication_status, status, deadline);
+
+
+INSERT OR IGNORE INTO opportunities (
+  slug, headline, category, public_summary, full_summary, why_it_matters,
+  source_name, source_url, eligibility, deadline, location, funding_benefit,
+  required_contribution, conditions, application_steps, documents_required,
+  risks, fit_verdict, fit_score, next_action, status, publication_status,
+  members_only, featured, published_at
+) VALUES
+(
+  'credicorp-partnership-route-2026',
+  'CREDICORP partnership route for responsible productive-asset access',
+  'Development finance and partnership',
+  'CREDICORP invites financial institutions and vendors or manufacturers to explore partnership routes. Obit has not been approved as a partner, and this is not a grant announcement.',
+  'CREDICORP is a Federal Government development finance institution focused on expanding responsible consumer credit. Its public partnership route may be relevant to technology, vendor, distribution or financial-institution partners, subject to CREDICORP assessment.',
+  'A properly structured relationship could eventually help eligible Nigerians obtain productive devices, energy solutions or other assets through approved credit providers. No benefit to Obit members is confirmed at this stage.',
+  'CREDICORP',
+  'https://credicorp.ng/',
+  'The official page does not publish one universal partner-eligibility checklist. The applicant must truthfully identify its role and provide evidence of legal status, operations, customer safeguards and relevant capability.',
+  NULL,
+  'Nigeria',
+  'Potential partnership, vendor access, distribution support or wholesale credit support depending on the approved category. No grant amount is stated.',
+  'Not stated publicly. Any credit product may carry provider-specific repayment costs.',
+  'No Obit entity should present itself as a lender, CREDICORP partner or approved vendor until formally authorised.',
+  '1. Review the official Become a Partner route.\n2. Select the truthful partner category.\n3. Prepare a capability note using verified operations only.\n4. Assemble corporate, compliance and evidence documents.\n5. Obtain Chief Obinna''s approval before submitting or accepting terms.',
+  'Registration documents; ownership and management details; verified service description; operating evidence; financial records requested by CREDICORP; customer-protection and data-handling approach; supplier or financing relationships if applicable.',
+  'Main risks are regulatory overstatement, unsuitable credit terms, inability to evidence operations, or implying a partnership before approval. Do not pay unofficial agents.',
+  'Best current fit is Obit Technologies Limited, with FFK described only as a proposed delivery channel. Cooperative eligibility as a financing institution remains unverified.',
+  76,
+  'PREPARE_THIS_WEEK',
+  'CONFIRMED',
+  'PUBLISHED',
+  1,
+  1,
+  '2026-09-24 08:00:00'
+),
+(
+  'smedan-registration-route-2026',
+  'SMEDAN registration can strengthen an MSME profile—but does not guarantee funding',
+  'MSME support',
+  'SMEDAN operates an official business-registration portal that may connect registered MSMEs to government and private-sector support. Registration itself is not a grant award.',
+  'The SMEDAN portal is a foundational MSME registration route. An eligible business can create or verify its profile and use that record when pursuing relevant programmes, but each opportunity has separate conditions.',
+  'For a trader, artisan or small business, a consistent official business profile can make later applications easier to verify and reduce dependence on agents promising guaranteed grants.',
+  'SMEDAN',
+  'https://portal.smedan.gov.ng/',
+  'Nigerian micro, small and medium enterprises using the truthful legal and operating category. Cooperative-category eligibility should be confirmed before registration.',
+  NULL,
+  'Nigeria',
+  'Registration and potential access to relevant public or private support information. No automatic loan or grant is promised.',
+  'No fee or contribution is stated on the official sign-up page used for this briefing.',
+  'Avoid duplicate profiles and do not select an inaccurate business type. Programme benefits remain subject to their own rules.',
+  '1. Check whether the entity already has a SMEDAN profile.\n2. Gather the registered name, number, address, sector, contacts and ownership details.\n3. Use the official portal only.\n4. Verify every entry before submission.\n5. Retain the confirmation for later programme applications.',
+  'Registration certificate and number; business address and contacts; sector and operating description; ownership or management details; existing SMEDAN identifier if any.',
+  'Duplicate registration, incorrect classification and unofficial agents charging for guaranteed access are the principal risks.',
+  'Good foundational fit for Obit Technologies Limited. Cooperative registration should wait until the portal category is confirmed.',
+  67,
+  'PREPARE_THIS_WEEK',
+  'CONFIRMED',
+  'PUBLISHED',
+  1,
+  0,
+  '2026-09-24 08:00:00'
+);
