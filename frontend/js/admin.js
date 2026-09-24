@@ -32,21 +32,35 @@ document.getElementById('btnAdminActivate').addEventListener('click', async () =
 });
 
 document.getElementById('btnLogin').addEventListener('click', async () => {
+  const btn = document.getElementById('btnLogin');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
   const identifier = document.getElementById('loginIdentifier').value;
   const password = document.getElementById('loginPassword').value;
   try {
     const res = await OBIT.post('/api/auth/login', { identifier, password });
     if (!['staff', 'admin'].includes(res.role)) throw new Error('This login is for staff/admin accounts only.');
     if (res.mfa_required) {
-      const code = prompt('A 6-digit Admin login code was sent to your authorized email. Enter it here.');
-      if (code === null) return;
+      const code = prompt('Use the newest 6-digit code from the email titled "Your Obit Admin login code". It expires in 10 minutes. Enter it here:');
+      if (code === null) {
+        showAlert('Login code was not entered. Click Log In to request a new code.');
+        return;
+      }
       const verified = await OBIT.post('/api/auth/admin-mfa', { user_id: res.user_id, code: code.trim() });
       OBIT.saveSession('staff', verified.token);
     } else {
       OBIT.saveSession('staff', res.token);
     }
     await loadAll();
-  } catch (err) { showAlert(err.message); }
+  } catch (err) {
+    showAlert(err.message === 'Invalid or expired admin login code'
+      ? 'That code was not accepted. Click Log In again, then enter the code from the newest admin login email within 10 minutes.'
+      : err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Log In';
+  }
 });
 
 document.getElementById('logoutLink').addEventListener('click', (e) => {
