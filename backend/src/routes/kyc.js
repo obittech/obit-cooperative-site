@@ -242,7 +242,10 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
 });
 
 kycRouter.get('/api/kyc/:id/status', async (req, res, params) => {
-  const check = await get('SELECT * FROM kyc_checks WHERE session_ref = ? OR application_id = ? ORDER BY id DESC LIMIT 1', [params.id, params.id]);
+  const numericId = /^\d+$/.test(String(params.id)) ? Number(params.id) : null;
+  const check = numericId
+    ? await get('SELECT * FROM kyc_checks WHERE session_ref = ? OR application_id = ? ORDER BY id DESC LIMIT 1', [params.id, numericId])
+    : await get('SELECT * FROM kyc_checks WHERE session_ref = ? ORDER BY id DESC LIMIT 1', [params.id]);
   if (!check) throw new HttpError(404, 'KYC session not found');
   res.json(200, {
     status: check.status,
