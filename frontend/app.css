@@ -74,3 +74,25 @@ table.app-table tr:hover td{background:#fafcfb}
 .tab-row{display:flex;gap:10px;margin-bottom:24px;border-bottom:1px solid var(--line)}
 .tab-row button{background:none;border:none;padding:10px 4px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
 .tab-row button.active{color:var(--green-dark);border-bottom-color:var(--green)}
+
+
+.opportunity-access{display:grid;grid-template-columns:1.3fr 1fr;gap:24px;align-items:center;margin-bottom:22px}
+.opportunity-access h2{margin:4px 0 8px}
+.opportunity-access p{color:var(--muted)}
+.opportunity-access .field{margin-bottom:10px}
+.opportunity-access.unlocked{border-color:#7fc994;background:#f6fcf8}
+.access-alert{grid-column:1/-1}
+.access-alert .alert{margin:0}
+.opportunity-disclaimer{background:#f4f7f5;border-left:4px solid var(--green);padding:14px 18px;border-radius:8px;color:var(--muted);font-size:14px;margin-bottom:22px}
+.opportunity-list{display:grid;gap:18px}
+.opportunity-card h2{font-size:23px;margin:12px 0 8px}
+.opportunity-card>p{color:var(--muted);line-height:1.65}
+.opportunity-topline{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.opportunity-category{color:var(--green-dark);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.opportunity-meta{display:flex;gap:8px 18px;flex-wrap:wrap;margin:18px 0 12px;font-size:13px;font-weight:600;color:var(--muted)}
+.opportunity-source{display:inline-block;color:var(--green-dark);font-weight:700;margin-top:4px}
+.member-lock{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:18px;padding:12px 14px;background:#fff8e8;border:1px solid #efd79a;border-radius:10px;color:#6b4e00;font-size:13px}
+.opportunity-detail{padding-top:16px;margin-top:16px;border-top:1px solid var(--line)}
+.opportunity-detail h3{font-size:14px;margin-bottom:5px;color:var(--ink)}
+.opportunity-detail p{white-space:pre-line;color:var(--muted);line-height:1.6}
+@media(max-width:700px){.opportunity-access{grid-template-columns:1fr}.opportunity-card{padding:22px}.opportunity-topline{align-items:flex-start}}
