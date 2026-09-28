@@ -42,11 +42,7 @@
       <div class="app-header">
         <div class="eyebrow green">MEMBERSHIP APPLICATION</div>
         <h1>Become an Obit member</h1>
-        <p>Create your profile, verify your identity and complete your membership fee. Your application, KYC and payment history carry forward into Obit One when it launches — you will not need to register again.</p>
-      </div>
-
-      <div class="sandbox-banner" id="modeBanner">
-        <strong>Verification notice.</strong> Paystack payment processing is connected. Dojah identity verification is currently configured for sandbox testing. Use Dojah sandbox test data only until live KYC is approved and enabled.
+        <p>Create your profile, verify your identity and complete your membership fee.</p>
       </div>
 
       <div class="stepper" id="stepper">
@@ -54,7 +50,7 @@
         <div class="step" data-step="review">2. Review & Consent</div>
         <div class="step" data-step="kyc">3. Verify (KYC)</div>
         <div class="step" data-step="payment">4. Membership Fee</div>
-        <div class="step" data-step="done">5. Under Review</div>
+        <div class="step" data-step="done">5. Savings Plan</div>
       </div>
 
       <div id="alertBox"></div>
@@ -120,12 +116,6 @@
             <label class="field">Next of kin — phone
               <input id="next_of_kin_phone" />
             </label>
-            <label class="field">Intended savings amount (₦)
-              <input id="intended_savings_amount" type="number" min="0" />
-            </label>
-            <label class="field">Savings frequency
-              <select id="intended_savings_frequency"><option value="">Select</option><option>Daily</option><option>Weekly</option><option>Monthly</option></select>
-            </label>
           </div>
           <label class="field">What are you interested in? (select any)
             <select id="interests" multiple size="4">
@@ -161,6 +151,7 @@
         <!-- STEP 3: KYC -->
         <section id="panel-kyc" style="display:none">
           <h2 style="margin-bottom:10px">Verify your identity</h2>
+          <div class="sandbox-banner" id="modeBanner"><strong>Verification notice.</strong> Dojah identity verification is configured for sandbox testing. Use test data only until live KYC is enabled.</div>
           <p class="muted-note" style="margin-bottom:18px">Identity verification is provided by Dojah. While the platform is in sandbox mode, use Dojah test data only. Your NIN/BVN is sent to the provider for verification and is not stored in the Obit database.</p>
           <div id="kycStatusBox"></div>
           <div id="kycIdentityFields" style="display:none;margin-top:16px">
@@ -195,9 +186,17 @@
 
         <!-- STEP 5: DONE -->
         <section id="panel-done" style="display:none">
-          <h2 style="margin-bottom:10px">You're under review 🎉</h2>
-          <p>Your payment has been verified and your application is now with the Obit team for final review and activation. You'll receive your permanent Member ID once approved.</p>
-          <p class="muted-note">Once active, come back to <a href="portal.html">Login</a> to set your Member Portal password.</p>
+          <h2 style="margin-bottom:10px">Plan your savings</h2>
+          <p id="savingsReviewNote">Your membership fee has been confirmed. Your membership is under review. You can prepare a savings goal now and submit it after your membership is approved.</p>
+          <div class="grid-2">
+            <label class="field">Amount per contribution (₦)<input id="draftPlanAmount" type="number" min="1" step="0.01" inputmode="decimal" /></label>
+            <label class="field">Frequency<select id="draftPlanFrequency"><option>Daily</option><option>Weekly</option><option>Monthly</option></select></label>
+            <label class="field">Purpose<select id="draftPlanPurpose"><option>Emergency Fund</option><option>Business Capital</option><option>Rent</option><option>School Fees</option><option>Equipment</option><option>Vehicle</option><option>Housing</option><option>General Savings</option></select></label>
+            <label class="field">Target amount (optional, ₦)<input id="draftPlanTarget" type="number" min="1" step="0.01" inputmode="decimal" /></label>
+          </div>
+          <button class="btn btn-primary" type="button" id="btnSaveSavingsDraft">Keep this plan for my portal</button>
+          <p id="savingsDraftStatus" class="muted-note" role="status" aria-live="polite"></p>
+          <p class="muted-note">This draft stays on this device. It does not collect money. After approval, <a href="portal.html">log in to your Member Portal</a> to review and save the plan.</p>
         </section>
 
       </div>
@@ -214,6 +213,6 @@
   <script src="js/config.js"></script>
   <script src="js/nav.js?v=20260924-2"></script>
   <script src="js/api.js"></script>
-  <script src="js/apply.js?v=20260924-2"></script>
+  <script src="js/apply.js?v=20260928-savings-1"></script>
 </body>
 </html>
