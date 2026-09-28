@@ -73,6 +73,7 @@ async function loadDashboard() {
   if (!token) return;
   try {
     const membership = await OBIT.get('/api/me/membership', { token });
+    restoreSavingsDraft(membership.application_id);
     document.getElementById('digitalMemberName').textContent = membership.full_legal_name || 'Member';
     document.getElementById('digitalMemberId').textContent = membership.digital_membership_id || membership.member_code;
     document.getElementById('digitalMemberStatus').innerHTML = badge(membership.status);
@@ -108,6 +109,19 @@ async function loadDashboard() {
     OBIT.clearSession('member');
     showAlert(err.message);
   }
+}
+
+let pendingSavingsDraftKey = null;
+function restoreSavingsDraft(applicationId) {
+  pendingSavingsDraftKey = `obit_savings_draft_${applicationId}`;
+  let draft;
+  try { draft = JSON.parse(localStorage.getItem(pendingSavingsDraftKey) || 'null'); } catch { return; }
+  if (!draft || !Number.isFinite(Number(draft.amount)) || Number(draft.amount) <= 0) return;
+  document.getElementById('planAmount').value = draft.amount;
+  document.getElementById('planFrequency').value = draft.frequency;
+  document.getElementById('planPurpose').value = draft.purpose;
+  document.getElementById('planTarget').value = draft.target_amount || '';
+  document.getElementById('planAlert').textContent = 'Your savings draft is ready. Review it and select Save Plan. No money has been collected.';
 }
 
 async function refreshReceipts(token) {
@@ -274,6 +288,8 @@ document.getElementById('btnCreatePlan').addEventListener('click', async () => {
   box.textContent = 'Saving your plan…';
   try {
     await OBIT.post('/api/me/contribution-plans', { amount, frequency, purpose, target_amount }, { token });
+    if (pendingSavingsDraftKey) localStorage.removeItem(pendingSavingsDraftKey);
+    pendingSavingsDraftKey = null;
     amountInput.value = '';
     targetInput.value = '';
     box.textContent = 'Plan saved. No money was collected.';
