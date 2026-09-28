@@ -39,6 +39,7 @@ meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
   const onboarding = await get('SELECT whatsapp_joined, orientation_completed FROM community_onboarding WHERE member_id = ?', [member.id]);
 
   res.json(200, {
+    application_id: member.application_id,
     member_code: member.member_code,
     digital_membership_id: member.member_code,
     status: member.status,
