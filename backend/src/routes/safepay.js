@@ -38,7 +38,10 @@ function publicListing(row) {
 
 safePayRouter.get('/api/market/listings', async (req, res) => {
   const community = await anchorCommunity();
-  const rows = await all("SELECT id,title,description,price_kobo,currency,category,status,created_at FROM market_listings WHERE community_id=? AND status='ACTIVE' ORDER BY id DESC LIMIT 100", [community.id]);
+  const rows = await all(`SELECT l.id,l.title,l.description,l.price_kobo,l.currency,l.category,l.status,l.created_at
+    FROM market_listings l JOIN members m ON m.id=l.seller_member_id
+    WHERE l.community_id=? AND l.status='ACTIVE' AND m.status='ACTIVE'
+    ORDER BY l.id DESC LIMIT 100`, [community.id]);
   res.json(200, rows.map(publicListing));
 });
 
@@ -72,7 +75,8 @@ safePayRouter.post('/api/market/listings', requireAuth('member'), async (req, re
 safePayRouter.post('/api/market/orders', requireAuth('member'), async (req, res) => {
   const buyer = await memberForUser(req.user.id);
   const community = await anchorCommunity();
-  const listing = await get("SELECT * FROM market_listings WHERE id=? AND community_id=? AND status='ACTIVE'", [Number(req.body?.listing_id), community.id]);
+  const listing = await get(`SELECT l.* FROM market_listings l JOIN members m ON m.id=l.seller_member_id
+    WHERE l.id=? AND l.community_id=? AND l.status='ACTIVE' AND m.status='ACTIVE'`, [Number(req.body?.listing_id), community.id]);
   if (!listing) throw new HttpError(404,'Listing not found');
   if (listing.seller_member_id === buyer.id) throw new HttpError(409,'You cannot buy your own listing');
   const reference = `OBM-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
