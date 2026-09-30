@@ -27,8 +27,26 @@
   <section class="market-toolbar"><div><h2>Obit Market</h2></div>
     <div class="market-actions"><button class="btn btn-secondary" id="btnRefresh">Refresh</button><a class="btn" href="apply.html">Join to sell</a><a class="btn btn-secondary" href="portal.html">Member Login</a></div>
   </section>
+  <label class="field market-search">Search member listings
+    <input id="marketSearch" type="search" placeholder="Search products or services" autocomplete="off" />
+  </label>
   <div id="marketAlert"></div>
   <section id="listingGrid" class="listing-grid"></section>
+
+  <section id="sellerPanel" class="card" style="display:none;margin-bottom:28px">
+    <h2>Sell on Obit Market</h2>
+    <p class="muted-note">Active cooperative members can submit a listing. The Obit team reviews it before it appears to buyers.</p>
+    <div class="grid-2">
+      <label class="field">Product or service name<input id="listingTitle" maxlength="120" required /></label>
+      <label class="field">Category<input id="listingCategory" maxlength="60" placeholder="e.g. Solar equipment" required /></label>
+      <label class="field">Price (₦)<input id="listingPrice" type="number" min="20000" max="3000000" step="0.01" inputmode="decimal" required /></label>
+      <label class="field" style="grid-column:1/-1">Description<textarea id="listingDescription" maxlength="2000" rows="4" placeholder="Describe the product, condition and what is included"></textarea></label>
+    </div>
+    <button class="btn btn-primary" id="btnSubmitListing" type="button">Submit for review</button>
+    <p id="sellerAlert" role="status" aria-live="polite"></p>
+    <h3>Your listings</h3>
+    <div id="myListings" class="listing-grid"></div>
+  </section>
 
   <section class="how-safe card">
     <h2>How Obit SafePay works</h2>
@@ -44,5 +62,5 @@
 </div>
 </main>
 <footer><div class="container footer-bottom"><span>© 2026 Obit Market</span><span><a href="market-terms.html">Terms</a> · <a href="market-privacy.html">Privacy</a></span></div></footer>
-<script src="js/config.js"></script><script src="js/api.js"></script><script src="js/market.js"></script>
+<script src="js/config.js"></script><script src="js/api.js"></script><script src="js/market.js?v=20260930-seller-1"></script>
 </body></html>
