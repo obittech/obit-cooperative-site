@@ -63,13 +63,47 @@ safePayRouter.post('/api/market/listings', requireAuth('member'), async (req, re
   const { title, description='', category='Other', price } = req.body || {};
   let priceKobo;
   try { priceKobo = parseNgnToKobo(price); } catch { throw new HttpError(400, 'Enter a valid price with no more than two decimal places'); }
-  if (!title || title.trim().length < 3) throw new HttpError(400, 'Listing title is required');
+  if (typeof title !== 'string' || title.trim().length < 3 || title.trim().length > 120) throw new HttpError(400, 'Listing title must be 3 to 120 characters');
+  if (typeof description !== 'string' || description.trim().length > 2000) throw new HttpError(400, 'Description must be at most 2000 characters');
+  if (typeof category !== 'string' || category.trim().length < 2 || category.trim().length > 60) throw new HttpError(400, 'Category must be 2 to 60 characters');
   if (!Number.isSafeInteger(priceKobo) || priceKobo < 2000000) throw new HttpError(400, 'SafePay marketplace listings must be at least ₦20,000 during the pilot');
   if (priceKobo > 300000000) throw new HttpError(400, 'SafePay pilot limit is ₦3,000,000 per transaction');
   const result = await run(`INSERT INTO market_listings (community_id,seller_member_id,title,description,category,price_kobo,currency,status)
-    VALUES (?,?,?,?,?,?,'NGN','ACTIVE')`, [community.id,member.id,title.trim(),String(description).trim(),String(category).trim(),priceKobo]);
-  await audit(req.user.id,'MARKET_LISTING_CREATED','market_listings',Number(result.lastInsertRowid),{price_kobo:priceKobo});
-  res.json(201,{id:Number(result.lastInsertRowid),status:'ACTIVE'});
+    VALUES (?,?,?,?,?,?,'NGN','DRAFT')`, [community.id,member.id,title.trim(),description.trim(),category.trim(),priceKobo]);
+  await audit(req.user.id,'MARKET_LISTING_SUBMITTED','market_listings',Number(result.lastInsertRowid),{price_kobo:priceKobo});
+  res.json(201,{id:Number(result.lastInsertRowid),status:'DRAFT'});
+});
+
+safePayRouter.get('/api/market/my-listings', requireAuth('member'), async (req, res) => {
+  const member = await memberForUser(req.user.id);
+  const rows = await all('SELECT id,title,description,category,price_kobo,currency,status,created_at FROM market_listings WHERE seller_member_id=? ORDER BY id DESC LIMIT 100', [member.id]);
+  res.json(200, rows.map(row => ({...publicListing(row), status:row.status})));
+});
+
+safePayRouter.get('/api/admin/market/listings', requireAuth('staff', 'admin'), async (req, res) => {
+  const rows = await all(`SELECT l.id,l.title,l.description,l.category,l.price_kobo,l.status,l.created_at,
+    m.member_code,m.status AS member_status,a.full_legal_name
+    FROM market_listings l JOIN members m ON m.id=l.seller_member_id
+    JOIN member_applications a ON a.id=m.application_id
+    WHERE l.status IN ('DRAFT','ACTIVE','PAUSED') ORDER BY l.id DESC LIMIT 200`);
+  res.json(200, rows.map(row => ({...row, price:Number(row.price_kobo)/100, price_kobo:undefined})));
+});
+
+safePayRouter.post('/api/admin/market/listings/:id/decision', requireAuth('staff', 'admin'), async (req, res, params) => {
+  const id = Number(params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, 'Invalid listing ID');
+  const decision = String(req.body?.decision || '');
+  const transitions = { APPROVE:['DRAFT','ACTIVE'], REJECT:['DRAFT','REMOVED'], PAUSE:['ACTIVE','PAUSED'], RESUME:['PAUSED','ACTIVE'] };
+  if (!transitions[decision]) throw new HttpError(400, 'Invalid listing decision');
+  const [from,to] = transitions[decision];
+  const listing = await get('SELECT l.status,m.status AS member_status FROM market_listings l JOIN members m ON m.id=l.seller_member_id WHERE l.id=?', [id]);
+  if (!listing) throw new HttpError(404, 'Listing not found');
+  if (listing.status !== from) throw new HttpError(409, `Listing must be ${from} for this action`);
+  if (to === 'ACTIVE' && listing.member_status !== 'ACTIVE') throw new HttpError(409, 'Seller membership is not active');
+  const updated = await run("UPDATE market_listings SET status=?,updated_at=datetime('now') WHERE id=? AND status=?", [to,id,from]);
+  if (updated.changes !== 1) throw new HttpError(409, 'Listing changed during review');
+  await audit(req.user.id,`MARKET_LISTING_${decision}`,'market_listings',id);
+  res.json(200,{id,status:to});
 });
 
 safePayRouter.post('/api/market/orders', requireAuth('member'), async (req, res) => {

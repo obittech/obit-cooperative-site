@@ -63,6 +63,7 @@
         <div class="tab-row">
           <button class="active" data-tab="queue">Application Queue</button>
           <button data-tab="withdrawals">Withdrawals</button>
+          <button data-tab="market">Market Listings</button>
           <button data-tab="reconciliation">Reconciliation</button>
           <button data-tab="audit">Audit Log</button>
         </div>
@@ -80,6 +81,13 @@
           <div class="grid-2" style="margin-bottom:16px" id="financeCards"></div>
           <div class="table-wrap card">
             <table class="app-table"><thead><tr><th>Member</th><th>Amount</th><th>Verified bank</th><th>Status</th><th>Action</th></tr></thead><tbody id="withdrawalsBody"></tbody></table>
+          </div>
+        </div>
+
+        <div id="panel-market" style="display:none">
+          <div id="marketReviewAlert" role="status" aria-live="polite"></div>
+          <div class="table-wrap card">
+            <table class="app-table"><thead><tr><th>Listing</th><th>Seller</th><th>Price</th><th>Status</th><th>Decision</th></tr></thead><tbody id="marketListingsBody"></tbody></table>
           </div>
         </div>
 
@@ -106,6 +114,6 @@
 
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
-  <script src="js/admin.js?v=20260924-login-code-1"></script>
+  <script src="js/admin.js?v=20260930-market-review-1"></script>
 </body>
 </html>

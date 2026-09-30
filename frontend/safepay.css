@@ -8,6 +8,8 @@
 .market-toolbar{display:flex;align-items:center;justify-content:space-between;margin:34px 0 18px}.market-actions{display:flex;gap:10px}.listing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:28px}
 .listing{padding:20px;border:1px solid var(--line);border-radius:18px;background:#fff}.listing .category{font-size:12px;font-weight:800;color:var(--green);text-transform:uppercase}.listing h3{margin:8px 0}.listing .price{font-size:25px;font-weight:900;color:var(--ink);margin:14px 0}.listing p{color:var(--muted);min-height:44px}
 .safe-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:20px}.safe-steps div{display:flex;flex-direction:column;gap:8px}.safe-steps b{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--green);color:#fff}.safe-steps span{font-size:13px;color:var(--muted)}
+.market-search{max-width:440px;margin-bottom:18px}.market-search input{width:100%;min-height:48px;font-size:16px}
+#sellerPanel .listing-grid{margin-top:14px}#sellerPanel .listing{overflow-wrap:anywhere}
 @media(max-width:900px){.safepay-hero{grid-template-columns:1fr}.listing-grid{grid-template-columns:1fr 1fr}.safe-steps{grid-template-columns:1fr 1fr}}
 @media(max-width:600px){
   .safepay-hero{gap:12px;margin-bottom:18px}
@@ -22,6 +24,8 @@
   .market-actions #btnRefresh{grid-column:1/-1}
   .market-actions .btn{min-width:0;padding-inline:10px;text-align:center}
   .listing{padding:18px}
+  #sellerPanel .field[style]{grid-column:auto!important}
+  #sellerPanel .btn-primary{width:100%;min-height:48px}
   .listing h3,.listing p{overflow-wrap:anywhere}
   .listing p{min-height:0}
   .safe-steps{gap:20px}

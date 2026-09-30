@@ -74,7 +74,7 @@ document.getElementById('logoutLink').addEventListener('click', (e) => {
 document.querySelectorAll('.tab-row [data-tab]').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-row [data-tab]').forEach((b) => b.classList.toggle('active', b === btn));
-    ['queue', 'withdrawals', 'reconciliation', 'audit'].forEach((name) => {
+    ['queue', 'withdrawals', 'market', 'reconciliation', 'audit'].forEach((name) => {
       document.getElementById(`panel-${name}`).style.display = name === btn.dataset.tab ? '' : 'none';
     });
   });
@@ -85,6 +85,9 @@ function badge(status) {
     : (status || '').includes('FAILED') || status === 'REJECTED' ? 'fail'
     : 'pending';
   return `<span class="status-badge ${cls}">${status}</span>`;
+}
+function escapeMarket(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 async function loadAll() {
@@ -99,6 +102,7 @@ async function loadAll() {
 
     await refreshQueue(token);
     await refreshWithdrawals(token);
+    await refreshMarketListings(token);
     await refreshReconciliation(token);
     await refreshAudit(token);
 
@@ -109,6 +113,28 @@ async function loadAll() {
     OBIT.clearSession('staff');
     showAlert(err.message);
   }
+}
+
+async function refreshMarketListings(token) {
+  const rows = await OBIT.get('/api/admin/market/listings', { token });
+  document.getElementById('marketListingsBody').innerHTML = rows.map((item) => {
+    const actions = item.status === 'DRAFT'
+      ? `<button class="btn btn-secondary" data-market-id="${item.id}" data-market-decision="APPROVE">Approve</button> <button class="btn btn-secondary" data-market-id="${item.id}" data-market-decision="REJECT">Reject</button>`
+      : item.status === 'ACTIVE'
+        ? `<button class="btn btn-secondary" data-market-id="${item.id}" data-market-decision="PAUSE">Pause</button>`
+        : `<button class="btn btn-secondary" data-market-id="${item.id}" data-market-decision="RESUME">Resume</button>`;
+    return `<tr><td><strong>${escapeMarket(item.title)}</strong><br><span class="muted-note">${escapeMarket(item.category)} · ${escapeMarket(item.description || '')}</span></td><td>${escapeMarket(item.member_code)}<br><span class="muted-note">${escapeMarket(item.full_legal_name)} (${escapeMarket(item.member_status)})</span></td><td>₦${Number(item.price).toLocaleString('en-NG')}</td><td>${badge(escapeMarket(item.status))}</td><td>${actions}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="muted-note">No listings to review.</td></tr>';
+  document.querySelectorAll('[data-market-decision]').forEach((button) => button.addEventListener('click', async () => {
+    const status = document.getElementById('marketReviewAlert');
+    button.disabled = true;
+    try {
+      const decision = button.dataset.marketDecision;
+      await OBIT.post(`/api/admin/market/listings/${button.dataset.marketId}/decision`, { decision }, { token });
+      status.textContent = `Listing status: ${{APPROVE:'approved',REJECT:'rejected',PAUSE:'paused',RESUME:'active'}[decision]}.`;
+      await refreshMarketListings(token);
+    } catch (err) { status.textContent = err.message; button.disabled = false; }
+  }));
 }
 
 async function refreshQueue(token) {
