@@ -32,13 +32,13 @@ function publicListing(row) {
   return {
     id: row.id, title: row.title, description: row.description,
     price: Number(row.price_kobo || 0) / 100, currency: row.currency,
-    category: row.category, status: row.status, created_at: row.created_at,
+    category: row.category, status: row.status, created_at: row.created_at, image_url: row.image_url || null,
   };
 }
 
 safePayRouter.get('/api/market/listings', async (req, res) => {
   const community = await anchorCommunity();
-  const rows = await all(`SELECT l.id,l.title,l.description,l.price_kobo,l.currency,l.category,l.status,l.created_at
+  const rows = await all(`SELECT l.id,l.title,l.description,l.price_kobo,l.currency,l.category,l.status,l.created_at,l.image_url
     FROM market_listings l JOIN members m ON m.id=l.seller_member_id
     WHERE l.community_id=? AND l.status='ACTIVE' AND m.status='ACTIVE'
     ORDER BY l.id DESC LIMIT 100`, [community.id]);
@@ -60,7 +60,16 @@ safePayRouter.get('/api/safepay/status', async (req, res) => {
 safePayRouter.post('/api/market/listings', requireAuth('member'), async (req, res) => {
   const member = await memberForUser(req.user.id);
   const community = await anchorCommunity();
-  const { title, description='', category='Other', price } = req.body || {};
+  const { title, description='', category='Other', price, image_url=null } = req.body || {};
+  let imageUrl = null;
+  if (image_url !== null && image_url !== '') {
+    if (typeof image_url !== 'string' || image_url.length > 2048) throw new HttpError(400, 'Product photo must be a valid HTTPS link');
+    try {
+      const url = new URL(image_url);
+      if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Invalid image URL');
+      imageUrl = url.href;
+    } catch { throw new HttpError(400, 'Product photo must be a valid HTTPS link'); }
+  }
   let priceKobo;
   try { priceKobo = parseNgnToKobo(price); } catch { throw new HttpError(400, 'Enter a valid price with no more than two decimal places'); }
   if (typeof title !== 'string' || title.trim().length < 3 || title.trim().length > 120) throw new HttpError(400, 'Listing title must be 3 to 120 characters');
@@ -68,20 +77,20 @@ safePayRouter.post('/api/market/listings', requireAuth('member'), async (req, re
   if (typeof category !== 'string' || category.trim().length < 2 || category.trim().length > 60) throw new HttpError(400, 'Category must be 2 to 60 characters');
   if (!Number.isSafeInteger(priceKobo) || priceKobo < 2000000) throw new HttpError(400, 'SafePay marketplace listings must be at least ₦20,000 during the pilot');
   if (priceKobo > 300000000) throw new HttpError(400, 'SafePay pilot limit is ₦3,000,000 per transaction');
-  const result = await run(`INSERT INTO market_listings (community_id,seller_member_id,title,description,category,price_kobo,currency,status)
-    VALUES (?,?,?,?,?,?,'NGN','DRAFT')`, [community.id,member.id,title.trim(),description.trim(),category.trim(),priceKobo]);
+  const result = await run(`INSERT INTO market_listings (community_id,seller_member_id,title,description,category,price_kobo,image_url,currency,status)
+    VALUES (?,?,?,?,?,?,?,'NGN','DRAFT')`, [community.id,member.id,title.trim(),description.trim(),category.trim(),priceKobo,imageUrl]);
   await audit(req.user.id,'MARKET_LISTING_SUBMITTED','market_listings',Number(result.lastInsertRowid),{price_kobo:priceKobo});
   res.json(201,{id:Number(result.lastInsertRowid),status:'DRAFT'});
 });
 
 safePayRouter.get('/api/market/my-listings', requireAuth('member'), async (req, res) => {
   const member = await memberForUser(req.user.id);
-  const rows = await all('SELECT id,title,description,category,price_kobo,currency,status,created_at FROM market_listings WHERE seller_member_id=? ORDER BY id DESC LIMIT 100', [member.id]);
+  const rows = await all('SELECT id,title,description,category,price_kobo,currency,status,created_at,image_url FROM market_listings WHERE seller_member_id=? ORDER BY id DESC LIMIT 100', [member.id]);
   res.json(200, rows.map(row => ({...publicListing(row), status:row.status})));
 });
 
 safePayRouter.get('/api/admin/market/listings', requireAuth('staff', 'admin'), async (req, res) => {
-  const rows = await all(`SELECT l.id,l.title,l.description,l.category,l.price_kobo,l.status,l.created_at,
+  const rows = await all(`SELECT l.id,l.title,l.description,l.category,l.price_kobo,l.status,l.created_at,l.image_url,
     m.member_code,m.status AS member_status,a.full_legal_name
     FROM market_listings l JOIN members m ON m.id=l.seller_member_id
     JOIN member_applications a ON a.id=m.application_id
