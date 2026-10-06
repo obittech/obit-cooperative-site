@@ -2,65 +2,75 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Obit Market & SafePay | Powered by Obit Technologies</title>
-<meta name="description" content="Explore Obit Market. Active Obit Cooperative members may sell, and anyone may shop without cooperative membership.">
-<link rel="canonical" href="https://obitcooperative.com/market.html">
-  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="safepay.css">
+  <title>Obit Market | Shop and Plan Your Purchase</title>
+  <meta name="description" content="Shop products from active Obit Cooperative members. Explore categories and estimate weekly or monthly payments. Membership is optional for buyers.">
+  <link rel="canonical" href="https://obitcooperative.com/market.html">
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="safepay.css?v=20261006-store-1">
 </head>
-<body>
+<body class="market-page">
 <a class="skip-link" href="#main-content">Skip to main content</a>
-<header class="site-header"><div class="container nav-wrap">
-  <a class="brand" href="index.html"><img class="brand-logo" src="assets/obit-logo.png" alt="Obit Cooperative"><span>Obit Cooperative</span></a>
-  <nav><a href="index.html">Home</a><a href="portal.html">Member Portal</a><a href="market.html" class="active">Obit Market</a></nav>
+<div class="market-topline">A marketplace for our community. <span>Member sellers. Everyone welcome.</span></div>
+<header class="market-header"><div class="container market-nav">
+  <a class="market-brand" href="market.html"><img src="assets/obit-logo.png" alt="Obit Cooperative"><span>OBIT <b>MARKET</b><small>Choose it. Plan for it.</small></span></a>
+  <nav aria-label="Market navigation"><a href="#shop">Shop</a><a href="#plan">Payment planner</a><a href="#how-it-works">How it works</a></nav>
+  <a class="btn btn-secondary account-link" href="portal.html">My account <span aria-hidden="true">↗</span></a>
 </div></header>
-<main class="app-main" id="main-content">
-<div class="container">
-  <section class="safepay-hero">
-    <div><span class="eyebrow">OBIT MARKET</span><h1>Buy and sell with <span>Obit SafePay</span></h1>
-    <p>Discover products offered by active Obit Cooperative members. Anyone can browse and buy when checkout opens. Cooperative membership is a choice for buyers and a requirement for sellers.</p>
-    <div class="trust-row"><span>✓ Member sellers</span><span>✓ Open to all buyers</span><span>✓ Controlled pilot</span></div></div>
-    <div class="safe-card"><div class="shield">✓</div><h2>Pay Securely.<br>Trade Confidently.</h2></div>
-  </section>
-
-  <div id="pilotNotice" class="sandbox-banner"><strong>Obit Market pilot:</strong> Listings are available to browse. Checkout for nonmember buyers and live payments are still in development. Do not send payment for a listing through this page.</div>
-
-  <section class="market-toolbar"><div><h2>Obit Market</h2></div>
-    <div class="market-actions"><button class="btn btn-secondary" id="btnRefresh">Refresh</button><a class="btn" href="apply.html">Join to sell</a><a class="btn btn-secondary" href="portal.html">Member Login</a></div>
-  </section>
-  <label class="field market-search">Search member listings
-    <input id="marketSearch" type="search" placeholder="Search products or services" autocomplete="off" />
-  </label>
-  <div id="marketAlert"></div>
-  <section id="listingGrid" class="listing-grid"></section>
-
-  <section id="sellerPanel" class="card" style="display:none;margin-bottom:28px">
-    <h2>Sell on Obit Market</h2>
-    <p class="muted-note">Active cooperative members can submit a listing. The Obit team reviews it before it appears to buyers.</p>
-    <div class="grid-2">
-      <label class="field">Product or service name<input id="listingTitle" maxlength="120" required /></label>
-      <label class="field">Category<input id="listingCategory" maxlength="60" placeholder="e.g. Solar equipment" required /></label>
-      <label class="field">Price (₦)<input id="listingPrice" type="number" min="20000" max="3000000" step="0.01" inputmode="decimal" required /></label>
-      <label class="field" style="grid-column:1/-1">Description<textarea id="listingDescription" maxlength="2000" rows="4" placeholder="Describe the product, condition and what is included"></textarea></label>
+<main id="main-content"><div class="container">
+  <section class="market-hero">
+    <div class="hero-copy"><span class="eyebrow">EVERYDAY NEEDS. BIGGER POSSIBILITIES.</span>
+      <h1>The things you need.<br><span>A plan that fits.</span></h1>
+      <p>Power your home, equip your business and make everyday life easier. Discover products from active Obit Cooperative members.</p>
+      <div class="hero-buttons"><a class="btn" href="#shop">Explore products <span aria-hidden="true">→</span></a><a class="hero-plan-link" href="#plan">Explore pay small small</a></div>
+      <div class="hero-tags"><span>Pay once</span><span>Plan weekly</span><span>Plan monthly</span></div>
     </div>
-    <button class="btn btn-primary" id="btnSubmitListing" type="button">Submit for review</button>
-    <p id="sellerAlert" role="status" aria-live="polite"></p>
-    <h3>Your listings</h3>
-    <div id="myListings" class="listing-grid"></div>
-  </section>
-
-  <section class="how-safe card">
-    <h2>How Obit SafePay works</h2>
-    <div class="safe-steps">
-      <div><b>1</b><strong>Deal created</strong><span>Buyer chooses an eligible marketplace listing.</span></div>
-      <div><b>2</b><strong>Payment secured</strong><span>When live payments open, funds will go to the Obit SafePay Escrow account through the approved payment provider.</span></div>
-      <div><b>3</b><strong>Seller delivers</strong><span>Delivery evidence and status are recorded on the technology platform.</span></div>
-      <div><b>4</b><strong>Buyer confirms</strong><span>Buyer confirms delivery or raises a dispute.</span></div>
-      <div><b>5</b><strong>Settlement</strong><span>The financial partner releases or refunds funds according to the approved transaction outcome.</span></div>
+    <div class="hero-display" aria-label="Illustration of home and business products">
+      <span class="display-label">MAKE ROOM FOR WHAT’S NEXT</span>
+      <svg class="hero-products" viewBox="0 0 520 310" role="img" aria-label="Solar panel, freezer and phone illustrations">
+        <defs><linearGradient id="panel" x2="1" y2="1"><stop stop-color="#173c50"/><stop offset="1" stop-color="#072630"/></linearGradient><linearGradient id="appliance" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#c9d7d6"/></linearGradient></defs>
+        <ellipse cx="270" cy="276" rx="211" ry="21" fill="#123b35" opacity=".1"/>
+        <g transform="translate(55 36) rotate(-8 95 104)"><rect width="177" height="211" rx="5" fill="#c4d5d3"/><rect x="7" y="7" width="163" height="197" rx="2" fill="url(#panel)"/><path d="M48 7v197M89 7v197M130 7v197M7 47h163M7 86h163M7 126h163M7 165h163" stroke="#6791a4" stroke-width="2"/></g>
+        <g transform="translate(178 124)"><rect x="0" y="12" width="224" height="131" rx="9" fill="url(#appliance)" stroke="#acbdb9"/><rect x="-5" y="0" width="234" height="24" rx="6" fill="#f8fcfa" stroke="#acbdb9"/><rect x="100" y="5" width="36" height="7" rx="3" fill="#93a6a2"/><rect x="19" y="103" width="20" height="16" rx="3" fill="#125348"/><path d="M169 106h33M169 113h33M169 120h33" stroke="#a6b8b1" stroke-width="3"/><rect x="20" y="143" width="13" height="8" fill="#81958c"/><rect x="190" y="143" width="13" height="8" fill="#81958c"/></g>
+        <g transform="translate(388 87) rotate(10 40 88)"><rect width="79" height="169" rx="13" fill="#182e35"/><rect x="5" y="6" width="69" height="156" rx="9" fill="#cbe8d8"/><path d="M5 101Q27 47 74 53v109H5Z" fill="#42a782"/><path d="M5 139Q30 101 74 119v43H5Z" fill="#15594c"/><rect x="25" y="9" width="29" height="6" rx="3" fill="#182e35"/></g>
+      </svg>
+      <div class="hero-mini-card"><span class="mini-check">✓</span><div><strong>Start with a clear plan</strong><small>See the full price and payment estimates</small></div></div>
+      <span class="illustration-note">Product illustrations</span>
     </div>
   </section>
+  <div class="market-benefits"><span><b>✓</b> Active member sellers</span><span><b>✓</b> Open to all buyers</span><span><b>✓</b> Clear product prices</span><span><b>✓</b> Obit SafePay coming soon</span></div>
 
-</div>
-</main>
-<footer><div class="container footer-bottom"><span>© 2026 Obit Market</span><span><a href="market-terms.html">Terms</a> · <a href="market-privacy.html">Privacy</a></span></div></footer>
-<script src="js/config.js"></script><script src="js/api.js"></script><script src="js/market.js?v=20260930-seller-1"></script>
+  <section id="shop" class="market-section">
+    <div class="section-heading"><div><span class="eyebrow">FIND YOUR NEXT PURCHASE</span><h2>What are you looking for?</h2></div><button class="text-button" id="btnRefresh" type="button">Refresh listings ↻</button></div>
+    <div class="shop-controls"><label class="market-search"><span class="sr-only">Search products</span><span aria-hidden="true">⌕</span><input id="marketSearch" type="search" placeholder="Try solar, freezer, phone or laptop" autocomplete="off"></label><label class="market-sort"><span class="sr-only">Sort products</span><select id="marketSort"><option value="newest">Newest first</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select></label></div>
+    <div id="categoryFilters" class="category-filters" aria-label="Product categories"></div>
+    <div class="catalog-heading"><h3>Member products</h3><span id="listingCount" aria-live="polite"></span></div>
+    <div id="marketAlert" role="status" aria-live="polite"></div>
+    <div id="listingGrid" class="listing-grid" aria-busy="true"><p>Loading member products.</p></div>
+    <div id="pilotNotice" class="market-notice"><strong>Browse today. Payments open later.</strong><span>Checkout and instalment plans are not yet available. Do not send payment for a listing through this page.</span></div>
+  </section>
+
+  <section id="plan" class="payment-planner market-section">
+    <div class="planner-intro"><span class="eyebrow">PAY SMALL SMALL</span><h2>A big purchase.<br>Smaller steps.</h2><p>Explore how a weekly or monthly plan could fit your budget. Start with a product price and choose your pace.</p><span class="estimate-label">Estimate tool · No payment collected</span></div>
+    <div class="planner-controls"><label class="field">Product price (₦)<input id="planAmount" type="number" min="20000" max="3000000" step="0.01" inputmode="decimal" value="120000"></label><fieldset class="rhythm-field"><legend>How often would you pay?</legend><div class="rhythm-buttons"><button type="button" data-rhythm="monthly" aria-pressed="true" class="selected">Monthly</button><button type="button" data-rhythm="weekly" aria-pressed="false">Weekly</button></div></fieldset><label class="field">Number of payments<select id="planLength"><option value="2">2 months</option><option value="4" selected>4 months</option><option value="6">6 months</option><option value="12">12 months</option></select></label><p id="planError" class="field-error" role="status"></p></div>
+    <div class="planner-result"><span>YOUR PAYMENT ESTIMATE</span><strong id="planPayment">₦30,000</strong><p id="planFrequency">per month for 4 payments</p><div class="plan-breakdown"><span>Product price <b id="planTotal">₦120,000</b></span><span>Payment schedule <b id="planSchedule">4 monthly payments</b></span></div><p class="plan-disclaimer">Product price divided into equal payments. This is not an approved offer. Fees, eligibility and delivery timing will be shown when live plans become available.</p></div>
+  </section>
+
+  <section id="how-it-works" class="market-section"><div class="section-heading"><div><span class="eyebrow">FROM CHOOSING TO OWNING</span><h2>Your purchase, step by step.</h2></div></div><div class="purchase-steps"><article><span>01</span><h3>Find your product</h3><p>Browse member listings and check the product details and full price.</p></article><article><span>02</span><h3>Choose your payment</h3><p>When checkout opens, review the available payment options and terms before you commit.</p></article><article><span>03</span><h3>Follow your delivery</h3><p>The confirmed order will show its delivery requirements and progress.</p></article><article><span>04</span><h3>Confirm receipt</h3><p>Confirm delivery or raise an issue through the Obit SafePay process.</p></article></div></section>
+
+  <section class="seller-invite"><div><span class="eyebrow">BUILT WITH OUR COOPERATIVE</span><h2>Your products. Our community.</h2><p>Sell through Obit Market as an active cooperative member. Buyers can shop without joining the cooperative.</p></div><div><a class="btn" href="apply.html">Become a member seller →</a><a class="seller-login" href="portal.html">Already a member? Sign in</a></div></section>
+  <section id="sellerPanel" class="card market-section" hidden>
+    <h2>Submit a product</h2><p class="muted-note">The Obit team reviews member listings before they appear in the store.</p>
+    <form id="sellerForm"><div class="grid-2">
+      <label class="field">Product or service name<input id="listingTitle" minlength="3" maxlength="120" required></label>
+      <label class="field">Category<select id="listingCategory" required><option value="Solar & Power">Solar &amp; Power</option><option value="Home Appliances">Home Appliances</option><option value="Phones & Computing">Phones &amp; Computing</option><option value="Business Equipment">Business Equipment</option><option value="Other">Other</option></select></label>
+      <label class="field">Full price (₦)<input id="listingPrice" type="number" min="20000" max="3000000" step="0.01" inputmode="decimal" required><small>Current listing range: ₦20,000 to ₦3,000,000.</small></label>
+      <label class="field">Product photo link (optional)<input id="listingImage" type="url" placeholder="https://" maxlength="2048"><small>Use a direct HTTPS image link for your actual product.</small></label>
+      <label class="field description-field">Description<textarea id="listingDescription" maxlength="2000" rows="4" placeholder="Describe the product, condition, warranty and what is included"></textarea></label>
+    </div><button class="btn" id="btnSubmitListing" type="submit">Submit for review</button></form><p id="sellerAlert" role="status" aria-live="polite"></p><h3>Your listings</h3><div id="myListings" class="listing-grid"></div>
+  </section>
+  <section class="market-section safepay-note"><div><span class="eyebrow">OBIT SAFEPAY</span><h2>Confidence at every step.</h2></div><p>When live payments open, funds will go to the Obit SafePay Escrow account through the approved payment provider. Delivery confirmation and dispute handling will guide settlement.</p></section>
+</div></main>
+<footer class="market-footer"><div class="container"><a class="market-brand" href="market.html"><img src="assets/obit-logo.png" alt=""><span>OBIT <b>MARKET</b></span></a><p>Member sellers. Everyone welcome.</p><div><a href="index.html">Cooperative</a><a href="market-terms.html">Terms</a><a href="market-privacy.html">Privacy</a></div><small>© 2026 Obit Market</small></div></footer>
+<nav class="mobile-market-nav" aria-label="Mobile market navigation"><a href="#shop">⌕<span>Shop</span></a><a href="#plan">₦<span>Planner</span></a><a href="#how-it-works">?<span>How it works</span></a><a href="portal.html">○<span>Account</span></a></nav>
+<dialog id="productDialog" class="product-dialog"><button id="closeProduct" class="dialog-close" type="button" aria-label="Close product details">×</button><div id="productDetails"></div></dialog>
+<script src="js/config.js"></script><script src="js/api.js"></script><script src="js/market.js?v=20261006-store-1"></script>
 </body></html>

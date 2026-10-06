@@ -123,7 +123,7 @@ async function refreshMarketListings(token) {
       : item.status === 'ACTIVE'
         ? `<button class="btn btn-secondary" data-market-id="${item.id}" data-market-decision="PAUSE">Pause</button>`
         : `<button class="btn btn-secondary" data-market-id="${item.id}" data-market-decision="RESUME">Resume</button>`;
-    return `<tr><td><strong>${escapeMarket(item.title)}</strong><br><span class="muted-note">${escapeMarket(item.category)} · ${escapeMarket(item.description || '')}</span></td><td>${escapeMarket(item.member_code)}<br><span class="muted-note">${escapeMarket(item.full_legal_name)} (${escapeMarket(item.member_status)})</span></td><td>₦${Number(item.price).toLocaleString('en-NG')}</td><td>${badge(escapeMarket(item.status))}</td><td>${actions}</td></tr>`;
+    return `<tr><td><strong>${escapeMarket(item.title)}</strong><br><span class="muted-note">${escapeMarket(item.category)} · ${escapeMarket(item.description || '')}</span>${item.image_url && /^https:\/\//.test(item.image_url) ? `<br><a href="${escapeMarket(item.image_url)}" target="_blank" rel="noopener noreferrer">View product photo ↗</a>` : ''}</td><td>${escapeMarket(item.member_code)}<br><span class="muted-note">${escapeMarket(item.full_legal_name)} (${escapeMarket(item.member_status)})</span></td><td>₦${Number(item.price).toLocaleString('en-NG')}</td><td>${badge(escapeMarket(item.status))}</td><td>${actions}</td></tr>`;
   }).join('') || '<tr><td colspan="5" class="muted-note">No listings to review.</td></tr>';
   document.querySelectorAll('[data-market-decision]').forEach((button) => button.addEventListener('click', async () => {
     const status = document.getElementById('marketReviewAlert');

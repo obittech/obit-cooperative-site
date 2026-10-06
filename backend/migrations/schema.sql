@@ -448,7 +448,7 @@ INSERT OR IGNORE INTO communities (slug,legal_name,display_name,community_type,s
 VALUES ('obit-cooperative','Obit Technologies Multipurpose Cooperative Society Limited','Obit Cooperative Society','cooperative','ACTIVE');
 CREATE TABLE IF NOT EXISTS market_listings (
   id INTEGER PRIMARY KEY AUTOINCREMENT, community_id INTEGER NOT NULL REFERENCES communities(id),
-  seller_member_id INTEGER NOT NULL REFERENCES members(id), title TEXT NOT NULL, description TEXT,
+  seller_member_id INTEGER NOT NULL REFERENCES members(id), title TEXT NOT NULL, description TEXT, image_url TEXT,
   category TEXT NOT NULL DEFAULT 'Other', price_kobo INTEGER NOT NULL CHECK(price_kobo>0),
   currency TEXT NOT NULL DEFAULT 'NGN', status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('DRAFT','ACTIVE','PAUSED','SOLD','REMOVED')),
   created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
