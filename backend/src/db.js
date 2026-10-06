@@ -37,6 +37,7 @@ function sqliteMigrate() {
   sqlite.exec(schema);
   const cols = (table) => sqlite.prepare(`PRAGMA table_info(${table})`).all().map(r=>r.name);
   const userCols = cols('users');
+  if (!cols('market_listings').includes('image_url')) sqlite.exec('ALTER TABLE market_listings ADD COLUMN image_url TEXT');
   if (!userCols.includes('session_version')) sqlite.exec('ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0');
   const withdrawalCols = cols('withdrawal_requests');
   if (!withdrawalCols.includes('bank_account_id')) sqlite.exec('ALTER TABLE withdrawal_requests ADD COLUMN bank_account_id INTEGER REFERENCES member_bank_accounts(id)');
@@ -58,6 +59,7 @@ export async function migrate() {
   const schema = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'postgres.sql'), 'utf8');
   await pool.query(schema);
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0");
+  await pool.query('ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS image_url TEXT');
 }
 
 function translateSql(input) {
