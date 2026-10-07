@@ -1,6 +1,7 @@
 # Obit Billionaires encoder rehearsal
 
-Status: implementation prepared, not deployed or verified with provider media.
+Status: deployed on Render; image build and disabled startup check passed.
+Real provider media and YouTube ingestion remain unverified.
 
 This isolated container receives Olivia's LiveAvatar video and audio using LiveKit,
 encodes 720p video with FFmpeg, and sends it to YouTube over RTMPS. The script runs
@@ -33,8 +34,9 @@ Render dashboard or Blueprint deployment is needed. Hosting charges must be
 reviewed before provisioning. Restarting an enabled service can repeat the test,
 so disable rehearsal after the first run before choosing any automatic restart.
 
-Validation completed: Python compilation and isolated destination/argument checks.
-Outstanding: image build, real provider API authentication, LiveKit event timing,
+Validation completed: Python compilation, destination/argument checks, Docker
+build, disabled Render startup, and local synthetic 720p H264/AAC encoding.
+Outstanding: real provider API authentication, LiveKit event timing,
 audio/video synchronisation, YouTube ingestion and ending the stream.
 Audio/video synchronisation must be checked by listening to the actual rehearsal.
 Speech completion is correlated by source_event_id. Provider event behaviour still needs verification.
