@@ -8,6 +8,7 @@ import json
 import os
 import signal
 import uuid
+from urllib.parse import urlsplit
 
 SCRIPT = [
     "Welcome to Obit Billionaires Affirmations. I am Olivia, your AI host. Take a steady breath and repeat after me.",
@@ -25,6 +26,14 @@ class ConfigurationError(ValueError):
     """Static operator-facing messages containing no supplied values."""
 
 def destination(key):
+    key = (key or "").strip()
+    if key.startswith(("rtmp://", "rtmps://")):
+        parsed = urlsplit(key)
+        if (parsed.hostname not in {"a.rtmp.youtube.com", "a.rtmps.youtube.com"}
+                or parsed.username or parsed.password or parsed.query or parsed.fragment
+                or not parsed.path.startswith("/live2/")):
+            raise ConfigurationError("YOUTUBE_STREAM_KEY contains an unsupported ingest URL")
+        key = parsed.path[len("/live2/"):]
     if not key or any(c.isspace() for c in key) or any(c in key for c in "/?#"):
         raise ConfigurationError("YOUTUBE_STREAM_KEY must contain only the stream key, without a URL or whitespace")
     return "rtmps://a.rtmps.youtube.com:443/live2/" + key
