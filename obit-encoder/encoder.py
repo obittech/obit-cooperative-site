@@ -21,9 +21,12 @@ SCRIPT = [
     "Choose one useful action for today. Thank you for joining Obit Billionaires Affirmations.",
 ]
 
+class ConfigurationError(ValueError):
+    """Static operator-facing messages containing no supplied values."""
+
 def destination(key):
     if not key or any(c.isspace() for c in key) or any(c in key for c in "/?#"):
-        raise ValueError("Invalid YouTube stream key")
+        raise ConfigurationError("YOUTUBE_STREAM_KEY must contain only the stream key, without a URL or whitespace")
     return "rtmps://a.rtmps.youtube.com:443/live2/" + key
 
 def options(width, height, video_port, audio_port, output):
@@ -47,9 +50,12 @@ async def run():
         print("Rehearsal disabled. No avatar session or broadcast started.", flush=True)
         return
     if os.environ.get("DESTINATION_VISIBILITY") != "unlisted":
-        raise ValueError("An unlisted test destination must be confirmed first")
+        raise ConfigurationError("DESTINATION_VISIBILITY must be unlisted")
     output = destination(os.environ["YOUTUBE_STREAM_KEY"])
-    duration = min(240, max(60, int(os.environ.get("MAX_TEST_SECONDS", "180"))))
+    try:
+        duration = min(240, max(60, int(os.environ.get("MAX_TEST_SECONDS", "180"))))
+    except ValueError:
+        raise ConfigurationError("MAX_TEST_SECONDS must be an integer") from None
     room = rtc.Room()
     stop = asyncio.Event()
     first_video = asyncio.Event()
@@ -259,6 +265,9 @@ async def run():
 if __name__ == "__main__":
     try:
         asyncio.run(run())
+    except ConfigurationError as error:
+        print("Configuration check failed: " + str(error), flush=True)
+        raise SystemExit(1)
     except Exception as error:
         # Exception type only. Third-party SDK messages may include secrets.
         print("Rehearsal failed: " + type(error).__name__, flush=True)
