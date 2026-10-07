@@ -7,9 +7,7 @@ import contextlib
 import json
 import os
 import signal
-import time
 import uuid
-from urllib.parse import urlparse
 
 SCRIPT = [
     "Welcome to Obit Billionaires Affirmations. I am Olivia, your AI host. Take a steady breath and repeat after me.",
@@ -55,6 +53,7 @@ async def run():
     room = rtc.Room()
     stop = asyncio.Event()
     first_video = asyncio.Event()
+    media_ready = asyncio.Event()
     speaking_finished = asyncio.Event()
     expected_speech = None
     tasks = set()
@@ -98,6 +97,9 @@ async def run():
         stream = rtc.AudioStream(track, capacity=10, sample_rate=48000, num_channels=1, frame_size_ms=20)
         streams.append(stream)
         async for event in stream:
+            if not media_ready.is_set():
+                # Exclude the automatic intro before the broadcast is ready.
+                continue
             audio.extend(bytes(event.frame.data))
             # Fail rather than silently losing speech or accumulating stale audio.
             if len(audio) > 48000 * 2:
@@ -158,7 +160,7 @@ async def run():
                     raise RuntimeError("Encoder cannot keep up with real time")
                 await asyncio.sleep(max(0, target - loop.time()))
         spawn(feed())
-        return server.sockets[0].getsockname()[1]
+        return server.sockets[0].getsockname()[1], connected
 
     async with httpx.AsyncClient(timeout=20) as client:
         async def call(path, body=None):
@@ -166,6 +168,7 @@ async def run():
             response = await client.post("https://api.liveavatar.com/v1/" + path, headers=headers, json=body)
             if not response.is_success:
                 # Never log upstream bodies, tokens or destination URLs.
+                print(f"LiveAvatar request failed: {path}, HTTP {response.status_code}", flush=True)
                 raise RuntimeError(f"LiveAvatar HTTP {response.status_code}")
             return response.json()["data"]
         try:
@@ -177,12 +180,16 @@ async def run():
                                    "context_id": os.environ["LIVEAVATAR_CONTEXT_ID"], "language": "en"},
             })
             token = created["session_token"]
+            print("LiveAvatar authenticated. Starting bounded session.", flush=True)
             started = await call("sessions/start")
             await room.connect(started["livekit_url"], started["livekit_client_token"])
             await asyncio.wait_for(first_video.wait(), 30)
-            vp, ap = await socket_feed(True), await socket_feed(False)
+            (vp, video_connected), (ap, audio_connected) = await socket_feed(True), await socket_feed(False)
             process = await asyncio.create_subprocess_exec(*options(*dimensions, vp, ap, output),
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+            await asyncio.wait_for(asyncio.gather(video_connected, audio_connected), 20)
+            audio.clear()
+            media_ready.set()
             async def watch_encoder():
                 await process.wait()
                 if not stop.is_set():
@@ -222,9 +229,13 @@ async def run():
                 await asyncio.wait_for(stop.wait(), duration)
         finally:
             stop.set()
-            for task in list(tasks):
+            pending = list(tasks)
+            for task in pending:
                 task.cancel()
-            await asyncio.gather(*list(tasks), return_exceptions=True)
+            await asyncio.gather(*pending, return_exceptions=True)
+            for stream in streams:
+                with contextlib.suppress(Exception):
+                    await stream.aclose()
             for writer in writers:
                 writer.close()
             for server in servers:
