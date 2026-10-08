@@ -55,10 +55,10 @@ def options(width, height, video_port, audio_port, output):
     if width <= 0 or height <= 0 or width > 4096 or height > 4096:
         raise ValueError("Unsupported frame size")
     return ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-            "-thread_queue_size", "128", "-f", "rawvideo", "-pixel_format", "rgb24",
+            "-thread_queue_size", "128", "-probesize", "32", "-analyzeduration", "0", "-f", "rawvideo", "-pixel_format", "rgb24",
             "-video_size", f"{width}x{height}", "-framerate", "25",
             "-i", f"tcp://127.0.0.1:{video_port}",
-            "-thread_queue_size", "128", "-f", "s16le", "-ar", "48000", "-ac", "1",
+            "-thread_queue_size", "128", "-probesize", "32", "-analyzeduration", "0", "-f", "s16le", "-ar", "48000", "-ac", "1",
             "-i", f"tcp://127.0.0.1:{audio_port}",
             "-map", "0:v", "-map", "1:a", "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2",
             "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
@@ -133,7 +133,9 @@ async def run():
                 continue
             audio.extend(bytes(event.frame.data))
             # Fail rather than silently losing speech or accumulating stale audio.
-            if len(audio) > 48000 * 2:
+            # LiveKit can deliver a short burst while FFmpeg opens its output.
+            # Keep up to five seconds, then fail rather than lose speech.
+            if len(audio) > 48000 * 2 * 5:
                 raise MediaError("Audio encoder backpressure")
 
     @room.on("track_subscribed")
