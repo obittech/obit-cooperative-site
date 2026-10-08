@@ -1,59 +1,27 @@
-# Obit Billionaires encoder rehearsal
+# Obit Billionaires recorded broadcaster
 
-Status: deployed on Render; image build and disabled startup check passed.
-Real provider media and YouTube ingestion remain unverified.
+The container now plays a reusable branded 112-second recording, produced once with HeyGen Amy voice, with the existing Obit Group-based logo and affirmation cards. Playback creates no LiveAvatar sessions and needs no voice-generation subscription per show. FFmpeg prepares H264/AAC at build time and copies encoded media at runtime.
 
-This isolated container receives Olivia's LiveAvatar video and audio using LiveKit,
-encodes 720p video with FFmpeg, and sends it to YouTube over RTMPS. The script runs
-once for at most four minutes. It is not the completed daily automation system.
+## Rehearsal
 
-Required provider secrets, entered through the hosting service's protected settings:
-- LIVEAVATAR_API_KEY (replacement key, never the revoked key)
-- YOUTUBE_STREAM_KEY (the Obit Billionaires unlisted rehearsal)
+ENABLE_RECORDED=true, BROADCAST_MODE=rehearsal, DESTINATION_VISIBILITY=unlisted. The saved YOUTUBE_STREAM_KEY must belong to the actual unlisted room. The room visibility must be checked in YouTube Studio; the environment assertion alone cannot verify it. A single full recording plays and exits. Disable ENABLE_RECORDED after the test.
 
-Non-secret configuration:
-- LIVEAVATAR_AVATAR_ID=dc6a2ade-fcad-48b4-89ce-8ae807b18c32
-- LIVEAVATAR_VOICE_ID=3cfb966a-e2b6-45d3-bc73-10fe4c92d8ae
-- LIVEAVATAR_CONTEXT_ID=8f87025d-e99b-4e98-a407-ce48eb58c0f2
-- MAX_TEST_SECONDS=180
-- DESTINATION_VISIBILITY=unlisted
-- ENABLE_REHEARSAL=false (change only after verifying the actual YouTube visibility)
+## Daily mode
 
-Secrets are not included in this package. LiveAvatar credentials already stored
-in the private studio have not been extracted or copied to Render.
+BROADCAST_MODE=daily requires YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET and YOUTUBE_REFRESH_TOKEN stored privately in Render. They must authorize the Obit Billionaires channel UC2cjo3492WY8JtfB1tq7dwA with youtube.force-ssl scope. Never paste credentials into chat or commit them. A YouTube API-enabled Google Cloud project and one owner OAuth consent are required. A browser login or stream key does not provide a refresh token.
 
-The visibility flag is an operator assertion, not a YouTube API check. Verify the
-actual room before enabling. FFmpeg's destination includes the key in its process
-arguments inside this isolated service. It is never logged. Do not share process
-dumps or give other users shell access to the service.
+The runner refreshes authorization, verifies the channel, matches the existing stream key to an authorized stream, avoids duplicate/active events, creates or reuses today’s event, confirms privacy and automatic start/end, then plays three complete rounds (about 5m37s). Each show states that the host is recorded. It uses Lagos dates. No second event is created if an existing one is active or today’s event already completed. Failures stop instead of endlessly retrying. Live chat remains native to YouTube; microphone guests are not implemented.
 
-Run locally with the same protected environment, or build the Docker image on a
-dedicated hosting service. Do not attach this encoder to the cooperative API.
-Render's available connector cannot create Docker workers. A repository plus the
-Render dashboard or Blueprint deployment is needed. Hosting charges must be
-reviewed before provisioning. Restarting an enabled service can repeat the test,
-so disable rehearsal after the first run before choosing any automatic restart.
+Proposed schedule: 07:00 Africa/Lagos daily = 0 6 * * * UTC. The deployed schedule remains the disabled annual placeholder until OAuth authorization and daily lifecycle testing pass. Unlisted remains the launch-test default. A public launch needs the real visibility changed explicitly.
 
-Validation completed: Python compilation, destination/argument checks, Docker
-build, disabled Render startup, and local synthetic 720p H264/AAC encoding.
-Outstanding: real provider API authentication, LiveKit event timing,
-audio/video synchronisation, YouTube ingestion and ending the stream.
-Audio/video synchronisation must be checked by listening to the actual rehearsal.
-Speech completion is correlated by source_event_id. Provider event behaviour still needs verification.
+## Costs and validation
 
-The draft Render Blueprint uses a disabled cron job so a service restart cannot
-automatically rebroadcast. The placeholder annual schedule does not enable a
-daily broadcast. Run the rehearsal manually, then set ENABLE_REHEARSAL=false.
-Review the displayed Render charges before creating the service. The proposed
-standard instance is for the video encoding test, not an approved purchase.
+Reuse the existing Render cron. Current 2c-4g runtime pricing was $0.00197/minute with $1/service monthly minimum. At three rounds/day, playback runtime alone is about $0.33/month, below that floor; startup time and other account services add usage. No new plan or service is required for playback. Verify the account bill rather than treating $1 as a guaranteed total.
 
-After the test: implement durable scheduling with run locks, automatic broadcast
-creation/ending, bounded recovery, spend limits and a guest consent/queue/media
-system. The present runner accepts no guest microphones and handles no live chat.
+prepare_recording.py builds the packaged media from logo.jpg.b64 and voice.opus.b64. Assets are checked in so the runtime needs no expiring download links. encoder.py retains only helper functions and the inactive legacy LiveAvatar runner; Docker’s default command is recorded.py. ENABLE_REHEARSAL stays false.
 
-Primary implementation references:
-- https://docs.liveavatar.com/docs/full-mode/events
-- https://docs.liveavatar.com/api-reference/sessions/create-session-token
-- https://docs.liveavatar.com/api-reference/sessions/start-session
-- https://docs.livekit.io/reference/python/livekit/rtc/video_stream.html
-- https://docs.livekit.io/reference/python/livekit/rtc/audio_stream.html
+Primary references:
+- https://developers.google.com/youtube/v3/live/docs/liveBroadcasts/insert
+- https://developers.google.com/youtube/v3/live/docs/liveBroadcasts/bind
+- https://developers.google.com/youtube/v3/live/docs/liveBroadcasts/transition
+- https://render.com/docs/cronjobs
