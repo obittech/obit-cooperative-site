@@ -83,6 +83,8 @@ async def run():
     first_video = asyncio.Event()
     media_ready = asyncio.Event()
     speaking_finished = asyncio.Event()
+    speech_started = asyncio.Event()
+    audible_audio_logged = False
     expected_speech = None
     tasks = set()
     streams = []
@@ -125,12 +127,16 @@ async def run():
             first_video.set()
 
     async def receive_audio(track):
+        nonlocal audible_audio_logged
         stream = rtc.AudioStream(track, capacity=10, sample_rate=48000, num_channels=1, frame_size_ms=20)
         streams.append(stream)
         async for event in stream:
             if not media_ready.is_set():
                 # Exclude the automatic intro before the broadcast is ready.
                 continue
+            if not audible_audio_logged and any(event.frame.data):
+                print("Avatar audio contains non-silent samples.", flush=True)
+                audible_audio_logged = True
             audio.extend(bytes(event.frame.data))
             # Fail rather than silently losing speech or accumulating stale audio.
             # LiveKit can deliver a short burst while FFmpeg opens its output.
@@ -157,11 +163,14 @@ async def run():
             event = json.loads(packet.data)
             if (event.get("event_type") == "avatar.speak_ended"
                     and expected_speech is not None
-                    and event.get("source_event_id") in (None, expected_speech)):
-                # Some FULL responses omit correlation; commands are serialized.
+                    and speech_started.is_set()):
+                # FULL speech lifecycle IDs can differ from command IDs.
+                # Only one command is outstanding; require its speech to start first.
                 print("Avatar completed a scripted line.", flush=True)
                 speaking_finished.set()
             elif event.get("event_type") == "avatar.speak_started":
+                if expected_speech is not None:
+                    speech_started.set()
                 print("Avatar speech started.", flush=True)
             elif event.get("event_type") == "session.stopped":
                 stop.set()
@@ -262,6 +271,7 @@ async def run():
                     if stop.is_set():
                         return
                     speaking_finished.clear()
+                    speech_started.clear()
                     await command("avatar.speak_text", line)
                     await asyncio.wait_for(speaking_finished.wait(), 35)
                     await asyncio.sleep(4)
