@@ -157,8 +157,12 @@ async def run():
             event = json.loads(packet.data)
             if (event.get("event_type") == "avatar.speak_ended"
                     and expected_speech is not None
-                    and event.get("source_event_id") == expected_speech):
+                    and event.get("source_event_id") in (None, expected_speech)):
+                # Some FULL responses omit correlation; commands are serialized.
+                print("Avatar completed a scripted line.", flush=True)
                 speaking_finished.set()
+            elif event.get("event_type") == "avatar.speak_started":
+                print("Avatar speech started.", flush=True)
             elif event.get("event_type") == "session.stopped":
                 stop.set()
         except (ValueError, TypeError):
