@@ -25,6 +25,19 @@ SCRIPT = [
 class ConfigurationError(ValueError):
     """Static operator-facing messages containing no supplied values."""
 
+class MediaError(RuntimeError):
+    """Only locally defined, secret-free diagnostic messages."""
+
+def encoder_failure(raw):
+    text = raw.lower()
+    if any(x in text for x in (b"invalid stream key", b"authentication failed", b"server error", b"403 forbidden", b"401 unauthorized")):
+        return "YouTube rejected the encoder connection"
+    if any(x in text for x in (b"connection refused", b"connection timed out", b"network is unreachable", b"tls", b"input/output error")):
+        return "Encoder destination connection failed"
+    if any(x in text for x in (b"error initializing output", b"unknown encoder", b"error while opening encoder", b"failed to configure output")):
+        return "Encoder codec initialization failed"
+    return "Encoder exited before rehearsal completed"
+
 def destination(key):
     key = (key or "").strip()
     if key.startswith(("rtmp://", "rtmps://")):
@@ -41,7 +54,7 @@ def destination(key):
 def options(width, height, video_port, audio_port, output):
     if width <= 0 or height <= 0 or width > 4096 or height > 4096:
         raise ValueError("Unsupported frame size")
-    return ["ffmpeg", "-hide_banner", "-loglevel", "quiet", "-nostdin",
+    return ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
             "-thread_queue_size", "128", "-f", "rawvideo", "-pixel_format", "rgb24",
             "-video_size", f"{width}x{height}", "-framerate", "25",
             "-i", f"tcp://127.0.0.1:{video_port}",
@@ -91,7 +104,10 @@ async def run():
         def done(t):
             tasks.discard(t)
             if not t.cancelled() and t.exception():
-                failures.append(type(t.exception()).__name__)
+                error = t.exception()
+                reason = str(error) if isinstance(error, MediaError) else type(error).__name__
+                failures.append(reason)
+                print("Media task failed: " + reason, flush=True)
                 stop.set()
         task.add_done_callback(done)
         return task
@@ -103,7 +119,7 @@ async def run():
         async for event in stream:
             size = (event.frame.width, event.frame.height)
             if dimensions is not None and dimensions != size:
-                raise RuntimeError("Video dimensions changed")
+                raise MediaError("Video dimensions changed")
             dimensions = size
             frame = bytes(event.frame.data)
             first_video.set()
@@ -118,7 +134,7 @@ async def run():
             audio.extend(bytes(event.frame.data))
             # Fail rather than silently losing speech or accumulating stale audio.
             if len(audio) > 48000 * 2:
-                raise RuntimeError("Audio encoder backpressure")
+                raise MediaError("Audio encoder backpressure")
 
     @room.on("track_subscribed")
     def subscribed(track, publication, participant):
@@ -172,7 +188,7 @@ async def run():
                 await asyncio.wait_for(writer.drain(), 3)
                 target += tick
                 if loop.time() - target > .5:
-                    raise RuntimeError("Encoder cannot keep up with real time")
+                    raise MediaError("Encoder cannot keep up with real time")
                 await asyncio.sleep(max(0, target - loop.time()))
         spawn(feed())
         return server.sockets[0].getsockname()[1], connected
@@ -201,14 +217,22 @@ async def run():
             await asyncio.wait_for(first_video.wait(), 30)
             (vp, video_connected), (ap, audio_connected) = await socket_feed(True), await socket_feed(False)
             process = await asyncio.create_subprocess_exec(*options(*dimensions, vp, ap, output),
-                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+            diagnostics = bytearray()
+            async def drain_diagnostics():
+                while chunk := await process.stderr.read(4096):
+                    diagnostics.extend(chunk[:max(0, 16384 - len(diagnostics))])
+            diagnostic_task = spawn(drain_diagnostics())
             await asyncio.wait_for(asyncio.gather(video_connected, audio_connected), 20)
             audio.clear()
             media_ready.set()
             async def watch_encoder():
                 await process.wait()
                 if not stop.is_set():
-                    failures.append("Encoder exited")
+                    await diagnostic_task
+                    reason = encoder_failure(bytes(diagnostics))
+                    failures.append(reason)
+                    print(reason, flush=True)
                     stop.set()
             spawn(watch_encoder())
             async def speak_script():
