@@ -140,6 +140,10 @@ async def run():
 
     @room.on("track_subscribed")
     def subscribed(track, publication, participant):
+        # FULL mode also includes agent tracks. The official SDK renders only
+        # the HeyGen participant so agent audio is not duplicated in playback.
+        if participant.identity != "heygen":
+            return
         if track.kind == rtc.TrackKind.KIND_VIDEO:
             spawn(receive_video(track))
         elif track.kind == rtc.TrackKind.KIND_AUDIO:
