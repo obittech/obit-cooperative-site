@@ -2,6 +2,10 @@
 
 The container now plays a reusable branded 112-second recording, produced once with HeyGen Amy voice, with the existing Obit Group-based logo and affirmation cards. Playback creates no LiveAvatar sessions and needs no voice-generation subscription per show. FFmpeg prepares H264/AAC at build time and copies encoded media at runtime.
 
+## Verified status (8 October 2026)
+
+The recorded rehearsal ran on Render from 05:02:57 to 05:04:49 UTC and exited successfully. YouTube Studio displayed the branded recording LIVE with Excellent ingestion health in the unlisted test room FUp5-_K0wpY. The packaged media passed H264 1280x720, AAC 48kHz and non-silent audio checks. Seven configuration and mocked YouTube lifecycle tests passed. The deployed ENABLE_RECORDED and ENABLE_REHEARSAL flags are now false. Daily owner OAuth and actual API lifecycle validation remain incomplete because Google Cloud Console is unavailable in the current browser. No public daily schedule is enabled.
+
 ## Rehearsal
 
 ENABLE_RECORDED=true, BROADCAST_MODE=rehearsal, DESTINATION_VISIBILITY=unlisted. The saved YOUTUBE_STREAM_KEY must belong to the actual unlisted room. The room visibility must be checked in YouTube Studio; the environment assertion alone cannot verify it. A single full recording plays and exits. Disable ENABLE_RECORDED after the test.
