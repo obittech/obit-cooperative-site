@@ -86,6 +86,8 @@ async def run():
     speech_started = asyncio.Event()
     audible_audio_logged = False
     last_voice_at = 0.0
+    last_audio_log = 0.0
+    scripted_text = None
     expected_speech = None
     tasks = set()
     streams = []
@@ -128,14 +130,18 @@ async def run():
             first_video.set()
 
     async def receive_audio(track):
-        nonlocal audible_audio_logged, last_voice_at
+        nonlocal audible_audio_logged, last_voice_at, last_audio_log
         stream = rtc.AudioStream(track, capacity=10, sample_rate=48000, num_channels=1, frame_size_ms=20)
         streams.append(stream)
         async for event in stream:
             if not media_ready.is_set():
                 # Exclude the automatic intro before the broadcast is ready.
                 continue
-            if any(abs(sample) >= 256 for sample in event.frame.data):
+            rms = (sum(sample * sample for sample in event.frame.data) / max(1, len(event.frame.data))) ** .5
+            if loop.time() - last_audio_log >= 5:
+                print("Avatar audio RMS: " + str(round(rms)), flush=True)
+                last_audio_log = loop.time()
+            if rms >= 300:
                 last_voice_at = loop.time()
             if not audible_audio_logged and last_voice_at:
                 print("Avatar audio contains non-silent samples.", flush=True)
@@ -171,6 +177,8 @@ async def run():
                 # Only one command is outstanding; require its speech to start first.
                 print("Avatar completed a scripted line.", flush=True)
                 speaking_finished.set()
+            elif event.get("event_type") in ("avatar.transcription", "avatar.transcription_ended"):
+                print("Avatar confirmed scripted text: " + str(event.get("text") == scripted_text), flush=True)
             elif event.get("event_type") == "avatar.speak_started":
                 if expected_speech is not None:
                     speech_started.set()
@@ -258,7 +266,7 @@ async def run():
                     stop.set()
             spawn(watch_encoder())
             async def speak_script():
-                nonlocal expected_speech
+                nonlocal expected_speech, scripted_text
                 # Interrupt the context intro so the broadcast uses the exact test script.
                 async def command(kind, text=None):
                     command_id = str(uuid.uuid4())
@@ -267,6 +275,7 @@ async def run():
                     if text is not None:
                         payload["text"] = text
                         expected_speech = command_id
+                        scripted_text = text
                     await room.local_participant.publish_data(json.dumps(payload).encode(), reliable=True, topic="agent-control")
                 await command("avatar.interrupt")
                 await asyncio.sleep(2)
