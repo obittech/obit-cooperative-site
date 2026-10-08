@@ -85,6 +85,7 @@ async def run():
     speaking_finished = asyncio.Event()
     speech_started = asyncio.Event()
     audible_audio_logged = False
+    last_voice_at = 0.0
     expected_speech = None
     tasks = set()
     streams = []
@@ -127,14 +128,16 @@ async def run():
             first_video.set()
 
     async def receive_audio(track):
-        nonlocal audible_audio_logged
+        nonlocal audible_audio_logged, last_voice_at
         stream = rtc.AudioStream(track, capacity=10, sample_rate=48000, num_channels=1, frame_size_ms=20)
         streams.append(stream)
         async for event in stream:
             if not media_ready.is_set():
                 # Exclude the automatic intro before the broadcast is ready.
                 continue
-            if not audible_audio_logged and any(event.frame.data):
+            if any(abs(sample) >= 256 for sample in event.frame.data):
+                last_voice_at = loop.time()
+            if not audible_audio_logged and last_voice_at:
                 print("Avatar audio contains non-silent samples.", flush=True)
                 audible_audio_logged = True
             audio.extend(bytes(event.frame.data))
@@ -272,8 +275,19 @@ async def run():
                         return
                     speaking_finished.clear()
                     speech_started.clear()
+                    command_at = loop.time()
                     await command("avatar.speak_text", line)
-                    await asyncio.wait_for(speaking_finished.wait(), 35)
+                    while not speaking_finished.is_set():
+                        now = loop.time()
+                        # A verified audible turn followed by a pause is also a
+                        # completion signal when the provider omits speak_ended.
+                        if (speech_started.is_set() and last_voice_at > command_at
+                                and now - last_voice_at >= 2.0):
+                            print("Scripted line completed after audible speech and pause.", flush=True)
+                            break
+                        if now - command_at > 35:
+                            raise MediaError("Avatar speech completion not detected")
+                        await asyncio.sleep(.1)
                     await asyncio.sleep(4)
                 stop.set()
             spawn(speak_script())
