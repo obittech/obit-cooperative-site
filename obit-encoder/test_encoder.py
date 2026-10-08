@@ -13,7 +13,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn('tcp://127.0.0.1:12001', args)
         self.assertIn('tcp://127.0.0.1:12002', args)
         self.assertEqual(args[-1], 'rtmps://a.rtmps.youtube.com:443/live2/test-key')
-        self.assertEqual(args[args.index('-loglevel') + 1], 'quiet')
+        self.assertEqual(args[args.index('-loglevel') + 1], 'error')
 
     def test_frame_size_is_bounded(self):
         for size in ((0, 720), (1280, 9000)):
