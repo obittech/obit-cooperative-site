@@ -5,7 +5,9 @@ services:
     branch: obit-affirmations-encoder
     rootDir: obit-encoder
     region: oregon
-    plan: standard
+    plan: 2c-4g
+    # Daily target: 0 6 * * * (07:00 Africa/Lagos).
+    # Remains disabled until owner OAuth and daily lifecycle validation.
     schedule: "0 0 1 1 *"
     dockerfilePath: ./Dockerfile
     dockerContext: .
@@ -13,17 +15,11 @@ services:
     envVars:
       - key: ENABLE_REHEARSAL
         value: "false"
+      - key: ENABLE_RECORDED
+        value: "false"
+      - key: BROADCAST_MODE
+        value: rehearsal
       - key: DESTINATION_VISIBILITY
         value: unlisted
-      - key: MAX_TEST_SECONDS
-        value: "180"
-      - key: LIVEAVATAR_AVATAR_ID
-        value: dc6a2ade-fcad-48b4-89ce-8ae807b18c32
-      - key: LIVEAVATAR_VOICE_ID
-        value: 3cfb966a-e2b6-45d3-bc73-10fe4c92d8ae
-      - key: LIVEAVATAR_CONTEXT_ID
-        value: 8f87025d-e99b-4e98-a407-ce48eb58c0f2
-      - key: LIVEAVATAR_API_KEY
-        sync: false
       - key: YOUTUBE_STREAM_KEY
         sync: false
