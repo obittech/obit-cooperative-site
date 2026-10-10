@@ -2,9 +2,11 @@
 
 The container now plays a reusable branded 112-second recording, produced once with HeyGen Amy voice, with the existing Obit Group-based logo and affirmation cards. Playback creates no LiveAvatar sessions and needs no voice-generation subscription per show. FFmpeg prepares H264/AAC at build time and copies encoded media at runtime.
 
-## Verified status (8 October 2026)
+## Production status (10 October 2026)
 
-The recorded rehearsal ran on Render from 05:02:57 to 05:04:49 UTC and exited successfully. YouTube Studio displayed the branded recording LIVE with Excellent ingestion health in the unlisted test room FUp5-_K0wpY. The packaged media passed H264 1280x720, AAC 48kHz and non-silent audio checks. Seven configuration and mocked YouTube lifecycle tests passed. The deployed ENABLE_RECORDED and ENABLE_REHEARSAL flags are now false. Daily owner OAuth and actual API lifecycle validation remain incomplete because Google Cloud Console is unavailable in the current browser. No public daily schedule is enabled.
+Public daily mode is deployed on the existing Render cron crn-db3880jtqb8s73ftqit0. ENABLE_RECORDED=true, ENABLE_REHEARSAL=false, BROADCAST_MODE=daily and DESTINATION_VISIBILITY=public. The active Render schedule is 0 6 * * *, daily at 07:00 Africa/Lagos. The first scheduled production run is 10 October 2026.
+
+Owner OAuth was saved privately in Render and validated against the expected channel. The full unlisted daily lifecycle test created event 5WE3w8dK0TE on 8 October, played 337 seconds, completed successfully at 07:36:15 UTC and exited successfully at 07:36:18 UTC. YouTube Studio showed live playback. The static-card stream had a low-bitrate advisory, with readable video and Good ingestion health. The packaged media passed H264 1280x720, AAC 48kHz and non-silent audio checks. Seven configuration and mocked YouTube lifecycle tests passed. Scheduled public execution has not yet been observed.
 
 ## Rehearsal
 
@@ -16,7 +18,7 @@ BROADCAST_MODE=daily requires YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET and YOUTU
 
 The runner refreshes authorization, verifies the channel, matches the existing stream key to an authorized stream, avoids duplicate/active events, creates or reuses today’s event, confirms privacy and automatic start/end, then plays three complete rounds (about 5m37s). Each show states that the host is recorded. It uses Lagos dates. No second event is created if an existing one is active or today’s event already completed. Failures stop instead of endlessly retrying. Live chat remains native to YouTube; microphone guests are not implemented.
 
-Proposed schedule: 07:00 Africa/Lagos daily = 0 6 * * * UTC. The deployed schedule remains the disabled annual placeholder until OAuth authorization and daily lifecycle testing pass. Unlisted remains the launch-test default. A public launch needs the real visibility changed explicitly.
+Active schedule: 07:00 Africa/Lagos daily = 0 6 * * * UTC. Daily production events are public. Tests should use unlisted visibility.
 
 ## Costs and validation
 
