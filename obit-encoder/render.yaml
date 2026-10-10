@@ -6,9 +6,8 @@ services:
     rootDir: obit-encoder
     region: oregon
     plan: 2c-4g
-    # Daily target: 0 6 * * * (07:00 Africa/Lagos).
-    # Remains disabled until owner OAuth and daily lifecycle validation.
-    schedule: "0 0 1 1 *"
+    # Daily at 07:00 Africa/Lagos. Full lifecycle test passed on 2026-10-08.
+    schedule: "0 6 * * *"
     dockerfilePath: ./Dockerfile
     dockerContext: .
     autoDeployTrigger: off
@@ -16,10 +15,16 @@ services:
       - key: ENABLE_REHEARSAL
         value: "false"
       - key: ENABLE_RECORDED
-        value: "false"
+        value: "true"
       - key: BROADCAST_MODE
-        value: rehearsal
+        value: daily
       - key: DESTINATION_VISIBILITY
-        value: unlisted
+        value: public
       - key: YOUTUBE_STREAM_KEY
+        sync: false
+      - key: YOUTUBE_CLIENT_ID
+        sync: false
+      - key: YOUTUBE_CLIENT_SECRET
+        sync: false
+      - key: YOUTUBE_REFRESH_TOKEN
         sync: false
