@@ -34,10 +34,14 @@ def wrap(draw, text, face, width):
             line = candidate
     return lines + [line]
 
-def build():
+def build(session=None):
+    global LINES
+    if session:
+        LINES = SESSIONS[session]["cards"]
     media = ROOT / 'media'; media.mkdir(exist_ok=True)
     for name in ('logo.jpg', 'voice.opus'):
-        (media / name).write_bytes(base64.b64decode((ROOT / 'assets' / (name + '.b64')).read_text(), validate=False))
+        source = (session + '.opus.b64') if session and name == 'voice.opus' else name + '.b64'
+        (media / name).write_bytes(base64.b64decode((ROOT / 'assets' / source).read_text(), validate=False))
     logo = Image.open(media / 'logo.jpg').convert('RGB').resize((280, 280))
     duration = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', str(media / 'voice.opus')]))
     # Original instrumental bed. Keep the voice track silent during response pauses.
@@ -49,12 +53,14 @@ def build():
         local = t % 8
         envelope = max(0, min(local/1.5, 1, (8-local)/1.5, t/3, (duration-t)/4))
         tone = sum(math.sin(2*math.pi*f*t) + 0.2*math.sin(4*math.pi*f*t) for f in chords[int(t/8)%4])/3
-        samples.append(int(32767 * 0.1125 * envelope * tone))
+        samples.append(int(32767 * (0.065 if session == 'bedtime' else 0.1125) * envelope * tone))
     with wave.open(str(media/'music.wav'), 'wb') as music:
         music.setnchannels(1); music.setsampwidth(2); music.setframerate(sample_rate)
         music.writeframes(samples.tobytes())
     pauses = [(10.4,13.45),(16.65,22),(28.2,34.85),(40.6,47.2),(53.85,56.45),(68.35,74.5),(81.55,87.85),(92.7,99.25),(110.35,duration)]
-    mute = '+'.join(f'between(t,{a},{b})' for a,b in pauses)
+    if session:
+        pauses = []
+    mute = '+'.join(f'between(t,{a},{b})' for a,b in pauses) or '0'
     audio_filter = f"[1:a]highpass=f=160,afftdn=nf=-22:tn=1,volume='if({mute},0,1)':eval=frame[voice];[voice][2:a]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]"
     concat = []
     for i, (start, label, text) in enumerate(LINES):
@@ -77,9 +83,13 @@ def build():
         concat += [f"file '{path}'", f'duration {end-start:.6f}']
     concat.append(f"file '{path}'")
     (media/'cards.txt').write_text('\n'.join(concat)+'\n')
-    subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-f','concat','-safe','0','-i',str(media/'cards.txt'),'-i',str(media/'voice.opus'),'-i',str(media/'music.wav'),'-filter_complex',audio_filter,'-map','0:v','-map','[a]','-vf','fps=25','-c:v','libx264','-preset','veryfast','-crf','23','-pix_fmt','yuv420p','-g','50','-c:a','aac','-b:a','96k','-ar','48000','-t',str(duration),'-movflags','+faststart',str(media/'affirmations.mp4')],check=True)
-    (media/'metadata.json').write_text(json.dumps({'duration':duration,'voice':'Amy - Voice 1','provider':'HeyGen','request_id':'025a5030157642d2a627db9feab85a1e'}))
+    subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-f','concat','-safe','0','-i',str(media/'cards.txt'),'-i',str(media/'voice.opus'),'-i',str(media/'music.wav'),'-filter_complex',audio_filter,'-map','0:v','-map','[a]','-vf','fps=25','-c:v','libx264','-preset','veryfast','-crf','23','-pix_fmt','yuv420p','-g','50','-c:a','aac','-b:a','96k','-ar','48000','-t',str(duration),'-movflags','+faststart',str(media/((session or 'affirmations')+'.mp4'))],check=True)
+    (media/((session+'-metadata.json') if session else 'metadata.json')).write_text(json.dumps({'duration':duration,'voice':'Amy - Voice 1','provider':'HeyGen','request_id':'025a5030157642d2a627db9feab85a1e'}))
     print('Reusable recording built:',round(duration,2),'seconds',flush=True)
+
+SESSIONS = {"morning": {"cards": [[0, "MORNING AFFIRMATIONS", "Good morning. Take a comfortable breath. You do not have to solve everything today. Begin with what is within your reach."], [9.922105263157894, "01 / REFLECTION", "I meet this day with courage and a clear mind."], [16.484210526315792, "02 / REFLECTION", "My skills and honest work bring value to others."], [22.76842105263158, "03 / REFLECTION", "I can make careful decisions, even when money is tight."], [29.317894736842106, "04 / REFLECTION", "I will take one useful step towards the life I am building."], [36.271578947368425, "05 / REFLECTION", "Before you leave, choose that step. Make it small enough to begin and meaningful enough to matter."]], "duration": 42.736326530612246}, "work": {"cards": [[0, "WORK AFFIRMATIONS", "Pause for a moment. Relax your shoulders. The morning may have brought delays, difficult customers or unfinished work. Give yourself room to begin again."], [12.257894736842104, "01 / REFLECTION", "A difficult morning does not decide my whole day."], [17.682105263157894, "02 / REFLECTION", "I respond to pressure with patience and clear judgement."], [24.285263157894732, "03 / REFLECTION", "I serve people well while respecting my time and energy."], [31.111578947368418, "04 / REFLECTION", "I can ask for help when I need it."], [37.17999999999999, "05 / REFLECTION", "Now choose the next task that deserves your attention. Take it one step at a time."]], "duration": 42.10938775510204}, "bedtime": {"cards": [[0, "BEDTIME AFFIRMATIONS", "The day is ending. Let your breathing settle naturally. Some things went well. Others may still be waiting. You can leave them until tomorrow."], [12.278823529411765, "01 / REFLECTION", "I recognise the effort I made today."], [18.647058823529413, "02 / REFLECTION", "Unfinished work does not make me a failure."], [24.35529411764706, "03 / REFLECTION", "I can care for my family without carrying every worry through the night."], [31.410588235294117, "04 / REFLECTION", "I give myself permission to rest."], [37.53647058823529, "05 / REFLECTION", "Let the plans wait for now. Find a comfortable position and allow the evening to grow quiet."]], "duration": 43.57224489795918}}
 
 if __name__ == '__main__':
     build()
+    for session in SESSIONS:
+        build(session)
