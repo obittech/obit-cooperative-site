@@ -15,6 +15,10 @@ DESCRIPTION = ('Join Obit Billionaires Affirmations for a daily practice of conf
                'This broadcast uses a recorded guide. Repeat each statement aloud during the pauses and share your commitment in live chat. '
                'Affirmations encourage reflection and action; they do not guarantee financial outcomes.')
 
+def session_at(now):
+    hour = now.astimezone(dt.timezone(dt.timedelta(hours=1))).hour
+    return 'morning' if hour < 12 else ('work' if hour < 18 else 'bedtime')
+
 class YouTubeError(RuntimeError):
     pass
 
@@ -61,7 +65,8 @@ class YouTube:
         self.authorize()
         now=now or dt.datetime.now(dt.timezone.utc)
         lagos=now.astimezone(dt.timezone(dt.timedelta(hours=1)))
-        title='Obit Billionaires | Daily Prosperity Affirmations | '+lagos.date().isoformat()
+        slot=session_at(now)
+        title='Obit Billionaires | '+slot.title()+' Affirmations | '+lagos.date().isoformat()
         streams=self.items('liveStreams',{'part':'id,cdn','mine':'true','maxResults':50})
         key=destination(stream_key).rsplit('/',1)[1]
         matches=[s for s in streams if s.get('cdn',{}).get('ingestionInfo',{}).get('streamName')==key]
@@ -117,15 +122,17 @@ def run():
     if visibility not in ('unlisted','public') or (mode=='rehearsal' and visibility!='unlisted'):
         raise ConfigurationError('Rehearsal destination must be unlisted')
     output=destination(required('YOUTUBE_STREAM_KEY'))
-    metadata=json.loads((ROOT/'media/metadata.json').read_text())
-    repeats=1 if mode=='rehearsal' else 3
+    slot=session_at(dt.datetime.now(dt.timezone.utc)) if mode=='daily' else 'morning'
+    print('Selected session: '+slot,flush=True)
+    metadata=json.loads((ROOT/'media'/(slot+'-metadata.json')).read_text())
+    repeats=1
     duration=metadata['duration']*repeats
     with httpx.Client(timeout=30) as client:
         youtube=YouTube(client); broadcast=None
         if mode=='daily':
             broadcast=youtube.prepare(required('YOUTUBE_STREAM_KEY'),visibility)
         print('Recorded playback started: '+str(round(duration))+' seconds; no LiveAvatar session.',flush=True)
-        cmd=['ffmpeg','-hide_banner','-loglevel','error','-nostdin','-re','-stream_loop',str(repeats-1),'-i',str(ROOT/'media/affirmations.mp4'),
+        cmd=['ffmpeg','-hide_banner','-loglevel','error','-nostdin','-re','-stream_loop',str(repeats-1),'-i',str(ROOT/'media'/(slot+'.mp4')),
              '-t',str(duration),'-c:v','copy','-c:a','copy','-f','flv',output]
         process=subprocess.Popen(cmd,stderr=subprocess.PIPE,stdout=subprocess.DEVNULL)
         def stop(signum,frame):
