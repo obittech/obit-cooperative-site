@@ -3,7 +3,7 @@ import os
 import unittest
 from unittest.mock import patch
 import httpx
-from recorded import YouTube, YouTubeError, CHANNEL
+from recorded import YouTube, YouTubeError, CHANNEL, session_at
 
 class DailyEventTests(unittest.TestCase):
     def fixture(self, channel=CHANNEL, broadcasts=None):
@@ -42,8 +42,14 @@ class DailyEventTests(unittest.TestCase):
         self.assertEqual(self.posts,[])
 
     def test_completed_daily_event_cannot_repeat(self):
-        with self.fixture(broadcasts=[{'id':'done','snippet':{'title':'Obit Billionaires | Daily Prosperity Affirmations | 2026-10-08'},'status':{'lifeCycleStatus':'complete'}}]) as client:
+        with self.fixture(broadcasts=[{'id':'done','snippet':{'title':'Obit Billionaires | Morning Affirmations | 2026-10-08'},'status':{'lifeCycleStatus':'complete'}}]) as client:
             with self.assertRaisesRegex(YouTubeError,'already completed'): self.prepare(client)
         self.assertEqual(self.posts,[])
 
-if __name__=='__main__': unittest.main()
+class SessionTests(unittest.TestCase):
+    def test_lagos_slots(self):
+        for hour, expected in [(6,'morning'),(13,'work'),(21,'bedtime')]:
+            now=dt.datetime(2026,10,12,hour,tzinfo=dt.timezone.utc)
+            self.assertEqual(session_at(now),expected)
+
+if __name__=='__main__' : unittest.main()
