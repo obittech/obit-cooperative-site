@@ -71,10 +71,10 @@ def build(session=None):
         d.text((420,110), 'AFFIRMATIONS', font=font(18), fill='#b0c6bb')
         d.line((420,168,1200,168), fill='#527a5c', width=2)
         d.text((420,212), label, font=font(18,True), fill='#e7be55')
-        face=font(46,True)
+        face=font(32,True)
         for j,line in enumerate(wrap(d,text,face,780)):
-            d.text((420,268+j*66), line, font=face, fill='#f6f8f3')
-        d.text((420,588), 'BREATHE. SPEAK. TAKE ACTION.', font=font(19,True), fill='#e7be55')
+            d.text((420,260+j*45), line, font=face, fill='#f6f8f3')
+        d.text((420,588), ('BREATHE. SETTLE. REST.' if session == 'bedtime' else 'BREATHE. SPEAK. TAKE ACTION.'), font=font(19,True), fill='#e7be55')
         d.text((420,630), 'Recorded guide \u00b7 Participate aloud and in live chat', font=font(17), fill='#b0c6bb')
         d.rectangle((40,688,1240,693),fill='#294738')
         d.rectangle((40,688,40+int(1200*(i+1)/len(LINES)),693),fill='#e7be55')
@@ -84,12 +84,11 @@ def build(session=None):
     concat.append(f"file '{path}'")
     (media/'cards.txt').write_text('\n'.join(concat)+'\n')
     subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-f','concat','-safe','0','-i',str(media/'cards.txt'),'-i',str(media/'voice.opus'),'-i',str(media/'music.wav'),'-filter_complex',audio_filter,'-map','0:v','-map','[a]','-vf','fps=25','-c:v','libx264','-preset','veryfast','-crf','23','-pix_fmt','yuv420p','-g','50','-c:a','aac','-b:a','96k','-ar','48000','-t',str(duration),'-movflags','+faststart',str(media/((session or 'affirmations')+'.mp4'))],check=True)
-    (media/((session+'-metadata.json') if session else 'metadata.json')).write_text(json.dumps({'duration':duration,'voice':'Amy - Voice 1','provider':'HeyGen','request_id':'025a5030157642d2a627db9feab85a1e'}))
+    (media/((session+'-metadata.json') if session else 'metadata.json')).write_text(json.dumps({'duration':duration,'voice':'Amy neural','provider':'Piper','session':session}))
     print('Reusable recording built:',round(duration,2),'seconds',flush=True)
 
-SESSIONS = {"morning": {"cards": [[0, "MORNING AFFIRMATIONS", "Good morning. Take a comfortable breath. You do not have to solve everything today. Begin with what is within your reach."], [9.922105263157894, "01 / REFLECTION", "I meet this day with courage and a clear mind."], [16.484210526315792, "02 / REFLECTION", "My skills and honest work bring value to others."], [22.76842105263158, "03 / REFLECTION", "I can make careful decisions, even when money is tight."], [29.317894736842106, "04 / REFLECTION", "I will take one useful step towards the life I am building."], [36.271578947368425, "05 / REFLECTION", "Before you leave, choose that step. Make it small enough to begin and meaningful enough to matter."]], "duration": 42.736326530612246}, "work": {"cards": [[0, "WORK AFFIRMATIONS", "Pause for a moment. Relax your shoulders. The morning may have brought delays, difficult customers or unfinished work. Give yourself room to begin again."], [12.257894736842104, "01 / REFLECTION", "A difficult morning does not decide my whole day."], [17.682105263157894, "02 / REFLECTION", "I respond to pressure with patience and clear judgement."], [24.285263157894732, "03 / REFLECTION", "I serve people well while respecting my time and energy."], [31.111578947368418, "04 / REFLECTION", "I can ask for help when I need it."], [37.17999999999999, "05 / REFLECTION", "Now choose the next task that deserves your attention. Take it one step at a time."]], "duration": 42.10938775510204}, "bedtime": {"cards": [[0, "BEDTIME AFFIRMATIONS", "The day is ending. Let your breathing settle naturally. Some things went well. Others may still be waiting. You can leave them until tomorrow."], [12.278823529411765, "01 / REFLECTION", "I recognise the effort I made today."], [18.647058823529413, "02 / REFLECTION", "Unfinished work does not make me a failure."], [24.35529411764706, "03 / REFLECTION", "I can care for my family without carrying every worry through the night."], [31.410588235294117, "04 / REFLECTION", "I give myself permission to rest."], [37.53647058823529, "05 / REFLECTION", "Let the plans wait for now. Find a comfortable position and allow the evening to grow quiet."]], "duration": 43.57224489795918}}
+SESSIONS = json.loads((ROOT / 'assets' / 'full_sessions.json').read_text())
 
-if __name__ == '__main__':
-    build()
+if __name__ == "__main__":
     for session in SESSIONS:
         build(session)
