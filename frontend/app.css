@@ -117,3 +117,8 @@ table.app-table tr:hover td{background:#fafcfb}
   .kv dd{margin-bottom:10px;overflow-wrap:anywhere}
   .member-code{overflow-wrap:anywhere}
 }
+
+.portal-millionaires{background:linear-gradient(135deg,#eaf6ef,#f8faf8)}
+.portal-millionaires p{color:var(--muted)}
+.portal-millionaires-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+@media(max-width:720px){.portal-millionaires-actions{flex-direction:column}.portal-millionaires-actions .btn{width:100%;text-align:center;min-height:48px}}
