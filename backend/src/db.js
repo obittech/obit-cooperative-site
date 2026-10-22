@@ -35,6 +35,7 @@ if (DB_ENGINE === 'sqlite') {
 function sqliteMigrate() {
   const schema = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'schema.sql'), 'utf8');
   sqlite.exec(schema);
+  sqlite.exec(fs.readFileSync(path.join(__dirname, '..', 'migrations', 'kyc-cost-controls.sql'), 'utf8'));
   const cols = (table) => sqlite.prepare(`PRAGMA table_info(${table})`).all().map(r=>r.name);
   const userCols = cols('users');
   if (!cols('market_listings').includes('image_url')) sqlite.exec('ALTER TABLE market_listings ADD COLUMN image_url TEXT');
@@ -58,6 +59,7 @@ export async function migrate() {
   if (DB_ENGINE === 'sqlite') { sqliteMigrate(); return; }
   const schema = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'postgres.sql'), 'utf8');
   await pool.query(schema);
+  await pool.query(fs.readFileSync(path.join(__dirname, '..', 'migrations', 'kyc-cost-controls.sql'), 'utf8'));
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0");
   await pool.query('ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS image_url TEXT');
 }
@@ -103,7 +105,17 @@ export async function all(sql, params=[]) {
   const result=await pgExecutor().query(translateSql(sql),params);
   return result.rows;
 }
+let sqliteTransactionQueue = Promise.resolve();
 export async function atomic(fn) {
+  if (DB_ENGINE === 'sqlite') {
+    const pending = sqliteTransactionQueue.then(() => atomicInternal(fn));
+    sqliteTransactionQueue = pending.catch(() => {});
+    return pending;
+  }
+  return atomicInternal(fn);
+}
+
+async function atomicInternal(fn) {
   if(DB_ENGINE==='sqlite'){
     sqlite.exec('BEGIN IMMEDIATE');
     try { const result=await fn(); sqlite.exec('COMMIT'); return result; }
@@ -119,4 +131,9 @@ export async function atomic(fn) {
     try{await client.query('ROLLBACK');}catch{}
     throw err;
   }finally{client.release();}
+}
+
+export async function closeDatabase() {
+  if (pool) await pool.end();
+  if (sqlite) sqlite.close();
 }

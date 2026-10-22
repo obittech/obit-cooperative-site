@@ -8,6 +8,7 @@ import { Router, HttpError } from '../router.js';
 import { get, run } from '../db.js';
 import { audit } from '../utils/audit.js';
 import crypto from 'node:crypto';
+import { requireKycAccess, reserveKycRequest, finishKycRequest } from '../services/kyc-cost-controls.js';
 
 export const kycRouter = new Router();
 
@@ -125,27 +126,14 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [check.application_id]);
   if (!application) throw new HttpError(404, 'Application not found');
 
-  // Provider calls cost money and process sensitive identity data. Limit repeated
-  // verification attempts persistently across sessions for the same application.
-  const recentAttempts = await get(
-    "SELECT COALESCE(SUM(attempt_count), 0) AS total FROM kyc_checks WHERE application_id = ? AND created_at >= datetime('now', '-24 hours')",
-    [check.application_id]
-  );
-  if (Number(recentAttempts?.total || 0) >= 5) {
-    await audit(null, 'KYC_RATE_LIMITED', 'member_applications', check.application_id, {
-      provider: 'DOJAH', environment: DOJAH_ENV, sessionRef: check.session_ref,
-    });
-    throw new HttpError(429, 'Too many identity verification attempts. Try again later or contact support.');
-  }
-
   const type = String(req.body?.type || 'nin').toLowerCase();
   const idNumber = String(req.body?.id_number || '').trim();
   if (!['nin', 'bvn'].includes(type)) throw new HttpError(400, 'KYC type must be nin or bvn.');
   if (!validIdNumber(idNumber)) throw new HttpError(400, 'Enter a valid 11-digit NIN or BVN.');
 
-  // Count the attempt before contacting the provider so failures and timeouts
-  // cannot be used to bypass the limit. The raw identifier is never stored.
-  await run("UPDATE kyc_checks SET attempt_count = COALESCE(attempt_count, 0) + 1, last_attempt_at = datetime('now') WHERE id = ?", [check.id]);
+  if (!check.session_ref.startsWith(`dojah_${DOJAH_ENV}_`)) throw new HttpError(409, 'Create a new KYC session for this environment.');
+  requireKycAccess(DOJAH_ENV, type);
+  const requestId = await reserveKycRequest(check, DOJAH_ENV, type);
 
   // The identifier is used only for this provider request. It is never persisted.
   const path = type === 'bvn' ? '/api/v1/kyc/bvn' : '/api/v1/kyc/nin';
@@ -162,14 +150,16 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
       : { nin: idNumber };
     providerResponse = await dojahGet(path, providerParams);
   } catch (error) {
+    await finishKycRequest(requestId, error.providerStatus === 404 ? 'NOT_FOUND' : error.providerStatus ? 'PROVIDER_ERROR' : 'UNKNOWN', error.providerStatus || null);
     await run(
       "UPDATE kyc_checks SET raw_status_detail = ? WHERE id = ?",
       [JSON.stringify({ environment: DOJAH_ENV, outcome: 'PROVIDER_ERROR', provider_status: error.providerStatus || null }), check.id]
     );
     await audit(null, 'KYC_PROVIDER_ERROR', 'member_applications', check.application_id, {
       provider: 'DOJAH', environment: DOJAH_ENV, sessionRef: check.session_ref,
+      requestId, providerStatus: error.providerStatus || null, potentiallyBillable: true,
     });
-    throw error;
+    throw new HttpError(error.status || 502, 'Identity verification could not be completed. Contact support before retrying.');
   }
 
   const entity = providerResponse?.entity || providerResponse?.data?.entity || providerResponse?.data || {};
@@ -224,9 +214,10 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   );
   await run("UPDATE member_applications SET status = ?, updated_at = datetime('now') WHERE id = ?", [newStatus, check.application_id]);
   await audit(null, matched ? 'KYC_VERIFIED' : 'KYC_FAILED', 'member_applications', check.application_id, {
-    provider: 'DOJAH', environment: DOJAH_ENV, sessionRef: check.session_ref, idType: type,
+    provider: 'DOJAH', environment: DOJAH_ENV, sessionRef: check.session_ref, idType: type, requestId, potentiallyBillable: true,
   });
 
+  await finishKycRequest(requestId, matched ? 'MATCH' : 'MISMATCH', 200);
   res.json(200, {
     status: newStatus,
     provider: 'DOJAH',

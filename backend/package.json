@@ -1,7 +1,7 @@
 {
   "name": "obit-membership-mvp-api",
   "version": "0.1.0",
-  "description": "Obit Cooperative — Release 1 Membership MVP API (Node built-ins only: http, node:sqlite, node:crypto)",
+  "description": "Obit Cooperative \u2014 Release 1 Membership MVP API (Node built-ins only: http, node:sqlite, node:crypto)",
   "type": "module",
   "engines": {
     "node": ">=22.5.0 <23.0.0"
@@ -10,7 +10,8 @@
     "start": "node --experimental-sqlite src/server.js",
     "dev": "node --experimental-sqlite --watch src/server.js",
     "simulate-webhook": "node scripts/simulate-webhook.js",
-    "migrate:postgres": "node --experimental-sqlite scripts/migrate-sqlite-to-postgres.js"
+    "migrate:postgres": "node --experimental-sqlite scripts/migrate-sqlite-to-postgres.js",
+    "test:kyc": "node --experimental-sqlite --test test/kyc-cost-controls.test.js"
   },
   "dependencies": {
     "pg": "^8.16.3"
