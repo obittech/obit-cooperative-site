@@ -85,3 +85,12 @@ jobs:
           done
           curl -fsS http://127.0.0.1:10001/api/health
           curl -fsS http://127.0.0.1:10001/api/readiness
+
+      - name: KYC cost controls (SQLite)
+        run: npm run test:kyc
+      - name: KYC cost controls (PostgreSQL)
+        env:
+          DB_ENGINE: postgres
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
+          PGSSL: disable
+        run: npm run test:kyc
