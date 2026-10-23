@@ -1,15 +1,10 @@
 import { Router } from '../router.js';
 import { get, DB_ENGINE } from '../db.js';
+import { createHealthHandler } from '../utils/health.js';
 
 export const systemRouter = new Router();
 
-systemRouter.get('/api/health', async (_req, res) => {
-  res.json(200, {
-    ok: true,
-    service: 'obit-cooperative-api',
-    time: new Date().toISOString(),
-  });
-});
+systemRouter.get('/api/health', createHealthHandler(() => get('SELECT 1 AS ok')));
 
 systemRouter.get('/api/readiness', async (_req, res) => {
   let databaseOk = false;
