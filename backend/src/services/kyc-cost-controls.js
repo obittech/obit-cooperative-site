@@ -62,5 +62,28 @@ export async function reserveKycRequest(check, environment, product) {
 // Ambiguous outcomes remain blocked indefinitely until an operator reconciles.
 export async function finishKycRequest(id, state, providerStatus = null) {
   if (!['MATCH', 'MISMATCH', 'NOT_FOUND', 'PROVIDER_ERROR', 'UNKNOWN'].includes(state)) throw new Error('Invalid KYC outcome');
-  await run('UPDATE kyc_provider_requests SET state = ?, provider_status = ?, finished_ms = ? WHERE id = ?', [state, providerStatus, Date.now(), id]);
+  await run('UPDATE kyc_provider_requests SET state = ?, provider_status = COALESCE(?, provider_status), finished_ms = ? WHERE id = ?', [state, providerStatus, Date.now(), id]);
+}
+
+// Accept only the explicit provider tracking field, never arbitrary identity data.
+// Reject identifiers embedded in unexpected references rather than retaining them.
+export function providerReference(body) {
+  const candidates = [body?.reference_id, body?.data?.reference_id];
+  const present = candidates.filter(value => value !== undefined && value !== null);
+  if (!present.length) return { reference: null, status: 'MISSING' };
+  if (present.some(value => typeof value !== 'string'
+      || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value)
+      || /[0-9]{11}/.test(value)) || new Set(present).size !== 1) {
+    return { reference: null, status: 'INVALID' };
+  }
+  return { reference: present[0], status: 'CAPTURED' };
+}
+
+export async function recordProviderResponse(id, body, providerStatus) {
+  const { reference, status } = providerReference(body);
+  await atomic(async () => {
+    await run('INSERT INTO kyc_provider_references (request_id, reference_id, reference_status, recorded_ms) VALUES (?, ?, ?, ?) RETURNING request_id', [id, reference, status, Date.now()]);
+    await run('UPDATE kyc_provider_requests SET provider_status = ? WHERE id = ?', [providerStatus, id]);
+  });
+  return status === 'CAPTURED';
 }
