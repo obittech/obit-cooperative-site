@@ -1,4 +1,4 @@
-# Dojah backend readiness, 22 October 2026
+# Dojah backend readiness, updated 27 October 2026
 
 ## Provider evidence
 
@@ -11,7 +11,7 @@ Ticket #98dca2ce, reply of 21 October at 15:01 Nigerian time, confirms:
 
 Source: https://mail.google.com/mail/u/?authuser=obitcooperative%40gmail.com#all/1a15ec3fc6d7ad4b
 
-Although the reply says a pricing document is attached, the retrieved MIME message contains only plain text and HTML. Gmail attachment searches found no separate pricing document. Do not infer endpoint prices from the top-up amount. Obtain the document and confirm BVN/NIN endpoint names, prices, taxes, chargeable failure codes, timeout billing and any provider idempotency support before live configuration.
+The 26 October reply confirms the existing Validate BVN endpoint at NGN 45 and Lookup NIN endpoint at NGN 60 as final wallet debits inclusive of VAT and all fees. Every provider request is charged, including 404s. Clients handle timeouts, network failures, duplicates and retries. These billing terms do not grant production access. See [pricing reconciliation](DOJAH_PRICING_RECONCILIATION_2026-10-25.md) and https://mail.google.com/mail/u/?authuser=obitcooperative%40gmail.com#all/1a177ac8f3268ca1.
 
 ## Implemented controls
 
@@ -46,14 +46,16 @@ WHERE state IN ('DISPATCHED', 'UNKNOWN')
 ORDER BY started_ms;
 ```
 
-Reconcile ambiguous calls with Dojah using secure operational channels and the approximate time/product. Local request IDs are correlation IDs, not provider idempotency keys. Never send another verification as a reconciliation probe. Check the provider dashboard for actual charges and compare with conservative reservations. A process crash before dispatch may leave a reservation with no charge, which is an intentional safe failure. After a confirmed result, an authorised operator can resolve the specific record to an allowed terminal outcome. Preserve its reservation and history, record the evidence in an audit event, and do not reset attempts or delete it to force a retry. A correction inside 24 hours remains blocked. There is no public bypass endpoint.
+Join kyc_provider_references.request_id to kyc_provider_requests.id for reference_id and reference_status. Existing requests may have no reference row. MISSING and INVALID references require manual review. References remain restricted internal metadata and must not appear in public APIs or logs.
+
+Reconcile ambiguous calls with Dojah using secure operational channels, the provider reference where available and the approximate time/product. Local request IDs are correlation IDs, not provider idempotency keys. Never send another verification as a reconciliation probe. Check the provider dashboard for actual charges and compare with conservative reservations. A process crash before dispatch may leave a reservation with no charge, which is an intentional safe failure. After a confirmed result, an authorised operator can resolve the specific record to an allowed terminal outcome. Preserve its reservation and history, record the evidence in an audit event, and do not reset attempts or delete it to force a retry. A correction inside 24 hours remains blocked. There is no public bypass endpoint.
 
 ## Deployment gates
 
 1. Run `npm run test:kyc` for SQLite and PostgreSQL plus existing CI. PostgreSQL concurrency validation is required before deployment readiness is asserted.
 2. Deploy the additive migration and code together in sandbox. Migration runs at boot for both adapters and is repeatable. Verify database migration permissions and back up under the existing process.
 3. Keep `DOJAH_ENV=sandbox` and `DOJAH_PRODUCTION_AUTHORIZED=false`. Do not top up the wallet or perform a live identity test during preparation.
-4. Obtain express written production approval and exact approved BVN/NIN products/endpoints, outstanding compliance requirements, pricing document and activation instructions.
+4. Obtain express written production approval and exact approved BVN/NIN products/endpoints, outstanding compliance requirements and activation instructions. Endpoint prices are confirmed separately and do not authorise production.
 5. Obtain matching production AppId/secret through secure configuration. Never commit them or paste them into logs, tickets or PRs. Confirm the secret belongs to the approved Cooperative account.
 6. Obtain an approved spend ceiling and set positive integer daily request/budget limits plus conservative per-product maximum charge in kobo, inclusive of taxes/fees. Values in tests are fictitious, not recommended prices or budgets. Any price increase requires updating the upper bounds before resuming live requests.
 7. Only after these gates may an authorised operator set `DOJAH_ENV=live`, `DOJAH_PRODUCTION_AUTHORIZED=true` and `DOJAH_APPROVED_PRODUCTS` to the expressly approved products. Perform a consented, funded test within the approved budget and reconcile its charge before wider release.

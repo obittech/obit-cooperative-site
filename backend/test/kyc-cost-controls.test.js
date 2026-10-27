@@ -157,3 +157,19 @@ test('migration is repeatable and preserves reconciliation metadata', async () =
   await migrate(); await migrate();
   assert.deepEqual(await all('SELECT * FROM kyc_provider_references ORDER BY request_id'), before);
 });
+
+
+test('reference alone is not a valid success and cannot unblock another billable request', async () => {
+  for (const body of [{ reference_id: 'ref-only' }, { data: { reference_id: 'ref-only' } }, { reference_id: 'ref-only', entity: [] }]) {
+    const check = await fixture(); let calls = 0;
+    globalThis.fetch = async () => { calls++; return { ok: true, status: 200, json: async () => body }; };
+    await assert.rejects(verify(request, response, { ref: check.session_ref }), e => e.status === 502);
+    const row = await get('SELECT * FROM kyc_provider_requests WHERE check_id = ?', [check.id]);
+    assert.equal(row.state, 'UNKNOWN');
+    assert.equal(row.provider_status, 200);
+    assert.equal((await get('SELECT * FROM kyc_provider_references WHERE request_id = ?', [row.id])).reference_id, 'ref-only');
+    await run('UPDATE kyc_provider_requests SET started_ms = ? WHERE id = ?', [Date.now() - 172800000, row.id]);
+    await assert.rejects(verify(request, response, { ref: check.session_ref }), e => e.status === 409);
+    assert.equal(calls, 1);
+  }
+});

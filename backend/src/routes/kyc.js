@@ -60,6 +60,14 @@ async function dojahGet(path, params, requestId) {
     error.uncertain = response.status !== 404;
     throw error;
   }
+  const entity = body.entity || body.data?.entity || body.data;
+  if (!entity || typeof entity !== 'object' || Array.isArray(entity)
+      || !Object.keys(entity).some(key => key !== 'reference_id')) {
+    const error = new HttpError(502, 'Verification requires reconciliation.');
+    error.providerStatus = response.status;
+    error.uncertain = true;
+    throw error;
+  }
   return body;
 }
 
