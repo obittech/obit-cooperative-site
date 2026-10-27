@@ -82,7 +82,7 @@ export function providerReference(body) {
 export async function recordProviderResponse(id, body, providerStatus) {
   const { reference, status } = providerReference(body);
   await atomic(async () => {
-    await run('INSERT INTO kyc_provider_references (request_id, reference_id, reference_status, recorded_ms) VALUES (?, ?, ?, ?)', [id, reference, status, Date.now()]);
+    await run('INSERT INTO kyc_provider_references (request_id, reference_id, reference_status, recorded_ms) VALUES (?, ?, ?, ?) RETURNING request_id', [id, reference, status, Date.now()]);
     await run('UPDATE kyc_provider_requests SET provider_status = ? WHERE id = ?', [providerStatus, id]);
   });
   return status === 'CAPTURED';
