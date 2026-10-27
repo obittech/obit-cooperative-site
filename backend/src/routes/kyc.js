@@ -8,7 +8,7 @@ import { Router, HttpError } from '../router.js';
 import { get, run } from '../db.js';
 import { audit } from '../utils/audit.js';
 import crypto from 'node:crypto';
-import { requireKycAccess, reserveKycRequest, finishKycRequest } from '../services/kyc-cost-controls.js';
+import { requireKycAccess, reserveKycRequest, finishKycRequest, recordProviderResponse } from '../services/kyc-cost-controls.js';
 
 export const kycRouter = new Router();
 
@@ -28,7 +28,7 @@ function requireDojah() {
   }
 }
 
-async function dojahGet(path, params) {
+async function dojahGet(path, params, requestId) {
   requireDojah();
   const url = new URL(path, DOJAH_BASE_URL);
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -43,11 +43,21 @@ async function dojahGet(path, params) {
     },
     signal: AbortSignal.timeout(15000),
   });
-  let body = {};
+  // Record tracking metadata before matching or any other local processing.
+  // A parse failure still records the HTTP status and remains unresolved.
+  let body = null;
   try { body = await response.json(); } catch {}
+  const hasReference = await recordProviderResponse(requestId, body, response.status);
+  if (!body || typeof body !== 'object' || Array.isArray(body) || !hasReference) {
+    const error = new HttpError(502, 'Verification requires reconciliation.');
+    error.providerStatus = response.status;
+    error.uncertain = true;
+    throw error;
+  }
   if (!response.ok) {
     const error = new HttpError(response.status === 404 ? 422 : 502, 'Identity verification could not be completed.');
     error.providerStatus = response.status;
+    error.uncertain = response.status !== 404;
     throw error;
   }
   return body;
@@ -148,9 +158,9 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
           dob: canonicalDate(application.date_of_birth) || undefined,
         }
       : { nin: idNumber };
-    providerResponse = await dojahGet(path, providerParams);
+    providerResponse = await dojahGet(path, providerParams, requestId);
   } catch (error) {
-    await finishKycRequest(requestId, error.providerStatus === 404 ? 'NOT_FOUND' : error.providerStatus ? 'PROVIDER_ERROR' : 'UNKNOWN', error.providerStatus || null);
+    await finishKycRequest(requestId, error.uncertain ? 'UNKNOWN' : error.providerStatus === 404 ? 'NOT_FOUND' : error.providerStatus ? 'PROVIDER_ERROR' : 'UNKNOWN', error.providerStatus || null);
     await run(
       "UPDATE kyc_checks SET raw_status_detail = ? WHERE id = ?",
       [JSON.stringify({ environment: DOJAH_ENV, outcome: 'PROVIDER_ERROR', provider_status: error.providerStatus || null }), check.id]

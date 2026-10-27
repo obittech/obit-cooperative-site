@@ -9,7 +9,7 @@ process.env.DOJAH_ENV = 'sandbox';
 process.env.DOJAH_APP_ID = 'test-only';
 process.env.DOJAH_SECRET_KEY = 'test-only';
 const { migrate, get, run, all, closeDatabase } = await import('../src/db.js');
-const { reserveKycRequest, finishKycRequest, requireKycAccess } = await import('../src/services/kyc-cost-controls.js');
+const { reserveKycRequest, finishKycRequest, requireKycAccess, providerReference } = await import('../src/services/kyc-cost-controls.js');
 const { kycRouter } = await import('../src/routes/kyc.js');
 await migrate();
 after(async () => { await closeDatabase(); fs.rmSync(temp, { recursive: true, force: true }); });
@@ -36,7 +36,7 @@ test('simultaneous requests across two sessions reserve only one dispatch', asyn
 
 test('chargeable 404 is recorded once and repeated clicks never reach provider', async () => {
   const check = await fixture(); let calls = 0;
-  globalThis.fetch = async () => { calls++; return { ok: false, status: 404, json: async () => ({}) }; };
+  globalThis.fetch = async () => { calls++; return { ok: false, status: 404, json: async () => ({ reference_id: 'dojah-not-found-ref' }) }; };
   await assert.rejects(verify(request, response, { ref: check.session_ref }), e => e.status === 422);
   await assert.rejects(verify(request, response, { ref: check.session_ref }), e => e.status === 409);
   assert.equal(calls, 1);
@@ -91,7 +91,7 @@ test('live access requires authorisation, product approval and valid cost settin
 
 test('successful match remains idempotent and raw identities are not persisted', async () => {
   const check = await fixture(); let calls = 0;
-  globalThis.fetch = async () => { calls++; return { ok: true, status: 200, json: async () => ({ entity: { first_name: 'Test', last_name: 'Person', dob: '1990-01-01', nin: request.body.id_number } }) }; };
+  globalThis.fetch = async () => { calls++; return { ok: true, status: 200, json: async () => ({ reference_id: 'dojah-match-ref', entity: { first_name: 'Test', last_name: 'Person', dob: '1990-01-01', nin: request.body.id_number } }) }; };
   let result;
   await verify(request, { json: (status, body) => { result = body; } }, { ref: check.session_ref });
   assert.equal(result.status, 'KYC_VERIFIED');
@@ -105,4 +105,55 @@ test('legacy five-attempt cap survives migration', async () => {
   const check = await fixture();
   await run('UPDATE kyc_checks SET attempt_count = 5 WHERE id = ?', [check.id]);
   await assert.rejects(reserveKycRequest(check, 'sandbox', 'nin'), e => e.status === 429);
+});
+
+
+test('provider tracking rejects unsafe, conflicting and identity-like values', () => {
+  for (const value of [123, {}, '', 'a'.repeat(129), 'bad\nref', '12345678901', 'ref-12345678901']) {
+    assert.deepEqual(providerReference({ reference_id: value }), { reference: null, status: 'INVALID' });
+  }
+  assert.equal(providerReference({ reference_id: 'one', data: { reference_id: 'two' } }).status, 'INVALID');
+  assert.equal(providerReference({ entity: { reference_id: 'ignored' } }).status, 'MISSING');
+  assert.deepEqual(providerReference({ data: { reference_id: 'dojah-ref:abc_123' } }), { reference: 'dojah-ref:abc_123', status: 'CAPTURED' });
+});
+
+test('success and chargeable errors retain only provider reference metadata', async () => {
+  for (const status of [200, 404, 500]) {
+    const check = await fixture();
+    const ref = `provider-ref-${status}`;
+    globalThis.fetch = async () => ({ ok: status === 200, status, json: async () => ({ reference_id: ref, entity: { first_name: 'Test', last_name: 'Person', dob: '1990-01-01', nin: request.body.id_number, photo: 'PRIVATE-PHOTO' } }) });
+    let publicBody;
+    try { await verify(request, { json: (_status, body) => { publicBody = body; } }, { ref: check.session_ref }); } catch (error) { assert.ok(status !== 200); }
+    const row = await get('SELECT * FROM kyc_provider_requests WHERE check_id = ?', [check.id]);
+    const metadata = await get('SELECT * FROM kyc_provider_references WHERE request_id = ?', [row.id]);
+    assert.equal(metadata.reference_id, ref);
+    assert.equal(metadata.reference_status, 'CAPTURED');
+    assert.equal(row.provider_status, status);
+    assert.equal(row.state, status === 200 ? 'MATCH' : status === 404 ? 'NOT_FOUND' : 'UNKNOWN');
+    assert.equal(JSON.stringify({row, metadata, publicBody}).includes(request.body.id_number), false);
+    assert.equal(JSON.stringify(metadata).includes('PRIVATE-PHOTO'), false);
+    assert.equal(JSON.stringify(publicBody || {}).includes(ref), false);
+  }
+});
+
+test('missing, invalid and unreadable references remain blocked beyond 24 hours', async () => {
+  for (const body of [{}, { reference_id: request.body.id_number }, null]) {
+    const check = await fixture(); let calls = 0;
+    globalThis.fetch = async () => { calls++; return { ok: true, status: 200, json: async () => { if (body === null) throw new Error('private payload'); return body; } }; };
+    await assert.rejects(verify(request, response, { ref: check.session_ref }), e => e.status === 502);
+    const row = await get('SELECT * FROM kyc_provider_requests WHERE check_id = ?', [check.id]);
+    assert.equal(row.state, 'UNKNOWN');
+    assert.equal(row.provider_status, 200);
+    const metadata = await get('SELECT * FROM kyc_provider_references WHERE request_id = ?', [row.id]);
+    assert.equal(metadata.reference_id, null);
+    await run('UPDATE kyc_provider_requests SET started_ms = ? WHERE id = ?', [Date.now() - 172800000, row.id]);
+    await assert.rejects(verify(request, response, { ref: check.session_ref }), e => e.status === 409);
+    assert.equal(calls, 1);
+  }
+});
+
+test('migration is repeatable and preserves reconciliation metadata', async () => {
+  const before = await all('SELECT * FROM kyc_provider_references ORDER BY request_id');
+  await migrate(); await migrate();
+  assert.deepEqual(await all('SELECT * FROM kyc_provider_references ORDER BY request_id'), before);
 });

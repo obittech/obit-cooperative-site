@@ -15,3 +15,11 @@ CREATE TABLE IF NOT EXISTS kyc_provider_requests (
 );
 CREATE INDEX IF NOT EXISTS kyc_request_application ON kyc_provider_requests(application_id, started_ms);
 CREATE INDEX IF NOT EXISTS kyc_request_environment ON kyc_provider_requests(environment, started_ms);
+
+-- Provider tracking metadata only. Never expose through public KYC routes.
+CREATE TABLE IF NOT EXISTS kyc_provider_references (
+  request_id TEXT PRIMARY KEY REFERENCES kyc_provider_requests(id),
+  reference_id TEXT,
+  reference_status TEXT NOT NULL,
+  recorded_ms BIGINT NOT NULL
+);
