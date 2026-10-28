@@ -5,7 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'obit-yv-'));
 process.env.DB_PATH = path.join(temp, 'test.db');
-process.env.KYC_PROVIDER = 'YOUVERIFY';
 process.env.YOUVERIFY_ENV = 'sandbox';
 process.env.YOUVERIFY_SECRET_KEY = 'sandbox-test-secret';
 const { migrate, get, run, all, closeDatabase } = await import('../src/db.js');
@@ -78,27 +77,25 @@ test('pending, malformed, missing references, HTTP errors and timeouts stay unre
   }
 });
 
-test('provider switching cannot bypass pending reconciliation or consent', async () => {
+test('pending reconciliation and withdrawn consent prevent dispatch', async () => {
   const check = await fixture();
-  await reserveKycRequest(check, 'sandbox', 'nin', 'YOUVERIFY');
-  process.env.DOJAH_APP_ID = 'test'; process.env.DOJAH_SECRET_KEY = 'test';
-  await assert.rejects(reserveKycRequest(check, 'sandbox', 'bvn', 'DOJAH'), e => e.status === 409);
+  await reserveKycRequest(check, 'sandbox', 'nin');
+  await assert.rejects(reserveKycRequest(check, 'sandbox', 'bvn'), e => e.status === 409);
   const other = await fixture();
   await run("INSERT INTO consents (application_id, type, accepted) VALUES (?, 'privacy', 0)", [other.application_id]);
   await assert.rejects(verify(request, response, { ref: other.session_ref }), e => e.status === 409);
 });
 
-test('live gates use Youverify approval and costs, independently from Dojah', () => {
-  process.env.DOJAH_PRODUCTION_AUTHORIZED = 'true';
-  assert.throws(() => requireKycAccess('live', 'nin', 'YOUVERIFY'), e => e.status === 503);
+test('live gates require Youverify approval, approved product and cost controls', () => {
+  assert.throws(() => requireKycAccess('live', 'nin'), e => e.status === 503);
   process.env.YOUVERIFY_PRODUCTION_AUTHORIZED = 'true';
   process.env.YOUVERIFY_APPROVED_PRODUCTS = 'nin';
-  assert.throws(() => requireKycAccess('live', 'nin', 'YOUVERIFY'), e => e.status === 503);
+  assert.throws(() => requireKycAccess('live', 'nin'), e => e.status === 503);
   process.env.YOUVERIFY_DAILY_REQUEST_LIMIT = '5';
   process.env.YOUVERIFY_DAILY_BUDGET_KOBO = '10000';
   process.env.YOUVERIFY_NIN_MAX_COST_KOBO = '1000';
-  requireKycAccess('live', 'nin', 'YOUVERIFY');
-  assert.throws(() => requireKycAccess('live', 'bvn', 'YOUVERIFY'), e => e.status === 503);
+  requireKycAccess('live', 'nin');
+  assert.throws(() => requireKycAccess('live', 'bvn'), e => e.status === 503);
   delete process.env.YOUVERIFY_PRODUCTION_AUTHORIZED;
 });
 
@@ -107,4 +104,48 @@ test('name substrings and absent, invalid or mismatched DOB never verify', () =>
   for (const entity of [{ ...report.data, firstName: 'Tes' }, { ...report.data, dateOfBirth: '' }, { ...report.data, dateOfBirth: '1990-02-30' }, { ...report.data, dateOfBirth: '1991-01-01' }]) {
     assert.equal(youverifyMatch(app, entity).matched, false);
   }
+});
+
+const statusHandler = kycRouter.match('GET', '/api/kyc/test/status').handlers[0];
+
+async function retiredFixture() {
+  const check = await fixture();
+  const ref = `retired_sandbox_${crypto.randomUUID()}`;
+  await run("UPDATE kyc_checks SET provider = 'RETIRED_PROVIDER', session_ref = ? WHERE id = ?", [ref, check.id]);
+  return { ...check, provider: 'RETIRED_PROVIDER', session_ref: ref };
+}
+
+test('retired sessions cannot dispatch and status offers a new Youverify session', async () => {
+  const check = await retiredFixture(); let calls = 0;
+  globalThis.fetch = async () => { calls++; throw new Error('must not dispatch'); };
+  await assert.rejects(verify(request, response, { ref: check.session_ref }), e => e.status === 409);
+  let status;
+  await statusHandler({}, { json: (_code, body) => { status = body; } }, { id: check.session_ref });
+  assert.equal(status.restart_required, true);
+  let fresh;
+  await start({ body: { application_id: check.application_id } }, { json: (_code, body) => { fresh = body; } });
+  assert.equal(fresh.provider, 'YOUVERIFY');
+  assert.ok(fresh.session_ref.startsWith('youverify_sandbox_'));
+  assert.equal((await get('SELECT provider FROM kyc_checks WHERE id = ?', [check.id])).provider, 'RETIRED_PROVIDER');
+  assert.equal(calls, 0);
+});
+
+test('retired unresolved requests block new sessions and retain their history', async () => {
+  const check = await retiredFixture();
+  const id = crypto.randomUUID();
+  await run("INSERT INTO kyc_provider_requests (id, application_id, check_id, environment, product, state, reserved_kobo, started_ms) VALUES (?, ?, ?, 'sandbox', 'nin', 'UNKNOWN', 0, ?)", [id, check.application_id, check.id, Date.now() - 172800000]);
+  await assert.rejects(start({ body: { application_id: check.application_id } }, response), e => e.status === 409);
+  assert.equal((await get('SELECT state FROM kyc_provider_requests WHERE id = ?', [id])).state, 'UNKNOWN');
+});
+
+test('readiness reports Youverify configuration without secret values', async () => {
+  const { systemRouter } = await import('../src/routes/system.js');
+  const handler = systemRouter.match('GET', '/api/readiness').handlers[0];
+  let body;
+  await handler({}, { json: (_code, value) => { body = value; } });
+  assert.equal(body.youverify.provider, 'YOUVERIFY');
+  assert.equal(body.youverify.environment, 'sandbox');
+  assert.equal(body.youverify.configured, true);
+  assert.equal(body.youverify.production_authorized, false);
+  assert.equal(JSON.stringify(body).includes(process.env.YOUVERIFY_SECRET_KEY), false);
 });

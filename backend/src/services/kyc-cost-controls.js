@@ -9,28 +9,27 @@ function positiveInteger(name) {
   return value;
 }
 
-export function requireKycAccess(environment, product, provider = 'DOJAH') {
-  if (!['DOJAH', 'YOUVERIFY'].includes(provider)) throw new HttpError(503, 'Invalid KYC provider.');
+export function requireKycAccess(environment, product) {
   if (!['sandbox', 'live'].includes(environment)) throw new HttpError(503, 'Invalid KYC environment.');
-  if (provider === 'YOUVERIFY' ? !process.env.YOUVERIFY_SECRET_KEY : (!process.env.DOJAH_APP_ID || !process.env.DOJAH_SECRET_KEY)) throw new HttpError(503, 'KYC provider is not configured yet.');
+  if (!process.env.YOUVERIFY_SECRET_KEY) throw new HttpError(503, 'KYC provider is not configured yet.');
   if (environment === 'live') {
-    const products = String(process.env[`${provider}_APPROVED_PRODUCTS`] || '').split(',').map(x => x.trim());
-    if (process.env[`${provider}_PRODUCTION_AUTHORIZED`] !== 'true' || !products.includes(product)) {
+    const products = String(process.env.YOUVERIFY_APPROVED_PRODUCTS || '').split(',').map(x => x.trim());
+    if (process.env.YOUVERIFY_PRODUCTION_AUTHORIZED !== 'true' || !products.includes(product)) {
       throw new HttpError(503, 'Live KYC awaits provider authorisation.');
     }
-    positiveInteger(`${provider}_DAILY_REQUEST_LIMIT`);
-    positiveInteger(`${provider}_DAILY_BUDGET_KOBO`);
-    positiveInteger(`${provider}_${product.toUpperCase()}_MAX_COST_KOBO`);
+    positiveInteger('YOUVERIFY_DAILY_REQUEST_LIMIT');
+    positiveInteger('YOUVERIFY_DAILY_BUDGET_KOBO');
+    positiveInteger(`YOUVERIFY_${product.toUpperCase()}_MAX_COST_KOBO`);
   }
 }
 
 // The shared guard row serializes reservations across PostgreSQL workers.
 // Never hold this transaction open while waiting for the provider.
-export async function reserveKycRequest(check, environment, product, provider = 'DOJAH') {
-  requireKycAccess(environment, product, provider);
-  const limit = environment === 'live' ? positiveInteger(`${provider}_DAILY_REQUEST_LIMIT`) : 100;
-  const cost = environment === 'live' ? positiveInteger(`${provider}_${product.toUpperCase()}_MAX_COST_KOBO`) : 0;
-  const budget = environment === 'live' ? positiveInteger(`${provider}_DAILY_BUDGET_KOBO`) : Number.MAX_SAFE_INTEGER;
+export async function reserveKycRequest(check, environment, product) {
+  requireKycAccess(environment, product);
+  const limit = environment === 'live' ? positiveInteger('YOUVERIFY_DAILY_REQUEST_LIMIT') : 100;
+  const cost = environment === 'live' ? positiveInteger(`YOUVERIFY_${product.toUpperCase()}_MAX_COST_KOBO`) : 0;
+  const budget = environment === 'live' ? positiveInteger('YOUVERIFY_DAILY_BUDGET_KOBO') : Number.MAX_SAFE_INTEGER;
   return atomic(async () => {
     const guard = await run('UPDATE kyc_dispatch_guard SET version = version + 1 WHERE id = 1');
     if (guard.changes !== 1) throw new HttpError(503, 'KYC spending controls are unavailable.');
@@ -68,9 +67,9 @@ export async function finishKycRequest(id, state, providerStatus = null) {
 
 // Accept only the explicit provider tracking field, never arbitrary identity data.
 // Reject identifiers embedded in unexpected references rather than retaining them.
-export function providerReference(body, provider = 'DOJAH') {
+export function providerReference(body) {
   // Youverify's verification report ID is data.id, never the submitted ID.
-  const candidates = provider === 'YOUVERIFY' ? [body?.data?.id] : [body?.reference_id, body?.data?.reference_id];
+  const candidates = [body?.data?.id];
   const present = candidates.filter(value => value !== undefined && value !== null);
   if (!present.length) return { reference: null, status: 'MISSING' };
   if (present.some(value => typeof value !== 'string'
@@ -81,8 +80,8 @@ export function providerReference(body, provider = 'DOJAH') {
   return { reference: present[0], status: 'CAPTURED' };
 }
 
-export async function recordProviderResponse(id, body, providerStatus, provider = 'DOJAH') {
-  const { reference, status } = providerReference(body, provider);
+export async function recordProviderResponse(id, body, providerStatus) {
+  const { reference, status } = providerReference(body);
   await atomic(async () => {
     await run('INSERT INTO kyc_provider_references (request_id, reference_id, reference_status, recorded_ms) VALUES (?, ?, ?, ?) RETURNING request_id', [id, reference, status, Date.now()]);
     await run('UPDATE kyc_provider_requests SET provider_status = ? WHERE id = ?', [providerStatus, id]);

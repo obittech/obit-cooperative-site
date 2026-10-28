@@ -1,13 +1,12 @@
 # Youverify KYC integration
 
-The backend supports direct Nigerian NIN and BVN verification through Youverify Quickcheck. Existing Dojah configuration remains the default. Select one provider per deployment. Existing sessions remain tied to their provider and environment. Do not switch providers while applications have unresolved requests. Reconcile these first. Provider switching never bypasses the shared application-level duplicate and unresolved-request controls.
+The backend supports direct Nigerian NIN and BVN verification through Youverify Quickcheck. Youverify is the sole provider. No provider selector or fallback is supported. Prior verification history and provider references remain intact for audit and reconciliation. Retired pending sessions can be replaced with a new Youverify session only when there is no unresolved provider request. Shared application-level duplicate, attempt and spending controls still apply.
 
 ## Sandbox configuration
 
 Set these server-side variables on the existing backend service:
 
 ```dotenv
-KYC_PROVIDER=YOUVERIFY
 YOUVERIFY_ENV=sandbox
 YOUVERIFY_SECRET_KEY=<sandbox API secret from workspace settings>
 YOUVERIFY_PRODUCTION_AUTHORIZED=false
@@ -23,7 +22,7 @@ The response must be HTTP success, success=true, data.status=found and include a
 
 Require provider first and last names to match complete name tokens and require a valid matching ISO date of birth on both sides. A report that lacks DOB fails the application match. Confirm actual BVN DOB availability during sandbox acceptance before enabling that product. HTTP success or allValidationPassed alone never approves an application.
 
-Timeouts, unreadable payloads, missing report IDs, non-found/pending statuses and HTTP errors remain UNKNOWN. No automated retry, fallback, webhook approval or scheduled polling is enabled. Operators must reconcile uncertain requests in the provider dashboard. Existing daily limits, attempt limits and 24-hour duplicate checks also apply across providers. Usage accounting is deliberately conservative and includes other provider reservations in the same environment.
+Timeouts, unreadable payloads, missing report IDs, non-found/pending statuses and HTTP errors remain UNKNOWN. No automated retry, fallback, webhook approval or scheduled polling is enabled. Operators must reconcile uncertain requests in the provider dashboard. Existing daily limits, attempt limits and 24-hour duplicate checks also apply to historical requests. Usage accounting is deliberately conservative and includes historical reservations in the same environment.
 
 ## Production activation requirements
 

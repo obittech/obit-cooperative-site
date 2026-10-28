@@ -202,7 +202,7 @@ async function startKyc() {
     localStorage.setItem('obit_kyc_session_ref', session.session_ref);
     renderKycStatus('KYC_PENDING', session.message);
     document.getElementById('kycIdentityFields').style.display = '';
-    document.getElementById('btnVerifyDojah').style.display = '';
+    document.getElementById('btnVerifyYouverify').style.display = '';
     document.getElementById('btnStartKyc').style.display = 'none';
   } catch (err) {
     showAlert(err.message);
@@ -210,7 +210,7 @@ async function startKyc() {
 }
 
 function showKycProvider(session) {
-  const name = session.provider === 'YOUVERIFY' ? 'Youverify' : session.provider === 'DOJAH' ? 'Dojah' : 'the configured provider';
+  const name = 'Youverify';
   document.getElementById('modeBanner').textContent = session.environment === 'live'
     ? `Identity verification is provided by ${name}.`
     : `${name} sandbox verification. Use synthetic test data only.`;
@@ -223,7 +223,7 @@ function renderKycStatus(status, note) {
     (note ? `<p class="muted-note">${note}</p>` : '');
 }
 
-async function verifyDojahKyc() {
+async function verifyYouverifyKyc() {
   clearAlert();
   if (!state.kycSessionRef) return showAlert('Start identity verification first.');
 
@@ -232,10 +232,10 @@ async function verifyDojahKyc() {
   const idNumber = input.value.trim();
 
   if (!/^[0-9]{11}$/.test(idNumber)) {
-    return showAlert('Enter a valid 11-digit NIN or BVN. In sandbox mode, use the provider’s synthetic test data.');
+    return showAlert('Enter a valid 11-digit NIN or BVN. In sandbox mode, use Youverify synthetic test data.');
   }
 
-  const button = document.getElementById('btnVerifyDojah');
+  const button = document.getElementById('btnVerifyYouverify');
   button.disabled = true;
   button.textContent = 'Verifying…';
 
@@ -261,7 +261,7 @@ async function verifyDojahKyc() {
     showAlert(err.message);
   } finally {
     button.disabled = false;
-    button.textContent = 'Verify identity';
+    button.textContent = 'Verify with Youverify';
   }
 }
 
@@ -333,9 +333,16 @@ async function restoreExistingApplication() {
       const check = await OBIT.get(`/api/kyc/${state.kycSessionRef}/status`);
       showKycProvider(check);
       renderKycStatus(check.status);
-      if (check.status !== 'KYC_VERIFIED') {
+      if (check.restart_required) {
+        state.kycSessionRef = null;
+        localStorage.removeItem('obit_kyc_session_ref');
+        document.getElementById('kycIdentityFields').style.display = 'none';
+        document.getElementById('btnVerifyYouverify').style.display = 'none';
+        document.getElementById('btnStartKyc').style.display = '';
+        renderKycStatus('KYC_PENDING', 'Start a new Youverify verification session. Previous unresolved requests require support reconciliation first.');
+      } else if (check.status !== 'KYC_VERIFIED') {
         document.getElementById('kycIdentityFields').style.display = '';
-        document.getElementById('btnVerifyDojah').style.display = '';
+        document.getElementById('btnVerifyYouverify').style.display = '';
         document.getElementById('btnStartKyc').style.display = 'none';
       }
     }
@@ -351,7 +358,7 @@ document.getElementById('btnStartOrSave').addEventListener('click', saveProfileA
 document.getElementById('btnBackToProfile').addEventListener('click', () => goToStep('profile'));
 document.getElementById('btnSubmitApplication').addEventListener('click', submitApplication);
 document.getElementById('btnStartKyc').addEventListener('click', startKyc);
-document.getElementById('btnVerifyDojah').addEventListener('click', verifyDojahKyc);
+document.getElementById('btnVerifyYouverify').addEventListener('click', verifyYouverifyKyc);
 document.getElementById('btnInitPayment').addEventListener('click', initPayment);
 document.getElementById('btnSaveSavingsDraft').addEventListener('click', saveSavingsDraft);
 

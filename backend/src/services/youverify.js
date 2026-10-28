@@ -16,7 +16,7 @@ export async function youverifyPost(type, idNumber, requestId, environment) {
   });
   let body = null;
   try { body = await response.json(); } catch {}
-  const tracked = await recordProviderResponse(requestId, body, response.status, 'YOUVERIFY');
+  const tracked = await recordProviderResponse(requestId, body, response.status);
   // HTTP success alone is insufficient. Pending, missing and unrecognised
   // reports require reconciliation and never trigger an automatic retry.
   if (!response.ok || !tracked || body?.success !== true || body?.data?.status !== 'found') {
