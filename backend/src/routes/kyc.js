@@ -1,5 +1,5 @@
 // routes/kyc.js
-// Selectable KYC adapters. Sandbox is the default. Live calls require explicit
+// Youverify is the sole KYC provider. Sandbox is the default. Live calls require explicit
 // provider authorization, approved products, credentials and spending controls.
 // Secret credentials are server-side only and raw NIN/BVN values are never
 // written to the Obit database or audit log.
@@ -9,71 +9,13 @@ import { get, run } from '../db.js';
 import { audit } from '../utils/audit.js';
 import crypto from 'node:crypto';
 import { youverifyPost, youverifyMatch } from '../services/youverify.js';
-import { requireKycAccess, reserveKycRequest, finishKycRequest, recordProviderResponse } from '../services/kyc-cost-controls.js';
+import { requireKycAccess, reserveKycRequest, finishKycRequest } from '../services/kyc-cost-controls.js';
 
 export const kycRouter = new Router();
 
-const PROVIDER = (process.env.KYC_PROVIDER || 'DOJAH').toUpperCase();
-if (!['DOJAH', 'YOUVERIFY'].includes(PROVIDER)) throw new Error('Invalid KYC_PROVIDER');
-const KYC_ENV = (process.env[`${PROVIDER}_ENV`] || 'sandbox').toLowerCase();
-const providerConfigured = () => PROVIDER === 'YOUVERIFY' ? Boolean(process.env.YOUVERIFY_SECRET_KEY) : dojahConfigured();
-const DOJAH_BASE_URL = KYC_ENV === 'live' ? 'https://api.dojah.io' : 'https://sandbox.dojah.io';
-
-function dojahConfigured() {
-  return Boolean(process.env.DOJAH_APP_ID && process.env.DOJAH_SECRET_KEY);
-}
-
-function requireDojah() {
-  if (!dojahConfigured()) {
-    throw new HttpError(503, 'KYC provider is not configured yet.');
-  }
-  if (!['sandbox', 'live'].includes(KYC_ENV)) {
-    throw new HttpError(500, 'Invalid KYC provider environment.');
-  }
-}
-
-async function dojahGet(path, params, requestId) {
-  requireDojah();
-  const url = new URL(path, DOJAH_BASE_URL);
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
-  });
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      AppId: process.env.DOJAH_APP_ID,
-      Authorization: process.env.DOJAH_SECRET_KEY,
-      Accept: 'application/json',
-    },
-    signal: AbortSignal.timeout(15000),
-  });
-  // Record tracking metadata before matching or any other local processing.
-  // A parse failure still records the HTTP status and remains unresolved.
-  let body = null;
-  try { body = await response.json(); } catch {}
-  const hasReference = await recordProviderResponse(requestId, body, response.status);
-  if (!body || typeof body !== 'object' || Array.isArray(body) || !hasReference) {
-    const error = new HttpError(502, 'Verification requires reconciliation.');
-    error.providerStatus = response.status;
-    error.uncertain = true;
-    throw error;
-  }
-  if (!response.ok) {
-    const error = new HttpError(response.status === 404 ? 422 : 502, 'Identity verification could not be completed.');
-    error.providerStatus = response.status;
-    error.uncertain = response.status !== 404;
-    throw error;
-  }
-  const entity = body.entity || body.data?.entity || body.data;
-  if (!entity || typeof entity !== 'object' || Array.isArray(entity)
-      || !Object.keys(entity).some(key => key !== 'reference_id')) {
-    const error = new HttpError(502, 'Verification requires reconciliation.');
-    error.providerStatus = response.status;
-    error.uncertain = true;
-    throw error;
-  }
-  return body;
-}
+const PROVIDER = 'YOUVERIFY';
+const KYC_ENV = (process.env.YOUVERIFY_ENV || 'sandbox').toLowerCase();
+const providerConfigured = () => Boolean(process.env.YOUVERIFY_SECRET_KEY);
 
 function validIdNumber(value) {
   return typeof value === 'string' && /^\d{11}$/.test(value.trim());
@@ -85,36 +27,17 @@ async function hasRequiredConsent(applicationId) {
   return Boolean(terms?.accepted && privacy?.accepted);
 }
 
-function canonicalDate(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const dmy = raw.match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})/);
-  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
-  return raw.slice(0, 10);
-}
-
-function identityMatchDetails(application, entity = {}) {
-  const normalize = (v) => String(v || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  const nameParts = String(application.full_legal_name || '').trim().split(/\s+/).filter(Boolean);
-  const first = normalize(entity.first_name || entity.firstname || entity.firstName);
-  const last = normalize(entity.last_name || entity.surname || entity.last_name || entity.lastName);
-  const nameBlob = normalize(application.full_legal_name);
-  const nameMatch = Boolean(first && last && nameParts.length >= 2 && nameBlob.includes(first) && nameBlob.includes(last));
-  const providerDob = canonicalDate(entity.dob || entity.date_of_birth || entity.dateOfBirth);
-  const appDob = canonicalDate(application.date_of_birth);
-  const dobMatch = !providerDob || !appDob || providerDob === appDob;
-  return { matched: nameMatch && dobMatch, nameMatch, dobMatch, providerDobPresent: Boolean(providerDob), appDobPresent: Boolean(appDob) };
-}
-
 kycRouter.post('/api/kyc/session', async (req, res) => {
   const { application_id } = req.body || {};
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [application_id]);
   if (!application) throw new HttpError(404, 'Application not found');
-  if (application.status !== 'APPLICATION_SUBMITTED' && application.status !== 'KYC_FAILED') {
+  const latest = await get('SELECT * FROM kyc_checks WHERE application_id = ? ORDER BY id DESC LIMIT 1', [application_id]);
+  const replacingRetired = application.status === 'KYC_PENDING' && latest && latest.provider !== PROVIDER;
+  if (!['APPLICATION_SUBMITTED', 'KYC_FAILED'].includes(application.status) && !replacingRetired) {
     throw new HttpError(409, `Application must be submitted to start KYC (currently ${application.status})`);
   }
+  const unresolved = await get("SELECT id FROM kyc_provider_requests WHERE application_id = ? AND state IN ('DISPATCHED', 'UNKNOWN')", [application_id]);
+  if (unresolved) throw new HttpError(409, 'Verification is pending reconciliation. Contact support before retrying.');
   if (!await hasRequiredConsent(application_id)) {
     throw new HttpError(409, 'Terms and privacy consent are required before KYC.');
   }
@@ -154,28 +77,16 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   if (!['nin', 'bvn'].includes(type)) throw new HttpError(400, 'KYC type must be nin or bvn.');
   if (!validIdNumber(idNumber)) throw new HttpError(400, 'Enter a valid 11-digit NIN or BVN.');
 
-  if (!check.session_ref.startsWith(`${PROVIDER.toLowerCase()}_${KYC_ENV}_`)) throw new HttpError(409, 'Create a new KYC session for this environment.');
-  requireKycAccess(KYC_ENV, type, PROVIDER);
-  const requestId = await reserveKycRequest(check, KYC_ENV, type, PROVIDER);
+  if (check.provider !== PROVIDER || !check.session_ref.startsWith(`${PROVIDER.toLowerCase()}_${KYC_ENV}_`)) throw new HttpError(409, 'Create a new KYC session for this environment.');
+  requireKycAccess(KYC_ENV, type);
+  const requestId = await reserveKycRequest(check, KYC_ENV, type);
 
   // The identifier is used only for this provider request. It is never persisted.
-  const path = type === 'bvn' ? '/api/v1/kyc/bvn' : '/api/v1/kyc/nin';
   let providerResponse;
   try {
-    const legalParts = String(application.full_legal_name || '').trim().split(/\s+/).filter(Boolean);
-    const providerParams = type === 'bvn'
-      ? {
-          bvn: idNumber,
-          first_name: legalParts[0] || undefined,
-          last_name: legalParts.length > 1 ? legalParts[legalParts.length - 1] : undefined,
-          dob: canonicalDate(application.date_of_birth) || undefined,
-        }
-      : { nin: idNumber };
-    providerResponse = PROVIDER === 'YOUVERIFY'
-      ? await youverifyPost(type, idNumber, requestId, KYC_ENV)
-      : await dojahGet(path, providerParams, requestId);
+    providerResponse = await youverifyPost(type, idNumber, requestId, KYC_ENV);
   } catch (error) {
-    await finishKycRequest(requestId, error.uncertain ? 'UNKNOWN' : error.providerStatus === 404 ? 'NOT_FOUND' : error.providerStatus ? 'PROVIDER_ERROR' : 'UNKNOWN', error.providerStatus || null);
+    await finishKycRequest(requestId, 'UNKNOWN', error.providerStatus || null);
     await run(
       "UPDATE kyc_checks SET raw_status_detail = ? WHERE id = ?",
       [JSON.stringify({ environment: KYC_ENV, outcome: 'PROVIDER_ERROR', provider_status: error.providerStatus || null }), check.id]
@@ -187,51 +98,7 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
     throw new HttpError(error.status || 502, 'Identity verification could not be completed. Contact support before retrying.');
   }
 
-  const entity = providerResponse?.entity || providerResponse?.data?.entity || providerResponse?.data || {};
-  // Normalize Dojah field-name variants without depending on letter case.
-  // Some provider payloads use firstname/surname/birthdate while others use
-  // first_name/last_name/dob.
-  const entityByKey = Object.fromEntries(
-    Object.entries(entity || {}).map(([key, value]) => [
-      String(key).toLowerCase().replace(/[^a-z0-9]/g, ''),
-      value,
-    ])
-  );
-  const pick = (...keys) => {
-    for (const key of keys) {
-      const value = entityByKey[String(key).toLowerCase().replace(/[^a-z0-9]/g, '')];
-      if (value !== undefined && value !== null && value !== '') return value;
-    }
-    return '';
-  };
-  const normalizedEntity = {
-    ...entity,
-    first_name: pick('first_name', 'firstname', 'firstName', 'first'),
-    last_name: pick('last_name', 'lastname', 'lastName', 'surname', 'family_name'),
-    dob: pick('dob', 'date_of_birth', 'dateOfBirth', 'birthdate', 'birth_date'),
-  };
-
-  let match;
-  // Current Dojah BVN validation responses return match objects rather than
-  // raw identity strings. Prefer the provider's explicit boolean results.
-  if (PROVIDER === 'YOUVERIFY') {
-    match = youverifyMatch(application, entity);
-  } else if (type === 'bvn'
-      && typeof entity?.first_name === 'object'
-      && typeof entity?.last_name === 'object'
-      && typeof entity?.date_of_birth === 'object') {
-    const nameMatch = entity.first_name?.status === true && entity.last_name?.status === true;
-    const dobMatch = entity.date_of_birth?.status === true;
-    match = {
-      matched: nameMatch && dobMatch,
-      nameMatch,
-      dobMatch,
-      providerDobPresent: true,
-      appDobPresent: Boolean(application.date_of_birth),
-    };
-  } else {
-    match = identityMatchDetails(application, normalizedEntity);
-  }
+  const match = youverifyMatch(application, providerResponse.data);
   const matched = match.matched;
   const newStatus = matched ? 'KYC_VERIFIED' : 'KYC_FAILED';
 
@@ -269,7 +136,8 @@ kycRouter.get('/api/kyc/:id/status', async (req, res, params) => {
     status: check.status,
     session_ref: check.session_ref,
     provider: check.provider,
-    environment: /^(dojah|youverify)_live_/.test(check.session_ref || '') ? 'live' : 'sandbox',
+    environment: String(check.session_ref || '').split('_')[1] === 'live' ? 'live' : 'sandbox',
+    restart_required: check.status !== 'KYC_VERIFIED' && (check.provider !== PROVIDER || !check.session_ref.startsWith(`youverify_${KYC_ENV}_`)),
     verified_at: check.verified_at,
   });
 });

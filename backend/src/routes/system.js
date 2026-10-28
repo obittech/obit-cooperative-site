@@ -19,7 +19,7 @@ systemRouter.get('/api/readiness', async (_req, res) => {
     : paystackKey.startsWith('sk_test_') ? 'test'
     : 'unconfigured';
 
-  const dojahEnvironment = String(process.env.DOJAH_ENV || 'sandbox').toLowerCase();
+  const youverifyEnvironment = String(process.env.YOUVERIFY_ENV || 'sandbox').toLowerCase();
   const ready = databaseOk;
 
   res.json(ready ? 200 : 503, {
@@ -32,9 +32,11 @@ systemRouter.get('/api/readiness', async (_req, res) => {
       mode: paystackMode,
       live_enabled: process.env.PAYSTACK_LIVE_ENABLED === 'true',
     },
-    dojah: {
-      environment: dojahEnvironment,
-      configured: Boolean(process.env.DOJAH_APP_ID && process.env.DOJAH_SECRET_KEY),
+    youverify: {
+      provider: 'YOUVERIFY',
+      environment: youverifyEnvironment,
+      configured: Boolean(process.env.YOUVERIFY_SECRET_KEY),
+      production_authorized: process.env.YOUVERIFY_PRODUCTION_AUTHORIZED === 'true',
     },
     dev_routes_enabled: process.env.ENABLE_DEV_ROUTES === 'true',
   });

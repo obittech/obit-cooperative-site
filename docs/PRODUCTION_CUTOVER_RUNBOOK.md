@@ -7,7 +7,7 @@
 - PostgreSQL schema/runtime and API boot have been validated in CI.
 - Obit Market + SafePay use a multi-community tenant boundary. Obit Cooperative is the anchor community.
 - SafePay production money movement is fail-closed until an approved provider's sandbox contract, webhook signature rules and production approval are configured.
-- Dojah live KYC remains disabled until KYB/compliance approval.
+- Youverify is the sole KYC provider. Live verification remains disabled until provider approval and sandbox acceptance.
 
 ## PostgreSQL cutover
 1. Put the member platform into a short maintenance/read-only window.
@@ -27,10 +27,10 @@ If any production smoke test fails:
 4. Investigate PostgreSQL without writing new production data to both databases concurrently.
 
 ## KYC go-live
-Do not change `DOJAH_ENV` to live until Dojah confirms KYB approval and production credentials/permissions. Before enabling live:
+Do not change `YOUVERIFY_ENV` to live until Youverify confirms KYB approval and production credentials/permissions. Before enabling live:
 - remove sandbox-only diagnostics from member responses;
 - confirm NIN and BVN production response mappings;
-- retain bounded retries and fail-closed unknown responses;
+- retain duplicate-charge controls and block unknown responses pending reconciliation;
 - verify privacy notice, consent, retention and incident handling;
 - perform a controlled real-user pilot before broad activation.
 
