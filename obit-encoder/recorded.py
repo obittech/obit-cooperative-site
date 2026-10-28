@@ -6,6 +6,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import time
 import httpx
 from encoder import destination, encoder_failure, ConfigurationError
 
@@ -95,14 +96,28 @@ class YouTube:
         bound=self.request('POST','liveBroadcasts/bind',params={'part':'id,status,contentDetails','id':broadcast['id'],'streamId':matches[0]['id']})
         if bound.get('contentDetails',{}).get('boundStreamId')!=matches[0]['id']:
             raise YouTubeError('YouTube stream binding was not confirmed')
-        details=self.request('GET','liveBroadcasts',params={'part':'id,status,contentDetails','id':broadcast['id']})['items'][0]
+        details=self.broadcast_details(broadcast['id'],'id,status,contentDetails')
         if details['status'].get('privacyStatus')!=visibility or not details['contentDetails'].get('enableAutoStart') or not details['contentDetails'].get('enableAutoStop'):
             raise YouTubeError('YouTube visibility or automatic start/stop was not confirmed')
         print('Daily YouTube event prepared: '+broadcast['id'],flush=True)
         return broadcast['id']
 
+    def broadcast_details(self, broadcast_id, part):
+        # A newly bound event can briefly be absent from the read response.
+        # Retry reads only: replaying event creation could create duplicates.
+        for attempt in range(4):
+            rows=self.request('GET','liveBroadcasts',params={'part':part,'id':broadcast_id}).get('items',[])
+            matches=[row for row in rows if row.get('id')==broadcast_id]
+            if len(matches)==1:
+                return matches[0]
+            if rows:
+                raise YouTubeError('YouTube returned unexpected broadcast details; playback not confirmed')
+            if attempt<3:
+                time.sleep(2 ** attempt)
+        raise YouTubeError('YouTube broadcast details unavailable after four reads; no replacement event created')
+
     def finish(self, broadcast_id):
-        details=self.request('GET','liveBroadcasts',params={'part':'status','id':broadcast_id})['items'][0]
+        details=self.broadcast_details(broadcast_id,'id,status')
         status=details['status']['lifeCycleStatus']
         if status=='complete':
             return
