@@ -150,8 +150,8 @@
         <!-- STEP 3: KYC -->
         <section id="panel-kyc" style="display:none">
           <h2 style="margin-bottom:10px">Verify your identity</h2>
-          <div class="sandbox-banner" id="modeBanner"><strong>Verification notice.</strong> Dojah identity verification is configured for sandbox testing. Use test data only until live KYC is enabled.</div>
-          <p class="muted-note" style="margin-bottom:18px">Identity verification is provided by Dojah. While the platform is in sandbox mode, use Dojah test data only. Your NIN/BVN is sent to the provider for verification and is not stored in the Obit database.</p>
+          <div class="sandbox-banner" id="modeBanner"><strong>Verification notice.</strong> Use synthetic test data while verification is in sandbox mode. The session identifies the configured provider.</div>
+          <p class="muted-note" style="margin-bottom:18px">Identity verification uses the provider shown when you start a session. While the platform is in sandbox mode, use that provider's synthetic test data only. Your NIN/BVN is sent to the provider for verification and is not stored in the Obit database.</p>
           <div id="kycStatusBox"></div>
           <div id="kycIdentityFields" style="display:none;margin-top:16px">
             <div class="grid-2">
@@ -166,7 +166,7 @@
           </div>
           <div class="btn-row">
             <button class="btn btn-primary" id="btnStartKyc">Start Verification</button>
-            <button class="btn btn-primary" id="btnVerifyDojah" style="display:none">Verify with Dojah</button>
+            <button class="btn btn-primary" id="btnVerifyDojah" style="display:none">Verify identity</button>
           </div>
         </section>
 

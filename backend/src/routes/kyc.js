@@ -1,6 +1,6 @@
 // routes/kyc.js
-// Dojah KYC adapter. Sandbox is the safe default. Real identity verification
-// remains disabled until DOJAH_ENV=live and production credentials are set.
+// Selectable KYC adapters. Sandbox is the default. Live calls require explicit
+// provider authorization, approved products, credentials and spending controls.
 // Secret credentials are server-side only and raw NIN/BVN values are never
 // written to the Obit database or audit log.
 
@@ -8,12 +8,16 @@ import { Router, HttpError } from '../router.js';
 import { get, run } from '../db.js';
 import { audit } from '../utils/audit.js';
 import crypto from 'node:crypto';
+import { youverifyPost, youverifyMatch } from '../services/youverify.js';
 import { requireKycAccess, reserveKycRequest, finishKycRequest, recordProviderResponse } from '../services/kyc-cost-controls.js';
 
 export const kycRouter = new Router();
 
-const DOJAH_ENV = (process.env.DOJAH_ENV || 'sandbox').toLowerCase();
-const DOJAH_BASE_URL = DOJAH_ENV === 'live' ? 'https://api.dojah.io' : 'https://sandbox.dojah.io';
+const PROVIDER = (process.env.KYC_PROVIDER || 'DOJAH').toUpperCase();
+if (!['DOJAH', 'YOUVERIFY'].includes(PROVIDER)) throw new Error('Invalid KYC_PROVIDER');
+const KYC_ENV = (process.env[`${PROVIDER}_ENV`] || 'sandbox').toLowerCase();
+const providerConfigured = () => PROVIDER === 'YOUVERIFY' ? Boolean(process.env.YOUVERIFY_SECRET_KEY) : dojahConfigured();
+const DOJAH_BASE_URL = KYC_ENV === 'live' ? 'https://api.dojah.io' : 'https://sandbox.dojah.io';
 
 function dojahConfigured() {
   return Boolean(process.env.DOJAH_APP_ID && process.env.DOJAH_SECRET_KEY);
@@ -23,7 +27,7 @@ function requireDojah() {
   if (!dojahConfigured()) {
     throw new HttpError(503, 'KYC provider is not configured yet.');
   }
-  if (!['sandbox', 'live'].includes(DOJAH_ENV)) {
+  if (!['sandbox', 'live'].includes(KYC_ENV)) {
     throw new HttpError(500, 'Invalid KYC provider environment.');
   }
 }
@@ -115,24 +119,25 @@ kycRouter.post('/api/kyc/session', async (req, res) => {
     throw new HttpError(409, 'Terms and privacy consent are required before KYC.');
   }
 
-  const sessionRef = `dojah_${DOJAH_ENV}_${crypto.randomUUID()}`;
+  if (!['sandbox', 'live'].includes(KYC_ENV)) throw new HttpError(503, 'Invalid KYC environment.');
+  const sessionRef = `${PROVIDER.toLowerCase()}_${KYC_ENV}_${crypto.randomUUID()}`;
   await run(
-    "INSERT INTO kyc_checks (application_id, provider, session_ref, status, raw_status_detail) VALUES (?, 'DOJAH', ?, 'KYC_PENDING', ?)",
-    [application_id, sessionRef, JSON.stringify({ environment: DOJAH_ENV })]
+    "INSERT INTO kyc_checks (application_id, provider, session_ref, status, raw_status_detail) VALUES (?, ?, ?, 'KYC_PENDING', ?)",
+    [application_id, PROVIDER, sessionRef, JSON.stringify({ environment: KYC_ENV })]
   );
   await run("UPDATE member_applications SET status = 'KYC_PENDING', updated_at = datetime('now') WHERE id = ?", [application_id]);
   await audit(null, 'KYC_SESSION_STARTED', 'member_applications', application_id, {
-    provider: 'DOJAH', environment: DOJAH_ENV, sessionRef,
+    provider: PROVIDER, environment: KYC_ENV, sessionRef,
   });
 
   res.json(201, {
     session_ref: sessionRef,
-    provider: 'DOJAH',
-    environment: DOJAH_ENV,
-    configured: dojahConfigured(),
-    message: DOJAH_ENV === 'sandbox'
-      ? 'Dojah sandbox session created. No live identity source will be queried.'
-      : 'Dojah live KYC session created.',
+    provider: PROVIDER,
+    environment: KYC_ENV,
+    configured: providerConfigured(),
+    message: KYC_ENV === 'sandbox'
+      ? `${PROVIDER} sandbox session created. Use synthetic test data only.`
+      : `${PROVIDER} live KYC session created.`,
   });
 });
 
@@ -149,9 +154,9 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   if (!['nin', 'bvn'].includes(type)) throw new HttpError(400, 'KYC type must be nin or bvn.');
   if (!validIdNumber(idNumber)) throw new HttpError(400, 'Enter a valid 11-digit NIN or BVN.');
 
-  if (!check.session_ref.startsWith(`dojah_${DOJAH_ENV}_`)) throw new HttpError(409, 'Create a new KYC session for this environment.');
-  requireKycAccess(DOJAH_ENV, type);
-  const requestId = await reserveKycRequest(check, DOJAH_ENV, type);
+  if (!check.session_ref.startsWith(`${PROVIDER.toLowerCase()}_${KYC_ENV}_`)) throw new HttpError(409, 'Create a new KYC session for this environment.');
+  requireKycAccess(KYC_ENV, type, PROVIDER);
+  const requestId = await reserveKycRequest(check, KYC_ENV, type, PROVIDER);
 
   // The identifier is used only for this provider request. It is never persisted.
   const path = type === 'bvn' ? '/api/v1/kyc/bvn' : '/api/v1/kyc/nin';
@@ -166,15 +171,17 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
           dob: canonicalDate(application.date_of_birth) || undefined,
         }
       : { nin: idNumber };
-    providerResponse = await dojahGet(path, providerParams, requestId);
+    providerResponse = PROVIDER === 'YOUVERIFY'
+      ? await youverifyPost(type, idNumber, requestId, KYC_ENV)
+      : await dojahGet(path, providerParams, requestId);
   } catch (error) {
     await finishKycRequest(requestId, error.uncertain ? 'UNKNOWN' : error.providerStatus === 404 ? 'NOT_FOUND' : error.providerStatus ? 'PROVIDER_ERROR' : 'UNKNOWN', error.providerStatus || null);
     await run(
       "UPDATE kyc_checks SET raw_status_detail = ? WHERE id = ?",
-      [JSON.stringify({ environment: DOJAH_ENV, outcome: 'PROVIDER_ERROR', provider_status: error.providerStatus || null }), check.id]
+      [JSON.stringify({ environment: KYC_ENV, outcome: 'PROVIDER_ERROR', provider_status: error.providerStatus || null }), check.id]
     );
     await audit(null, 'KYC_PROVIDER_ERROR', 'member_applications', check.application_id, {
-      provider: 'DOJAH', environment: DOJAH_ENV, sessionRef: check.session_ref,
+      provider: PROVIDER, environment: KYC_ENV, sessionRef: check.session_ref,
       requestId, providerStatus: error.providerStatus || null, potentiallyBillable: true,
     });
     throw new HttpError(error.status || 502, 'Identity verification could not be completed. Contact support before retrying.');
@@ -207,7 +214,9 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   let match;
   // Current Dojah BVN validation responses return match objects rather than
   // raw identity strings. Prefer the provider's explicit boolean results.
-  if (type === 'bvn'
+  if (PROVIDER === 'YOUVERIFY') {
+    match = youverifyMatch(application, entity);
+  } else if (type === 'bvn'
       && typeof entity?.first_name === 'object'
       && typeof entity?.last_name === 'object'
       && typeof entity?.date_of_birth === 'object') {
@@ -228,20 +237,20 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
 
   await run(
     "UPDATE kyc_checks SET status = ?, raw_status_detail = ?, verified_at = CASE WHEN ? = 'KYC_VERIFIED' THEN datetime('now') ELSE verified_at END WHERE id = ?",
-    [newStatus, JSON.stringify({ environment: DOJAH_ENV, outcome: matched ? 'MATCH' : 'MISMATCH', id_type: type }), newStatus, check.id]
+    [newStatus, JSON.stringify({ environment: KYC_ENV, outcome: matched ? 'MATCH' : 'MISMATCH', id_type: type }), newStatus, check.id]
   );
   await run("UPDATE member_applications SET status = ?, updated_at = datetime('now') WHERE id = ?", [newStatus, check.application_id]);
   await audit(null, matched ? 'KYC_VERIFIED' : 'KYC_FAILED', 'member_applications', check.application_id, {
-    provider: 'DOJAH', environment: DOJAH_ENV, sessionRef: check.session_ref, idType: type, requestId, potentiallyBillable: true,
+    provider: PROVIDER, environment: KYC_ENV, sessionRef: check.session_ref, idType: type, requestId, potentiallyBillable: true,
   });
 
   await finishKycRequest(requestId, matched ? 'MATCH' : 'MISMATCH', 200);
   res.json(200, {
     status: newStatus,
-    provider: 'DOJAH',
-    environment: DOJAH_ENV,
+    provider: PROVIDER,
+    environment: KYC_ENV,
     message: matched ? 'Identity details matched.' : 'Identity details did not match the application.',
-    ...(DOJAH_ENV === 'sandbox' ? { sandbox_match: {
+    ...(KYC_ENV === 'sandbox' ? { sandbox_match: {
       name_match: match.nameMatch,
       dob_match: match.dobMatch,
       provider_dob_present: match.providerDobPresent,
@@ -260,7 +269,7 @@ kycRouter.get('/api/kyc/:id/status', async (req, res, params) => {
     status: check.status,
     session_ref: check.session_ref,
     provider: check.provider,
-    environment: check.session_ref?.startsWith('dojah_live_') ? 'live' : 'sandbox',
+    environment: /^(dojah|youverify)_live_/.test(check.session_ref || '') ? 'live' : 'sandbox',
     verified_at: check.verified_at,
   });
 });

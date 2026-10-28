@@ -197,6 +197,7 @@ async function startKyc() {
   clearAlert();
   try {
     const session = await OBIT.post('/api/kyc/session', { application_id: state.applicationId });
+    showKycProvider(session);
     state.kycSessionRef = session.session_ref;
     localStorage.setItem('obit_kyc_session_ref', session.session_ref);
     renderKycStatus('KYC_PENDING', session.message);
@@ -206,6 +207,13 @@ async function startKyc() {
   } catch (err) {
     showAlert(err.message);
   }
+}
+
+function showKycProvider(session) {
+  const name = session.provider === 'YOUVERIFY' ? 'Youverify' : session.provider === 'DOJAH' ? 'Dojah' : 'the configured provider';
+  document.getElementById('modeBanner').textContent = session.environment === 'live'
+    ? `Identity verification is provided by ${name}.`
+    : `${name} sandbox verification. Use synthetic test data only.`;
 }
 
 function renderKycStatus(status, note) {
@@ -224,7 +232,7 @@ async function verifyDojahKyc() {
   const idNumber = input.value.trim();
 
   if (!/^[0-9]{11}$/.test(idNumber)) {
-    return showAlert('Enter the 11-digit Dojah sandbox NIN or BVN test number.');
+    return showAlert('Enter a valid 11-digit NIN or BVN. In sandbox mode, use the provider’s synthetic test data.');
   }
 
   const button = document.getElementById('btnVerifyDojah');
@@ -253,7 +261,7 @@ async function verifyDojahKyc() {
     showAlert(err.message);
   } finally {
     button.disabled = false;
-    button.textContent = 'Verify with Dojah';
+    button.textContent = 'Verify identity';
   }
 }
 
@@ -323,6 +331,7 @@ async function restoreExistingApplication() {
     goToStep(target);
     if (target === 'kyc' && state.kycSessionRef) {
       const check = await OBIT.get(`/api/kyc/${state.kycSessionRef}/status`);
+      showKycProvider(check);
       renderKycStatus(check.status);
       if (check.status !== 'KYC_VERIFIED') {
         document.getElementById('kycIdentityFields').style.display = '';
