@@ -9,7 +9,7 @@ import { get, run } from '../db.js';
 import { audit } from '../utils/audit.js';
 import crypto from 'node:crypto';
 import { youverifyPost, youverifyMatch } from '../services/youverify.js';
-import { requireKycAccess, reserveKycRequest, finishKycRequest } from '../services/kyc-cost-controls.js';
+import { requireKycAccess, reserveKycRequest, finishKycRequest, sandboxRequestStatus } from '../services/kyc-cost-controls.js';
 
 export const kycRouter = new Router();
 
@@ -132,6 +132,7 @@ kycRouter.get('/api/kyc/:id/status', async (req, res, params) => {
     ? await get('SELECT * FROM kyc_checks WHERE session_ref = ? OR application_id = ? ORDER BY id DESC LIMIT 1', [params.id, numericId])
     : await get('SELECT * FROM kyc_checks WHERE session_ref = ? ORDER BY id DESC LIMIT 1', [params.id]);
   if (!check) throw new HttpError(404, 'KYC session not found');
+  const sandboxRequest = await sandboxRequestStatus(check, KYC_ENV);
   res.json(200, {
     status: check.status,
     session_ref: check.session_ref,
@@ -139,6 +140,7 @@ kycRouter.get('/api/kyc/:id/status', async (req, res, params) => {
     environment: String(check.session_ref || '').split('_')[1] === 'live' ? 'live' : 'sandbox',
     restart_required: check.status !== 'KYC_VERIFIED' && (check.provider !== PROVIDER || !check.session_ref.startsWith(`youverify_${KYC_ENV}_`)),
     verified_at: check.verified_at,
+    ...(sandboxRequest ? { sandbox_request: sandboxRequest } : {}),
   });
 });
 

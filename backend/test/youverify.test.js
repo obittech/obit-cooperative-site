@@ -9,7 +9,7 @@ process.env.YOUVERIFY_ENV = 'sandbox';
 process.env.YOUVERIFY_SECRET_KEY = 'sandbox-test-secret';
 const { migrate, get, run, all, closeDatabase } = await import('../src/db.js');
 const { kycRouter } = await import('../src/routes/kyc.js');
-const { requireKycAccess, reserveKycRequest } = await import('../src/services/kyc-cost-controls.js');
+const { requireKycAccess, reserveKycRequest, sandboxRequestStatus } = await import('../src/services/kyc-cost-controls.js');
 const { youverifyMatch } = await import('../src/services/youverify.js');
 await migrate();
 after(async () => { await closeDatabase(); fs.rmSync(temp, { recursive: true, force: true }); });
@@ -107,6 +107,32 @@ test('name substrings and absent, invalid or mismatched DOB never verify', () =>
 });
 
 const statusHandler = kycRouter.match('GET', '/api/kyc/test/status').handlers[0];
+
+test('sandbox status exposes only saved receipt metadata and never dispatches another call', async () => {
+  const check = await fixture(); let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return { ok: false, status: 401, json: async () => ({ success: false, message: 'PRIVATE-DETAIL', data: {} }) };
+  };
+  await assert.rejects(verify(request, response, { ref: check.session_ref }), e => e.status === 502);
+  let status;
+  await statusHandler({}, { json: (_code, body) => { status = body; } }, { id: check.session_ref });
+  assert.deepEqual(status.sandbox_request, { state: 'UNKNOWN', provider_http_status: 401, reference_status: 'MISSING' });
+  assert.equal(calls, 1);
+  assert.equal(JSON.stringify(status).includes('PRIVATE-DETAIL'), false);
+  assert.equal(JSON.stringify(status).includes(process.env.YOUVERIFY_SECRET_KEY), false);
+  assert.equal(JSON.stringify(status).includes(request.body.id_number), false);
+  await assert.rejects(verify(request, response, { ref: check.session_ref }), e => e.status === 409);
+  assert.equal(calls, 1);
+});
+
+test('sandbox receipt diagnostics exclude live deployments, live checks and retired providers', async () => {
+  const check = await fixture();
+  assert.equal(await sandboxRequestStatus(check, 'live'), null);
+  assert.equal(await sandboxRequestStatus({ ...check, session_ref: 'youverify_live_test' }, 'sandbox'), null);
+  assert.equal(await sandboxRequestStatus({ ...check, provider: 'RETIRED_PROVIDER' }, 'sandbox'), null);
+  assert.equal(await sandboxRequestStatus(check, 'sandbox'), null);
+});
 
 async function retiredFixture() {
   const check = await fixture();

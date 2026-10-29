@@ -88,3 +88,20 @@ export async function recordProviderResponse(id, body, providerStatus) {
   });
   return status === 'CAPTURED';
 }
+
+// Read only the existing sandbox receipt. Never expose the provider report ID,
+// response body, subject details or credentials through the public status API.
+export async function sandboxRequestStatus(check, environment) {
+  if (environment !== 'sandbox' || check.provider !== 'YOUVERIFY'
+      || !String(check.session_ref || '').startsWith('youverify_sandbox_')) return null;
+  const receipt = await get(`SELECT r.state, r.provider_status, p.reference_status
+    FROM kyc_provider_requests r
+    LEFT JOIN kyc_provider_references p ON p.request_id = r.id
+    WHERE r.check_id = ? AND r.environment = 'sandbox'
+    ORDER BY r.started_ms DESC, r.id DESC LIMIT 1`, [check.id]);
+  return receipt ? {
+    state: receipt.state,
+    provider_http_status: receipt.provider_status,
+    reference_status: receipt.reference_status || 'NOT_RECORDED',
+  } : null;
+}
