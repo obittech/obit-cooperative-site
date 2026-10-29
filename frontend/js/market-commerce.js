@@ -7,7 +7,7 @@ const MarketCommerce=(()=>{
   const token=read(),headers={'Content-Type':'application/json'};if(token)headers.Authorization='Bearer '+token;
   const res=await fetch(window.OBIT_API_BASE+path,{method,headers,signal:AbortSignal.timeout(15000),body:body===undefined?undefined:JSON.stringify(body)});
   let data;try{data=await res.json();}catch{throw Error('The service did not respond. Please try again.');}
-  if(!res.ok){if(res.status===401){clear();document.dispatchEvent(new Event('market:signout'));}throw Error(data.error||'Please try again.');}
+  if(!res.ok){if(res.status===401&&token){clear();document.dispatchEvent(new Event('market:signout'));}throw Error(data.error||'Please try again.');}
   return data;
  }
  function guest(){try{return ObitMarketState.normalize(JSON.parse(localStorage.getItem(GUEST)||'[]'));}catch{return [];}}

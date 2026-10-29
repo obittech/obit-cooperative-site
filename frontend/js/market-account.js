@@ -21,7 +21,7 @@ $('buyerAddressForm').addEventListener('submit',event=>{event.preventDefault();b
 });});
 $('buyerAddressForm').addEventListener('input',()=>{addressDirty=true;updateRequestButton();});
 $('buyerLogout').addEventListener('click',async()=>{try{await MarketCommerce.logout();message('Signed out of all shopping sessions.');}catch(e){message(e.message);}});
-document.addEventListener('market:signout',()=>{bag=null;$('accountBag').textContent='';$('buyerRequests').textContent='';$('buyerAddressForm').reset();showSession();});
+document.addEventListener('market:signout',()=>{challenge='';$('buyerEmailForm').reset();$('buyerEmailForm').hidden=false;$('buyerCodeForm').reset();$('buyerCodeForm').hidden=true;bag=null;$('accountBag').textContent='';$('buyerRequests').textContent='';$('buyerAddressForm').reset();showSession();});
 function updateRequestButton(){const ready=!!bag?.items.length&&bag.lines.every(l=>l.available)&&!!MarketCommerce.profile()?.address&&!addressDirty;$('submitQuoteRequest').disabled=!ready||submitting;}
 async function refreshBag(){
  try{bag=await MarketCommerce.cart();
