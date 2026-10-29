@@ -18,8 +18,17 @@ export async function initializeCheckout(buyerId,orderId,body={}){
   const row=await ownOrder(buyerId,id);await lockOrder(row);
   const order=await ownOrder(buyerId,id),old=await get('SELECT * FROM market_payment_attempts WHERE order_id=?',[id]);
   if(old){if(body.expected_total_kobo!==Number(old.amount_kobo))throw new HttpError(409,'Review the original payment total.');if(!['SUCCEEDED','REVIEW'].includes(old.status)&&effectiveOrderStatus(order)!=='AWAITING_PAYMENT')throw new HttpError(409,'This reservation is no longer active. Check payment status before trying again.');return {old};}
+  const items=await all('SELECT listing_id,quantity FROM market_purchase_order_items WHERE order_id=? ORDER BY listing_id',[id]);
+  if(!items.length)throw new HttpError(409,'This order contains no products');
+  // Extending a hold must use the same listing locks as new reservations.
+  // Re-check the clock after waiting, so an expired hold cannot be revived.
+  for(const item of items)await run('UPDATE market_listings SET updated_at=updated_at WHERE id=?',[item.listing_id]);
   if(effectiveOrderStatus(order)!=='AWAITING_PAYMENT')throw new HttpError(409,'This reservation is no longer active. Request a new quote.');
   if(body.expected_total_kobo!==Number(order.total_kobo))throw new HttpError(409,'Review the current order total before opening checkout.');
+  for(const item of items){
+   const stock=await get('SELECT i.quantity,l.status,m.status AS member_status,c.status AS community_status FROM market_listings l JOIN members m ON m.id=l.seller_member_id JOIN communities c ON c.id=l.community_id LEFT JOIN market_inventory i ON i.listing_id=l.id WHERE l.id=?',[item.listing_id]);
+   if(!stock||stock.quantity===null||stock.status!=='ACTIVE'||stock.member_status!=='ACTIVE'||stock.community_status!=='ACTIVE'||Number(stock.quantity)<await heldQuantity(item.listing_id))throw new HttpError(409,'Stock is no longer available for checkout. Request a new quote.');
+  }
   const buyer=await get('SELECT email FROM market_buyers WHERE id=?',[buyerId]);
   const reference='OBMP-'+crypto.randomBytes(16).toString('hex').toUpperCase();
   const result=await run("INSERT INTO market_payment_attempts (order_id,reference,mode,status,amount_kobo,currency,created_ms) VALUES (?,?,'test','INITIATING',?,'NGN',?)",[id,reference,order.total_kobo,Date.now()]);
@@ -57,14 +66,14 @@ async function applyReceipt(attemptId,data){
   if(reused)throw new HttpError(422,'Provider transaction already belongs to another order');
   if(current.status==='SUCCEEDED'&&received.status==='PAID'&&received.amount===Number(current.amount_kobo)&&received.total===Number(current.amount_kobo))return publicAttempt(current);
   let status=current.status,reason='',commit=false;
-  if(received.total!==Number(current.amount_kobo)||(received.status==='PAID'&&received.amount!==Number(current.amount_kobo))||['PARTIALLY_PAID','OVERPAID'].includes(received.status)){status='REVIEW';reason='AMOUNT_MISMATCH';}
+  if(received.total!==Number(current.amount_kobo)||(received.status!=='PAID'&&received.amount>0)||(received.status==='PAID'&&received.amount!==Number(current.amount_kobo))||['PARTIALLY_PAID','OVERPAID'].includes(received.status)){status='REVIEW';reason='AMOUNT_MISMATCH';}
   else if(received.status==='PAID'){
    if(Number(current.stock_committed)===1){status='SUCCEEDED';}
    else if(order.status!=='AWAITING_PAYMENT'||Number(order.expires_ms)<=Date.now()){status='REVIEW';reason='PAYMENT_AFTER_RESERVATION';}
    else{
     for(const item of items){
-     const stock=await get('SELECT i.quantity,l.status,m.status AS member_status FROM market_listings l JOIN members m ON m.id=l.seller_member_id LEFT JOIN market_inventory i ON i.listing_id=l.id WHERE l.id=?',[item.listing_id]);
-     if(!stock||stock.quantity===null||stock.status!=='ACTIVE'||stock.member_status!=='ACTIVE'||Number(stock.quantity)<await heldQuantity(item.listing_id)){status='REVIEW';reason='STOCK_UNAVAILABLE';break;}
+     const stock=await get('SELECT i.quantity,l.status,m.status AS member_status,c.status AS community_status FROM market_listings l JOIN members m ON m.id=l.seller_member_id JOIN communities c ON c.id=l.community_id LEFT JOIN market_inventory i ON i.listing_id=l.id WHERE l.id=?',[item.listing_id]);
+     if(!stock||stock.quantity===null||stock.status!=='ACTIVE'||stock.member_status!=='ACTIVE'||stock.community_status!=='ACTIVE'||Number(stock.quantity)<await heldQuantity(item.listing_id)){status='REVIEW';reason='STOCK_UNAVAILABLE';break;}
     }
     if(!reason){status='SUCCEEDED';commit=true;}
    }
