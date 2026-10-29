@@ -33,6 +33,7 @@ function publicListing(row) {
     id: row.id, title: row.title, description: row.description,
     price: Number(row.price_kobo || 0) / 100, currency: row.currency,
     seller_id: Number(row.seller_member_id), seller_name: row.seller_member_id ? 'Member shop '+Number(row.seller_member_id) : null,
+    stock_quantity: row.stock_quantity == null ? null : Number(row.stock_quantity), stock_version: Number(row.stock_version || 0),
     category: row.category, status: row.status, created_at: row.created_at, image_url: row.image_url || null,
   };
 }
@@ -86,7 +87,7 @@ safePayRouter.post('/api/market/listings', requireAuth('member'), async (req, re
 
 safePayRouter.get('/api/market/my-listings', requireAuth('member'), async (req, res) => {
   const member = await memberForUser(req.user.id);
-  const rows = await all('SELECT id,seller_member_id,title,description,category,price_kobo,currency,status,created_at,image_url FROM market_listings WHERE seller_member_id=? ORDER BY id DESC LIMIT 100', [member.id]);
+  const rows = await all('SELECT l.*,i.quantity AS stock_quantity,i.version AS stock_version FROM market_listings l LEFT JOIN market_inventory i ON i.listing_id=l.id WHERE l.seller_member_id=? ORDER BY l.id DESC LIMIT 100', [member.id]);
   res.json(200, rows.map(row => ({...publicListing(row), status:row.status})));
 });
 

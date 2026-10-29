@@ -41,13 +41,14 @@ const { systemRouter } = await import('./routes/system.js');
 const { opportunitiesRouter } = await import('./routes/opportunities.js');
 const { devRouter } = await import('./routes/dev.js');
 const { handlePaymentWebhook } = await import('./routes/webhooks.js');
+const { marketCommerceRouter } = await import('./routes/market-commerce.js');
 const { safePayRouter } = await import('./routes/safepay.js');
 const { handleSafePayWebhook } = await import('./routes/safepay-webhook.js');
 
 await migrate();
 console.log(`Database runtime: ${DB_ENGINE}`);
 
-const routers = [systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, opportunitiesRouter, safePayRouter, meRouter, adminRouter];
+const routers = [systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, opportunitiesRouter, marketCommerceRouter, safePayRouter, meRouter, adminRouter];
 if (process.env.ENABLE_DEV_ROUTES === 'true') routers.push(devRouter);
 
 const allowedOrigins = new Set(

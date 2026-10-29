@@ -32,6 +32,10 @@ jobs:
       - run: npm install
       - name: Payment safety regression tests
         run: npm run test:payments
+      - name: Marketplace commerce and cart regression tests
+        run: |
+          node --experimental-sqlite --test test/market-commerce.test.js
+          node --test ../tests/market-state.test.cjs
       - name: Syntax check
         run: find src scripts -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: SQLite adapter smoke
@@ -103,3 +107,10 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
           PGSSL: disable
         run: npm run test:kyc
+
+      - name: Marketplace commerce (PostgreSQL)
+        env:
+          DB_ENGINE: postgres
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
+          PGSSL: disable
+        run: node --experimental-sqlite --test test/market-commerce.test.js
