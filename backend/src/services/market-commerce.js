@@ -1,3 +1,4 @@
+import {heldStockSql,heldQuantity} from './market-stock.js';
 import crypto from 'node:crypto';
 import { all, get, run, atomic } from '../db.js';
 import { HttpError } from '../router.js';
@@ -11,14 +12,14 @@ const BASE=` FROM market_listings l JOIN members m ON m.id=l.seller_member_id
  LEFT JOIN market_stores s ON s.seller_member_id=l.seller_member_id AND s.status='APPROVED'
  LEFT JOIN market_promotions p ON p.listing_id=l.id`;
 const ACTIVE="l.status='ACTIVE' AND m.status='ACTIVE' AND c.status='ACTIVE' AND c.slug='obit-cooperative'";
-const FIELDS='l.id,l.seller_member_id,l.title,l.description,l.category,l.price_kobo,l.currency,l.image_url,l.created_at,i.quantity AS stock_quantity,s.name AS store_name,s.description AS store_description,s.official AS store_official,p.label AS promo_label,p.price_kobo AS promo_price,p.base_kobo AS promo_base,p.starts_ms,p.ends_ms,p.enabled AS promo_enabled';
+const FIELDS='l.id,l.seller_member_id,l.title,l.description,l.category,l.price_kobo,l.currency,l.image_url,l.created_at,i.quantity AS on_hand_quantity,s.name AS store_name,s.description AS store_description,s.official AS store_official,p.label AS promo_label,p.price_kobo AS promo_price,p.base_kobo AS promo_base,p.starts_ms,p.ends_ms,p.enabled AS promo_enabled';
 function sale(row,now=Date.now()){return Number(row.promo_enabled)===1 && Number(row.starts_ms)<=now && Number(row.ends_ms)>now && Number(row.promo_base)===Number(row.price_kobo) && Number(row.promo_price)<Number(row.price_kobo);}
 export function product(row,now=Date.now()) {
   return {id:Number(row.id),seller_id:Number(row.seller_member_id),seller_name:row.store_name||'Member shop '+row.seller_member_id,official_store:Number(row.store_official)===1,
     title:row.title,description:row.description,category:row.category,price:Number(sale(row,now)?row.promo_price:row.price_kobo)/100,
     promotion:sale(row,now)?{label:row.promo_label,ends_ms:Number(row.ends_ms)}:null,
     currency:row.currency,image_url:row.image_url,created_at:row.created_at,
-    stock_quantity:row.stock_quantity===null||row.stock_quantity===undefined?null:Number(row.stock_quantity)};
+    stock_quantity:row.on_hand_quantity===null||row.on_hand_quantity===undefined?null:Math.max(0,Number(row.on_hand_quantity)-Number(row.reserved_quantity||0))};
 }
 export function integer(value, min, max, label) {
   if (typeof value==='boolean' || value===null || value==='' || !/^\d+$/.test(String(value)) || !Number.isSafeInteger(Number(value)) || Number(value)<min || Number(value)>max) throw new HttpError(400,`Invalid ${label}`);
@@ -57,19 +58,18 @@ export async function catalogue(search) {
   if(!order)throw new HttpError(400,'Invalid sort');
   const where=' WHERE '+filters.join(' AND ');
   const total=Number((await get('SELECT COUNT(*) AS n'+BASE+where,args)).n);
-  const rows=await all('SELECT '+FIELDS+BASE+where+' ORDER BY '+order+' LIMIT ? OFFSET ?',[...args,size,(page-1)*size]);
+  const rows=await all('SELECT '+FIELDS+','+heldStockSql()+' AS reserved_quantity'+BASE+where+' ORDER BY '+order+' LIMIT ? OFFSET ?',[...args,size,(page-1)*size]);
   const shops=await all('SELECT DISTINCT l.seller_member_id,s.name,s.description,s.official'+BASE+' WHERE '+ACTIVE+' ORDER BY l.seller_member_id LIMIT 500');
   return {items:rows.map(r=>product(r,now)),total,page,page_size:size,pages:Math.ceil(total/size),shops:shops.map(r=>({id:Number(r.seller_member_id),name:r.name||'Member shop '+r.seller_member_id,description:r.description||'',official:Number(r.official)===1}))};
 }
 export async function preview(input) {
   const items=itemsInput(input,true);
   if(!items.length)return {items:[],lines:[],total_kobo:0,count:0};
-  const rows=await all('SELECT '+FIELDS+BASE+' WHERE '+ACTIVE+' AND l.id IN ('+items.map(()=>'?').join(',')+')',items.map(i=>i.id));
+  const rows=await all('SELECT '+FIELDS+','+heldStockSql()+' AS reserved_quantity'+BASE+' WHERE '+ACTIVE+' AND l.id IN ('+items.map(()=>'?').join(',')+')',items.map(i=>i.id));
   const now=Date.now();
   const byId=new Map(rows.map(r=>[Number(r.id),r]));let total=0,count=0;
   const lines=items.map(item=>{
-    const row=byId.get(item.id);const available=!!row && (row.stock_quantity===null || Number(row.stock_quantity)>=item.qty);
-    const priced=row?product(row,now):null;
+    const row=byId.get(item.id);const priced=row?product(row,now):null;const available=!!priced && (priced.stock_quantity===null || priced.stock_quantity>=item.qty);
     const subtotal=priced?Math.round(priced.price*100)*item.qty:0;
     if(!Number.isSafeInteger(subtotal)||!Number.isSafeInteger(total+subtotal))throw new HttpError(400,'Total is too large');
     if(available){total+=subtotal;count+=item.qty;}
@@ -155,8 +155,9 @@ export async function buyerRequests(buyerId) {
   const ids=requests.map(r=>Number(r.id)), marks=ids.map(()=>'?').join(',');
   const shops=await all('SELECT * FROM market_request_shops WHERE request_id IN ('+marks+') ORDER BY id',ids);
   const rows=await all('SELECT i.* FROM market_request_items i JOIN market_request_shops s ON s.id=i.shop_id WHERE s.request_id IN ('+marks+') ORDER BY i.id',ids);
+  const orders=await all('SELECT o.id,o.reference,o.shop_id FROM market_purchase_orders o JOIN market_request_shops s ON s.id=o.shop_id WHERE s.request_id IN ('+marks+')',ids);
   return requests.map(r=>({...r,id:Number(r.id),subtotal_kobo:Number(r.subtotal_kobo),address:JSON.parse(r.address_json),address_json:undefined,
-    shops:shops.filter(s=>Number(s.request_id)===Number(r.id)).map(s=>({...s,id:Number(s.id),seller_member_id:Number(s.seller_member_id),delivery_kobo:s.delivery_kobo===null?null:Number(s.delivery_kobo),
+    shops:shops.filter(s=>Number(s.request_id)===Number(r.id)).map(s=>({...s,id:Number(s.id),seller_member_id:Number(s.seller_member_id),order:orders.filter(o=>Number(o.shop_id)===Number(s.id)).map(o=>({id:Number(o.id),reference:o.reference}))[0]||null,delivery_kobo:s.delivery_kobo===null?null:Number(s.delivery_kobo),
       items:rows.filter(i=>Number(i.shop_id)===Number(s.id)).map(i=>({...i,unit_kobo:Number(i.unit_kobo)}))}))}));
 }
 export async function cancelRequest(buyerId,id) {
@@ -164,6 +165,7 @@ export async function cancelRequest(buyerId,id) {
   return atomic(async()=>{
     const updated=await run("UPDATE market_purchase_requests SET status='CANCELLED' WHERE id=? AND buyer_id=? AND status='REQUESTED'",[id,buyerId]);
     if(updated.changes!==1)throw new HttpError(409,'Request is unavailable or already cancelled');
+    if(await get('SELECT o.id FROM market_purchase_orders o JOIN market_request_shops s ON s.id=o.shop_id WHERE s.request_id=? LIMIT 1',[id]))throw new HttpError(409,'This request has an order. Manage it from your Orders tab.');
     await run("UPDATE market_request_shops SET status='CANCELLED',updated_at=CURRENT_TIMESTAMP WHERE request_id=?",[id]);
     await audit(null,'MARKET_QUOTE_CANCELLED','market_purchase_requests',id,{buyer_id:buyerId});return {ok:true};
   });
@@ -181,6 +183,8 @@ export async function setInventory(userId, listingId,body) {
     if(own.changes!==1)throw new HttpError(404,'Listing not found');
     const old=await get('SELECT version FROM market_inventory WHERE listing_id=?',[id]);
     if(Number(old?.version||0)!==version)throw new HttpError(409,'Stock changed in another session. Refresh before editing.');
+    const reserved=await heldQuantity(id);
+    if(qty<reserved)throw new HttpError(409,`Stock on hand cannot be below the ${reserved} units currently reserved. Refresh your stock view.`);
     if(old)await run('UPDATE market_inventory SET quantity=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE listing_id=?',[qty,id]);
     else await run('INSERT INTO market_inventory (listing_id,quantity) VALUES (?,?)',[id,qty]);
     await audit(userId,'MARKET_STOCK_UPDATED','market_listings',id,{quantity:qty});

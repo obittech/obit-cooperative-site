@@ -201,3 +201,91 @@ test('promotion boundaries, scheduled starts, role guards and inactive sellers a
  await assert.rejects(stores.promotion(admin.id,p,{...body,version:1}),e=>e.status===409);
  await db.migrate();
 });
+
+const orders=await import('../src/services/market-orders.js');
+async function quoted(s,customer,items,total,delivery=100000){
+ await m.createRequest(customer.id,request(items,total));
+ const latest=(await m.buyerRequests(customer.id))[0],shop=latest.shops.find(r=>r.seller_member_id===s.id);
+ await m.respondToRequest(s.uid,shop.id,{decision:'QUOTED',delivery_kobo:delivery,delivery_days:3,note:'Test confirmed stock'});
+ return {id:shop.id,total:shop.items.reduce((n,r)=>n+Number(r.unit_kobo)*Number(r.quantity),0)+delivery,request:latest.id};
+}
+test('acceptance snapshots a quote once, reserves stock and keeps payment and dispatch closed',async()=>{
+ const s=await seller(),b=await buyer(),id=await listing(s,2000000,3),quote=await quoted(s,b,[{id,qty:2}],4000000);
+ const result=await Promise.all([orders.acceptQuote(b.id,quote.id,{expected_total_kobo:quote.total,status:'PAID'}),orders.acceptQuote(b.id,quote.id,{expected_total_kobo:quote.total})]);
+ assert.equal(result[0].id,result[1].id);assert.equal(result.filter(x=>x.replayed).length,1);
+ const rows=await orders.buyerOrders(b.id);assert.equal(rows.length,1);assert.equal(rows[0].status,'AWAITING_PAYMENT');assert.equal(rows[0].total_kobo,4100000);assert.equal(rows[0].items[0].unit_kobo,2000000);assert.equal(rows[0].payment_available,false);assert.equal(rows[0].dispatch_allowed,false);assert.equal(rows[0].expires_ms-rows[0].created_ms,900000);assert.equal(rows[0].events.length,1);
+ assert.equal((await m.preview([{id,qty:2}])).lines[0].available,false);assert.equal((await m.catalogue(new URLSearchParams({seller:String(s.id)}))).items[0].stock_quantity,1);
+ await assert.rejects(m.setInventory(s.uid,id,{quantity:1,version:1}),e=>e.status===409);
+ await assert.rejects(m.cancelRequest(b.id,quote.request),e=>e.status===409);
+ assert.equal((await m.buyerRequests(b.id))[0].status,'REQUESTED');assert.equal((await m.buyerRequests(b.id))[0].shops[0].order.id,rows[0].id);
+ await db.run('UPDATE market_listings SET price_kobo=2200000 WHERE id=?',[id]);assert.equal((await orders.buyerOrders(b.id))[0].total_kobo,4100000);
+});
+test('competing buyers cannot reserve the same last unit across concurrent acceptance',async()=>{
+ const s=await seller(),p=await listing(s,2000000,1),a=await buyer(),b=await buyer();
+ const qa=await quoted(s,a,[{id:p,qty:1}],2000000),qb=await quoted(s,b,[{id:p,qty:1}],2000000);
+ const results=await Promise.allSettled([orders.acceptQuote(a.id,qa.id,{expected_total_kobo:qa.total}),orders.acceptQuote(b.id,qb.id,{expected_total_kobo:qb.total})]);
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.find(r=>r.status==='rejected').reason.status,409);
+ assert.equal((await m.preview([{id:p,qty:1}])).lines[0].available,false);
+ const winner=results[0].status==='fulfilled'?a:b,won=results.find(r=>r.status==='fulfilled').value;
+ await orders.cancelOrder({buyerId:winner.id},won.id,{reason:'Changed my mind'});
+ const loser=winner===a?b:a,q=loser===a?qa:qb;assert.equal((await orders.acceptQuote(loser.id,q.id,{expected_total_kobo:q.total})).status,'AWAITING_PAYMENT');
+});
+test('cancellation is owned, idempotent, audited once and releases all reserved products',async()=>{
+ const s=await seller(),otherSeller=await seller(),p=await listing(s),q=await listing(s),b=await buyer(),other=await buyer(),quote=await quoted(s,b,[{id:p,qty:2},{id:q,qty:3}],10000000);
+ const created=await orders.acceptQuote(b.id,quote.id,{expected_total_kobo:quote.total});
+ await assert.rejects(orders.cancelOrder({buyerId:other.id},created.id,{reason:'Not my order'}),e=>e.status===404);
+ await assert.rejects(orders.cancelOrder({userId:otherSeller.uid},created.id,{reason:'Not my order'}),e=>e.status===404);
+ await assert.rejects(orders.cancelOrder({buyerId:b.id},created.id,{reason:''}),e=>e.status===400);
+ const cancelled=await orders.cancelOrder({userId:s.uid},created.id,{reason:'Unable to supply'});assert.equal(cancelled.status,'CANCELLED');
+ const repeat=await orders.cancelOrder({buyerId:b.id},created.id,{reason:'Retry cancel'});assert.equal(repeat.replayed,true);
+ const row=(await orders.buyerOrders(b.id))[0];assert.equal(row.cancel_actor,'SELLER');assert.equal(row.cancel_reason,'Unable to supply');assert.equal(row.events.filter(e=>e.kind==='CANCELLED').length,1);
+ assert.equal((await m.catalogue(new URLSearchParams({seller:String(s.id)}))).items.find(i=>i.id===p).stock_quantity,10);
+ assert.equal((await orders.acceptQuote(b.id,quote.id,{expected_total_kobo:quote.total})).status,'CANCELLED');
+});
+test('expiry releases stock without a worker and records one terminal event on refresh',async()=>{
+ const s=await seller(),b=await buyer(),p=await listing(s,2000000,1),quote=await quoted(s,b,[{id:p,qty:1}],2000000),created=await orders.acceptQuote(b.id,quote.id,{expected_total_kobo:quote.total});
+ await db.run('UPDATE market_purchase_orders SET expires_ms=? WHERE id=?',[Date.now()-1000,created.id]);
+ assert.equal((await m.preview([{id:p,qty:1}])).lines[0].available,true);
+ const row=(await orders.buyerOrders(b.id))[0];assert.equal(row.status,'EXPIRED');assert.equal(row.events.filter(e=>e.kind==='EXPIRED').length,1);
+ await orders.buyerOrders(b.id);await orders.cancelOrder({buyerId:b.id},created.id,{reason:'Too late now'});
+ assert.equal((await orders.buyerOrders(b.id))[0].events.length,2);assert.equal((await orders.acceptQuote(b.id,quote.id,{expected_total_kobo:quote.total})).status,'EXPIRED');
+});
+test('unconfirmed stock, stale prices, stale quotes and wrong totals cannot reserve any stock',async()=>{
+ const s=await seller(),b=await buyer(),p=await listing(s,2000000,null),q=await listing(s),quote=await quoted(s,b,[{id:p,qty:1},{id:q,qty:1}],4000000);
+ await assert.rejects(orders.acceptQuote(b.id,quote.id,{expected_total_kobo:quote.total}),e=>e.status===409);
+ await m.setInventory(s.uid,p,{quantity:3,version:0});
+ await assert.rejects(orders.acceptQuote(b.id,quote.id,{expected_total_kobo:1}),e=>e.status===409);
+ await db.run('UPDATE market_listings SET price_kobo=2100000 WHERE id=?',[q]);await assert.rejects(orders.acceptQuote(b.id,quote.id,{expected_total_kobo:quote.total}),e=>e.status===409);
+ await db.run('UPDATE market_listings SET price_kobo=2000000 WHERE id=?',[q]);await db.run("UPDATE market_request_shops SET updated_at=datetime('now','-8 days') WHERE id=?",[quote.id]);
+ await assert.rejects(orders.acceptQuote(b.id,quote.id,{expected_total_kobo:quote.total}),e=>e.status===409);
+ assert.equal((await orders.buyerOrders(b.id)).length,0);assert.equal((await m.preview([{id:p,qty:3},{id:q,qty:10}])).count,13);
+});
+test('order access separates buyers, sellers and staff without exposing delivery contact details',async()=>{
+ const s=await seller(),otherSeller=await seller(),b=await buyer(),other=await buyer(),p=await listing(s),quote=await quoted(s,b,[{id:p,qty:1}],2000000);
+ const token=auth.buyerToken(b),wrong=auth.buyerToken(other);
+ assert.equal((await endpoint('POST',`/api/market/quotes/${quote.id}/accept`,wrong,{expected_total_kobo:quote.total})).status,404);
+ const accepted=await endpoint('POST',`/api/market/quotes/${quote.id}/accept`,token,{expected_total_kobo:quote.total});assert.equal(accepted.status,201);
+ assert.equal((await endpoint('GET','/api/market/orders',wrong)).data.length,0);
+ const sellerToken=issueToken(await db.get('SELECT * FROM users WHERE id=?',[s.uid]));
+ const own=(await endpoint('GET','/api/market/seller/orders',sellerToken)).data;assert.equal(own.length,1);assert.equal(own[0].address,undefined);assert.ok(!JSON.stringify(own).includes(address.phone));assert.ok(!JSON.stringify(own).includes(address.address));
+ assert.equal((await orders.sellerOrders(otherSeller.uid)).length,0);
+ assert.equal((await endpoint('GET','/api/admin/market/orders',sellerToken)).status,403);
+ const admin=await staff(),overview=(await endpoint('GET','/api/admin/market/orders',issueToken(admin))).data;assert.ok(!JSON.stringify(overview).includes(address.phone));
+ assert.equal((await endpoint('GET','/api/market/seller/orders',token)).status,401);
+});
+test('active order caps limit stock holds and expired orders do not consume the active allowance',async()=>{
+ const s=await seller(),b=await buyer(),p=await listing(s),quotes=[];
+ for(let n=0;n<3;n++)quotes.push(await quoted(s,b,[{id:p,qty:1}],2000000));
+ for(const q of quotes.slice(0,2))await orders.acceptQuote(b.id,q.id,{expected_total_kobo:q.total});
+ await assert.rejects(orders.acceptQuote(b.id,quotes[2].id,{expected_total_kobo:quotes[2].total}),e=>e.status===429);
+ await db.run('UPDATE market_purchase_orders SET expires_ms=? WHERE buyer_id=?',[Date.now()-1000,b.id]);
+ assert.equal((await orders.acceptQuote(b.id,quotes[2].id,{expected_total_kobo:quotes[2].total})).status,'AWAITING_PAYMENT');
+ await db.migrate();
+});
+test('quote cancellation racing acceptance cannot leave a cancelled request with a new order',async()=>{
+ const s=await seller(),b=await buyer(),p=await listing(s),quote=await quoted(s,b,[{id:p,qty:1}],2000000);
+ const results=await Promise.allSettled([orders.acceptQuote(b.id,quote.id,{expected_total_kobo:quote.total}),m.cancelRequest(b.id,quote.request)]);
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+ const parent=await db.get('SELECT status FROM market_purchase_requests WHERE id=?',[quote.request]),created=await orders.buyerOrders(b.id);
+ if(parent.status==='CANCELLED')assert.equal(created.length,0);else{assert.equal(parent.status,'REQUESTED');assert.equal(created.length,1);}
+});

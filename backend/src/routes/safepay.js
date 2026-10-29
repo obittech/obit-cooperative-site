@@ -1,3 +1,4 @@
+import {heldStockSql} from '../services/market-stock.js';
 // routes/safepay.js
 // Obit Market + Obit SafePay MVP.
 // Technology infrastructure: Obit Technologies Limited.
@@ -87,8 +88,9 @@ safePayRouter.post('/api/market/listings', requireAuth('member'), async (req, re
 
 safePayRouter.get('/api/market/my-listings', requireAuth('member'), async (req, res) => {
   const member = await memberForUser(req.user.id);
-  const rows = await all('SELECT l.*,i.quantity AS stock_quantity,i.version AS stock_version FROM market_listings l LEFT JOIN market_inventory i ON i.listing_id=l.id WHERE l.seller_member_id=? ORDER BY l.id DESC LIMIT 100', [member.id]);
-  res.json(200, rows.map(row => ({...publicListing(row), status:row.status})));
+  const rows = await all('SELECT l.*,i.quantity AS stock_quantity,i.version AS stock_version,'+heldStockSql()+' AS reserved_quantity FROM market_listings l LEFT JOIN market_inventory i ON i.listing_id=l.id WHERE l.seller_member_id=? ORDER BY l.id DESC LIMIT 100', [member.id]);
+  res.setHeader?.('Cache-Control','no-store');
+  res.json(200, rows.map(row=>({...publicListing(row),status:row.status,reserved_quantity:Number(row.reserved_quantity)})));
 });
 
 safePayRouter.get('/api/admin/market/listings', requireAuth('staff', 'admin'), async (req, res) => {

@@ -1,3 +1,4 @@
+import {acceptQuote,buyerOrders,sellerOrders,cancelOrder,operationsOrders,HOLD_MS} from '../services/market-orders.js';
 import {sellerStore,submitStore,reviewStores,reviewStore,promotion,promotions} from '../services/market-stores.js';
 import { Router, HttpError } from '../router.js';
 import { get, run, atomic } from '../db.js';
@@ -10,7 +11,7 @@ export const marketCommerceRouter=new Router();
 function privateResponse(req,res){res.setHeader?.('Cache-Control','no-store');}
 marketCommerceRouter.get('/api/market/capabilities',async(req,res)=>res.json(200,{
   email_signin_available:!!process.env.RESEND_API_KEY,payments_available:false,
-  mode:'quote_requests',stock_reserved:false,delivery_countries:['NG'],states:STATES
+  mode:'quotes_and_unpaid_orders',stock_reserved:false,orders_available:true,reservation_minutes:HOLD_MS/60000,delivery_countries:['NG'],states:STATES
 }));
 marketCommerceRouter.get('/api/market/catalog',async(req,res)=>res.json(200,await catalogue(new URL(req.url,'http://localhost').searchParams)));
 marketCommerceRouter.post('/api/market/cart-preview',async(req,res)=>res.json(200,await preview(req.body?.items)));
@@ -42,3 +43,10 @@ marketCommerceRouter.get('/api/admin/market/stores',privateResponse,requireAuth(
 marketCommerceRouter.post('/api/admin/market/stores/:id/review',privateResponse,requireAuth('staff','admin'),async(req,res,params)=>res.json(200,await reviewStore(req.user.id,params.id,req.body)));
 marketCommerceRouter.get('/api/admin/market/promotions',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await promotions()));
 marketCommerceRouter.post('/api/admin/market/listings/:id/promotion',privateResponse,requireAuth('staff','admin'),async(req,res,params)=>res.json(200,await promotion(req.user.id,params.id,req.body)));
+
+marketCommerceRouter.post('/api/market/quotes/:id/accept',privateResponse,requireBuyer,async(req,res,params)=>res.json(201,await acceptQuote(req.buyer.id,params.id,req.body)));
+marketCommerceRouter.get('/api/market/orders',privateResponse,requireBuyer,async(req,res)=>res.json(200,await buyerOrders(req.buyer.id)));
+marketCommerceRouter.post('/api/market/orders/:id/cancel',privateResponse,requireBuyer,async(req,res,params)=>res.json(200,await cancelOrder({buyerId:req.buyer.id},params.id,req.body)));
+marketCommerceRouter.get('/api/market/seller/orders',privateResponse,requireAuth('member'),async(req,res)=>res.json(200,await sellerOrders(req.user.id)));
+marketCommerceRouter.post('/api/market/seller/orders/:id/cancel',privateResponse,requireAuth('member'),async(req,res,params)=>res.json(200,await cancelOrder({userId:req.user.id},params.id,req.body)));
+marketCommerceRouter.get('/api/admin/market/orders',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await operationsOrders()));

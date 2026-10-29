@@ -3,7 +3,7 @@ const ObitMobile=(()=>{
  const account=document.getElementById('buyerAccount');
  const tabs=[...document.querySelectorAll('[data-account-view]')];
  function setAccountView(view,scroll=false){
-  if(!account||!['bag','delivery','requests'].includes(view))return;
+  if(!account||!['bag','delivery','requests','orders'].includes(view))return;
   account.dataset.mobileView=view;
   for(const tab of tabs){const selected=tab.dataset.accountView===view;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;}
   if(scroll&&matchMedia('(max-width:768px)').matches)document.querySelector('.account-mobile-tabs')?.scrollIntoView({block:'start',behavior:'smooth'});
@@ -15,7 +15,7 @@ const ObitMobile=(()=>{
    if(target===undefined)return;event.preventDefault();tabs[target].focus();setAccountView(tabs[target].dataset.accountView);
   });
  }
- function hashView(){if(account)setAccountView(location.hash==='#requests'?'requests':location.hash==='#delivery'?'delivery':'bag');}
+ function hashView(){if(account)setAccountView(location.hash==='#orders'?'orders':location.hash==='#requests'?'requests':location.hash==='#delivery'?'delivery':'bag');}
  document.getElementById('editDeliveryFromBag')?.addEventListener('click',()=>{
   setAccountView('delivery',true);if(!matchMedia('(max-width:768px)').matches)document.getElementById('deliveryPanel').scrollIntoView({block:'start',behavior:'smooth'});
  });
