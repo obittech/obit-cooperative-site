@@ -1,3 +1,5 @@
+import {checkoutConfig} from '../services/market-payment-state.js';
+import {initializeCheckout,verifyCheckout,reconcileCheckout,paymentOperations} from '../services/market-payments.js';
 import {acceptQuote,buyerOrders,sellerOrders,cancelOrder,operationsOrders,HOLD_MS} from '../services/market-orders.js';
 import {sellerStore,submitStore,reviewStores,reviewStore,promotion,promotions} from '../services/market-stores.js';
 import { Router, HttpError } from '../router.js';
@@ -10,7 +12,7 @@ import { catalogue, preview, buyerCart, changeCart, mergeCart, saveAddress, STAT
 export const marketCommerceRouter=new Router();
 function privateResponse(req,res){res.setHeader?.('Cache-Control','no-store');}
 marketCommerceRouter.get('/api/market/capabilities',async(req,res)=>res.json(200,{
-  email_signin_available:!!process.env.RESEND_API_KEY,payments_available:false,
+  email_signin_available:!!process.env.RESEND_API_KEY,payments_available:false,payment_provider:'monnify',test_checkout_available:checkoutConfig().available,checkout_mode:checkoutConfig().mode,
   mode:'quotes_and_unpaid_orders',stock_reserved:false,orders_available:true,reservation_minutes:HOLD_MS/60000,delivery_countries:['NG'],states:STATES
 }));
 marketCommerceRouter.get('/api/market/catalog',async(req,res)=>res.json(200,await catalogue(new URL(req.url,'http://localhost').searchParams)));
@@ -50,3 +52,8 @@ marketCommerceRouter.post('/api/market/orders/:id/cancel',privateResponse,requir
 marketCommerceRouter.get('/api/market/seller/orders',privateResponse,requireAuth('member'),async(req,res)=>res.json(200,await sellerOrders(req.user.id)));
 marketCommerceRouter.post('/api/market/seller/orders/:id/cancel',privateResponse,requireAuth('member'),async(req,res,params)=>res.json(200,await cancelOrder({userId:req.user.id},params.id,req.body)));
 marketCommerceRouter.get('/api/admin/market/orders',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await operationsOrders()));
+
+marketCommerceRouter.post('/api/market/orders/:id/checkout',privateResponse,requireBuyer,async(req,res,params)=>res.json(200,await initializeCheckout(req.buyer.id,params.id,req.body)));
+marketCommerceRouter.post('/api/market/orders/:id/payment/verify',privateResponse,requireBuyer,async(req,res,params)=>res.json(200,await verifyCheckout(req.buyer.id,params.id)));
+marketCommerceRouter.get('/api/admin/market/payments',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await paymentOperations()));
+marketCommerceRouter.post('/api/admin/market/orders/:id/payment/reconcile',privateResponse,requireAuth('staff','admin'),async(req,res,params)=>res.json(200,await reconcileCheckout(params.id)));

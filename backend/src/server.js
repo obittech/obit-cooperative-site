@@ -43,6 +43,7 @@ const { devRouter } = await import('./routes/dev.js');
 const { handlePaymentWebhook } = await import('./routes/webhooks.js');
 const { marketCommerceRouter } = await import('./routes/market-commerce.js');
 const { safePayRouter } = await import('./routes/safepay.js');
+const {handleMarketPaymentWebhook}=await import('./services/market-payments.js');
 const { handleSafePayWebhook } = await import('./routes/safepay-webhook.js');
 
 await migrate();
@@ -94,6 +95,7 @@ const server = http.createServer(async (req, res) => {
   try {
     // Webhooks read the raw body themselves (signature verification needs
     // the exact bytes), so route them before generic JSON body parsing.
+    if(pathname==='/api/webhooks/market/monnify'&&req.method==='POST'){await handleMarketPaymentWebhook(req,res);return;}
     const webhookMatch = WEBHOOK_PATTERN.exec(pathname);
     if (webhookMatch && req.method === 'POST') {
       await handlePaymentWebhook(req, res, { provider: webhookMatch[1] });

@@ -289,3 +289,124 @@ test('quote cancellation racing acceptance cannot leave a cancelled request with
  const parent=await db.get('SELECT status FROM market_purchase_requests WHERE id=?',[quote.request]),created=await orders.buyerOrders(b.id);
  if(parent.status==='CANCELLED')assert.equal(created.length,0);else{assert.equal(parent.status,'REQUESTED');assert.equal(created.length,1);}
 });
+
+const pay=await import('../src/services/market-payments.js');
+const {checkoutConfig}=await import('../src/services/market-payment-state.js');
+const {Readable}=await import('node:stream');
+const originalFetch=globalThis.fetch;
+async function paymentFixture(){const s=await seller(),b=await buyer(),p=await listing(s,2000000,3),q=await quoted(s,b,[{id:p,qty:1}],2000000);const o=await orders.acceptQuote(b.id,q.id,{expected_total_kobo:q.total});return {s,b,p,q,o};}
+function testCheckout(){process.env.NODE_ENV='test';process.env.MARKET_CHECKOUT_MODE='test';process.env.MARKET_MONNIFY_API_KEY='MK_TEST_'+crypto.randomUUID();process.env.MARKET_MONNIFY_SECRET_KEY='unit-only-secret-key';process.env.MARKET_MONNIFY_CONTRACT_CODE='1234567890';process.env.MARKET_MONNIFY_CALLBACK_URL='https://staging.example.test/market-account.html#orders';}
+function resetCheckout(){for(const key of ['MARKET_CHECKOUT_MODE','MARKET_MONNIFY_API_KEY','MARKET_MONNIFY_SECRET_KEY','MARKET_MONNIFY_CONTRACT_CODE','MARKET_MONNIFY_CALLBACK_URL','MARKET_MONNIFY_ALLOW_UNSIGNED_SANDBOX_WEBHOOK','NODE_ENV'])delete process.env[key];globalThis.fetch=originalFetch;}
+function mockMonnify(handler){globalThis.fetch=async(url,options)=>{
+ assert.ok(url.startsWith('https://sandbox.monnify.com/'));let data;
+ if(url.endsWith('/auth/login')){assert.ok(options.headers.Authorization.startsWith('Basic '));data={accessToken:'isolated-unit-test-token',expiresIn:3600};}
+ else{assert.equal(options.headers.Authorization,'Bearer isolated-unit-test-token');data=await handler(url,options);}
+ return new Response(JSON.stringify({requestSuccessful:true,responseCode:'0',responseBody:data}),{status:200,headers:{'Content-Type':'application/json'}});
+};}
+async function resetVerify(id){await db.run('UPDATE market_payment_attempts SET last_verify_ms=0 WHERE order_id=?',[id]);}
+async function paymentRow(id){return db.get('SELECT * FROM market_payment_attempts WHERE order_id=?',[id]);}
+function receiptFor(row,extra={}){return {transactionReference:row.provider_transaction_id||'MNFY|UNIT|'+row.id,paymentReference:row.reference,amountPaid:Number(row.amount_kobo)/100,totalPayable:Number(row.amount_kobo)/100,currencyCode:'NGN',paymentStatus:'PAID',...extra};}
+async function initialiseFixture(f){mockMonnify((_u,o)=>{const b=JSON.parse(o.body),reference='MNFY|UNIT|'+f.o.id;return {paymentReference:b.paymentReference,transactionReference:reference,checkoutUrl:'https://sandbox.sdk.monnify.com/checkout/'+reference};});return pay.initializeCheckout(f.b.id,f.o.id,{expected_total_kobo:f.q.total});}
+async function webhook(data,signature='signed'){
+ const raw=JSON.stringify({eventType:'SUCCESSFUL_TRANSACTION',eventData:{...data,currency:data.currencyCode}}),req=Readable.from([Buffer.from(raw)]);req.headers={};
+ if(signature==='signed')req.headers['monnify-signature']=crypto.createHmac('sha512',process.env.MARKET_MONNIFY_SECRET_KEY).update(raw).digest('hex');else if(signature!==null)req.headers['monnify-signature']=signature;
+ const res={json(status,result){this.status=status;this.data=result;}};await pay.handleMarketPaymentWebhook(req,res);return res;
+}
+test('Monnify checkout requires explicit sandbox settings and is unavailable in production',async()=>{
+ const f=await paymentFixture();let calls=0;globalThis.fetch=async()=>{calls++;throw Error('Must not dispatch');};
+ try{
+  assert.equal(checkoutConfig().available,false);await assert.rejects(pay.initializeCheckout(f.b.id,f.o.id,{expected_total_kobo:f.q.total}),e=>e.status===503);
+  testCheckout();process.env.NODE_ENV='production';assert.equal(checkoutConfig().available,false);await assert.rejects(pay.verifyCheckout(f.b.id,f.o.id),e=>e.status===503);
+  process.env.NODE_ENV='test';process.env.MARKET_MONNIFY_API_KEY='MK_LIVE_do-not-use';assert.equal(checkoutConfig().available,false);
+  process.env.MARKET_MONNIFY_API_KEY='MK_TEST_unit';process.env.MARKET_MONNIFY_CALLBACK_URL='javascript:alert(1)';assert.equal(checkoutConfig().available,false);assert.equal(calls,0);
+ }finally{resetCheckout();}
+});
+test('Monnify initialization is owned, server-priced and dispatched once with a 45-minute checkout hold',async()=>{
+ const f=await paymentFixture(),other=await buyer();testCheckout();let calls=0;
+ try{
+  mockMonnify((_u,o)=>{calls++;const b=JSON.parse(o.body);assert.equal(b.amount,f.q.total/100);assert.equal(b.customerEmail,f.b.email);assert.equal(b.contractCode,'1234567890');assert.deepEqual(b.paymentMethods,['CARD','ACCOUNT_TRANSFER']);assert.ok(!JSON.stringify(b).includes(address.phone));return {paymentReference:b.paymentReference,transactionReference:'MNFY|UNIT|'+f.o.id,checkoutUrl:'https://sandbox.sdk.monnify.com/checkout/MNFY|UNIT|'+f.o.id};});
+  await assert.rejects(pay.initializeCheckout(other.id,f.o.id,{expected_total_kobo:f.q.total}),e=>e.status===404);await assert.rejects(pay.initializeCheckout(f.b.id,f.o.id,{expected_total_kobo:1}),e=>e.status===409);
+  const both=await Promise.all([pay.initializeCheckout(f.b.id,f.o.id,{expected_total_kobo:f.q.total}),pay.initializeCheckout(f.b.id,f.o.id,{expected_total_kobo:f.q.total})]);assert.equal(calls,1);assert.equal(both[0].reference,both[1].reference);
+  assert.ok((await pay.initializeCheckout(f.b.id,f.o.id,{expected_total_kobo:f.q.total})).checkout_url.startsWith('https://sandbox.sdk.monnify.com/checkout/'));assert.equal(calls,1);
+  const o=(await orders.buyerOrders(f.b.id))[0];assert.ok(o.expires_ms>=o.created_ms+45*60000);await assert.rejects(orders.cancelOrder({buyerId:f.b.id},f.o.id,{reason:'Uncertain checkout'}),e=>e.status===409);
+  await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);await assert.rejects(pay.initializeCheckout(f.b.id,f.o.id,{expected_total_kobo:f.q.total}),e=>e.status===409);
+ }finally{resetCheckout();}
+});
+test('uncertain or unsafe Monnify checkout never dispatches a second initialization',async()=>{
+ const f=await paymentFixture();testCheckout();let calls=0;
+ try{
+  globalThis.fetch=async()=>{calls++;throw Error('timeout');};await assert.rejects(pay.initializeCheckout(f.b.id,f.o.id,{expected_total_kobo:f.q.total}),e=>e.status===502);
+  const retry=await pay.initializeCheckout(f.b.id,f.o.id,{expected_total_kobo:f.q.total});assert.equal(retry.status,'UNKNOWN');assert.equal(retry.checkout_url,null);assert.equal(calls,1);
+  const g=await paymentFixture();mockMonnify((_u,o)=>({paymentReference:JSON.parse(o.body).paymentReference,transactionReference:'MNFY|UNIT|'+g.o.id,checkoutUrl:'https://sandbox.sdk.monnify.com.attacker.test/steal'}));await assert.rejects(pay.initializeCheckout(g.b.id,g.o.id,{expected_total_kobo:g.q.total}),e=>e.status===502);assert.equal((await paymentRow(g.o.id)).status,'UNKNOWN');
+ }finally{resetCheckout();}
+});
+test('Monnify server verification commits isolated inventory once and paid test orders cannot expire',async()=>{
+ const f=await paymentFixture();testCheckout();
+ try{
+  await initialiseFixture(f);const row=await paymentRow(f.o.id);mockMonnify((url)=>{assert.ok(url.includes('/api/v2/merchant/transactions/query?paymentReference='+row.reference));return receiptFor(row);});
+  const result=await pay.verifyCheckout(f.b.id,f.o.id);assert.equal(result.status,'SUCCEEDED');assert.equal(result.stock_committed,true);
+  assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),2);assert.equal((await m.preview([{id:f.p,qty:2}])).lines[0].available,true);
+  await resetVerify(f.o.id);await pay.verifyCheckout(f.b.id,f.o.id);assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),2);
+  await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);const history=(await orders.buyerOrders(f.b.id))[0];assert.equal(history.status,'TEST_PAID');assert.equal(history.events.filter(e=>e.kind==='PAYMENT_VERIFIED').length,1);assert.equal(history.events.filter(e=>e.kind==='EXPIRED').length,0);assert.equal(history.dispatch_allowed,false);
+  await assert.rejects(orders.cancelOrder({userId:f.s.uid},f.o.id,{reason:'Cannot cancel paid order'}),e=>e.status===409);
+ }finally{resetCheckout();}
+});
+test('late, cancelled, partial and overpaid Monnify receipts require review without consuming stock',async()=>{
+ testCheckout();
+ try{
+  for(const condition of ['expired','cancelled','partial','overpaid']){
+   const f=await paymentFixture();await initialiseFixture(f);const row=await paymentRow(f.o.id);
+   if(condition==='expired')await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);
+   if(condition==='cancelled'){await db.run("UPDATE market_payment_attempts SET status='FAILED' WHERE id=?",[row.id]);await orders.cancelOrder({buyerId:f.b.id},f.o.id,{reason:'Confirmed failed sandbox payment'});}
+   const extra=condition==='partial'?{paymentStatus:'PARTIALLY_PAID',amountPaid:1}:condition==='overpaid'?{paymentStatus:'OVERPAID',amountPaid:99999}:{};
+   mockMonnify(()=>receiptFor(row,extra));const result=await pay.verifyCheckout(f.b.id,f.o.id);assert.equal(result.status,'REVIEW');assert.equal(result.stock_committed,false);
+   assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),3);assert.equal((await orders.buyerOrders(f.b.id))[0].status,'PAYMENT_REVIEW');
+  }
+ }finally{resetCheckout();}
+});
+test('Monnify amounts, currency, both references and ownership are verified before confirming',async()=>{
+ const f=await paymentFixture(),other=await buyer();testCheckout();
+ try{
+  await initialiseFixture(f);const row=await paymentRow(f.o.id);await assert.rejects(pay.verifyCheckout(other.id,f.o.id),e=>e.status===404);
+  for(const extra of [{amountPaid:null},{amountPaid:'1e5'},{amountPaid:'21,000.00'},{currencyCode:'USD'},{paymentReference:'OBIT-membership'},{transactionReference:'MNFY|OTHER|different'}]){
+   await resetVerify(f.o.id);mockMonnify(()=>receiptFor(row,extra));await assert.rejects(pay.verifyCheckout(f.b.id,f.o.id),e=>e.status===422);
+  }
+  assert.equal(Number((await paymentRow(f.o.id)).stock_committed),0);
+  mockMonnify(()=>receiptFor(row,{paymentStatus:'PENDING',amountPaid:0}));await resetVerify(f.o.id);assert.equal((await pay.verifyCheckout(f.b.id,f.o.id)).status,'READY');await assert.rejects(pay.verifyCheckout(f.b.id,f.o.id),e=>e.status===429);
+ }finally{resetCheckout();}
+});
+test('Monnify webhook notifications cannot fulfil orders without server verification and deduplicate safely',async()=>{
+ const f=await paymentFixture();testCheckout();let calls=0;
+ try{
+  await initialiseFixture(f);const row=await paymentRow(f.o.id),data=receiptFor(row);mockMonnify(()=>{calls++;return data;});
+  await assert.rejects(webhook(data,'bad'),e=>e.status===401);await assert.rejects(webhook(data,null),e=>e.status===401);assert.equal(calls,0);
+  const first=await webhook(data);assert.equal(first.status,200);const repeat=await webhook(data);assert.equal(repeat.data.replayed,true);assert.equal(calls,1);
+  assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),2);await assert.rejects(webhook({...data,paymentReference:'OBIT-membership'}),e=>e.status===422);
+  assert.equal((await endpoint('GET','/api/admin/market/payments',auth.buyerToken(f.b))).status,401);
+ }finally{resetCheckout();}
+});
+test('unsigned sandbox notifications require an explicit test switch and still use Monnify verification',async()=>{
+ const f=await paymentFixture();testCheckout();
+ try{
+  await initialiseFixture(f);const row=await paymentRow(f.o.id);process.env.MARKET_MONNIFY_ALLOW_UNSIGNED_SANDBOX_WEBHOOK='true';
+  mockMonnify(()=>receiptFor(row,{paymentStatus:'PENDING',amountPaid:0}));await assert.rejects(webhook(receiptFor(row),null),e=>e.status===503);assert.equal(Number((await paymentRow(f.o.id)).stock_committed),0);
+  process.env.NODE_ENV='production';await assert.rejects(webhook(receiptFor(row),null),e=>e.status===503);
+ }finally{resetCheckout();}
+});
+test('Monnify reconciliation racing cancellation or expiry cannot commit stock twice',async()=>{
+ const f=await paymentFixture();testCheckout();
+ try{
+  await initialiseFixture(f);const row=await paymentRow(f.o.id);mockMonnify(()=>receiptFor(row));
+  const results=await Promise.allSettled([pay.verifyCheckout(f.b.id,f.o.id),orders.cancelOrder({userId:f.s.uid},f.o.id,{reason:'Concurrent seller cancellation'}),orders.buyerOrders(f.b.id)]);
+  assert.equal(results[0].status,'fulfilled');assert.equal(results[1].status,'rejected');assert.equal((await orders.buyerOrders(f.b.id))[0].status,'TEST_PAID');assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),2);
+  await db.migrate();
+ }finally{resetCheckout();}
+});
+test('an expiry refresh racing a late Monnify receipt leaves stock available and payment in review',async()=>{
+ const f=await paymentFixture();testCheckout();
+ try{
+  await initialiseFixture(f);const row=await paymentRow(f.o.id);await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);mockMonnify(()=>receiptFor(row));
+  await Promise.all([pay.verifyCheckout(f.b.id,f.o.id),orders.buyerOrders(f.b.id)]);
+  const current=(await orders.buyerOrders(f.b.id))[0];assert.equal(current.status,'PAYMENT_REVIEW');assert.equal(current.events.filter(e=>e.kind==='EXPIRED').length,1);assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),3);
+ }finally{resetCheckout();}
+});

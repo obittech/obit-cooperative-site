@@ -50,3 +50,7 @@ Payments and fulfilment remain unavailable until their own implementations, prov
 - Before a payment release, address late webhook arrivals after reservation expiry, verify provider funding and amount/currency, settle physical stock exactly once, and atomically handle cancellations competing with payment. A legacy membership webhook must never confirm one of these new orders.
 
 Validation: 82 backend tests plus five cart tests pass locally. Eight new integration tests cover snapshot/idempotency, last-unit competition, cancellation, automatic expiry, stale/unconfirmed quotes, access/privacy, active-hold limits and quote cancellation racing acceptance. The existing PostgreSQL workflow runs these cases too. Isolated browser QA covers quote review, buyer and seller cancellation, stock counts and phone/desktop layouts. No production fixtures are inserted.
+
+## Monnify checkout follow-up
+
+Monnify is the selected marketplace payment provider. The isolated sandbox adapter now supports hosted checkout initialization, independent server verification, protected notification handling, durable attempt references, payment events, stock commitment once, and staff reconciliation. Production collection and dispatch remain disabled. The real merchant sandbox credentials and Contract Code are still required to exercise the provider itself. See [Monnify integration and activation requirements](MONNIFY_MARKET_CHECKOUT.md).

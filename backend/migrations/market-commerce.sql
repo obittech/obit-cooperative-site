@@ -101,3 +101,20 @@ CREATE TABLE IF NOT EXISTS market_purchase_order_events (
   kind TEXT NOT NULL CHECK(kind IN ('CREATED','CANCELLED','EXPIRED')),
   occurred_ms __INT__ NOT NULL, note TEXT NOT NULL DEFAULT '', UNIQUE(order_id,kind)
 );
+
+-- Dedicated marketplace payment attempts. No member/OBS payments are reused.
+CREATE TABLE IF NOT EXISTS market_payment_attempts (
+ id __ID__, order_id __INT__ NOT NULL UNIQUE REFERENCES market_purchase_orders(id),
+ reference TEXT NOT NULL UNIQUE, mode TEXT NOT NULL CHECK(mode='test'),
+ status TEXT NOT NULL CHECK(status IN ('INITIATING','READY','UNKNOWN','FAILED','SUCCEEDED','REVIEW')),
+ amount_kobo __INT__ NOT NULL CHECK(amount_kobo>0), currency TEXT NOT NULL DEFAULT 'NGN',
+ checkout_url TEXT, provider_transaction_id TEXT UNIQUE,
+ stock_committed INTEGER NOT NULL DEFAULT 0 CHECK(stock_committed IN (0,1)),
+ created_ms __INT__ NOT NULL, verified_ms __INT__, last_verify_ms __INT__ NOT NULL DEFAULT 0,
+ review_reason TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS market_payment_events (
+ id __ID__, attempt_id __INT__ NOT NULL REFERENCES market_payment_attempts(id),
+ kind TEXT NOT NULL, occurred_ms __INT__ NOT NULL, note TEXT NOT NULL,
+ UNIQUE(attempt_id,kind)
+);
