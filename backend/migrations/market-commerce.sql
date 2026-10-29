@@ -54,3 +54,20 @@ CREATE TABLE IF NOT EXISTS market_request_items (
 
 CREATE TABLE IF NOT EXISTS market_auth_guard (id INTEGER PRIMARY KEY, touched INTEGER NOT NULL DEFAULT 0);
 INSERT INTO market_auth_guard (id,touched) VALUES (1,0) ON CONFLICT(id) DO NOTHING;
+
+-- Store identities require staff review. Evidence is private to operations.
+CREATE TABLE IF NOT EXISTS market_stores (
+  id __ID__, seller_member_id __INT__ NOT NULL UNIQUE REFERENCES members(id),
+  name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')),
+  official INTEGER NOT NULL DEFAULT 0 CHECK(official IN (0,1)),
+  verification_note TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1,
+  updated_at __TIME__ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS market_promotions (
+  id __ID__, listing_id __INT__ NOT NULL UNIQUE REFERENCES market_listings(id),
+  label TEXT NOT NULL, price_kobo __INT__ NOT NULL CHECK(price_kobo>=2000000),
+  base_kobo __INT__ NOT NULL, starts_ms __INT__ NOT NULL, ends_ms __INT__ NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+  version INTEGER NOT NULL DEFAULT 1, updated_at __TIME__ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

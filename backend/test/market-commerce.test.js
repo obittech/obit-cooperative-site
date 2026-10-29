@@ -153,3 +153,51 @@ test('operations overview requires staff privileges and excludes full delivery d
  assert.equal(result.status,200);assert.ok(result.data.length>0);
  assert.ok(result.data.every(r=>!r.address_json&&!r.address&&!r.phone&&!r.email));
 });
+
+const stores=await import('../src/services/market-stores.js');
+async function staff(){const r=await db.run("INSERT INTO users (email,role) VALUES (?,'admin')",[`${tag}-${++seq}@example.test`]);return db.get('SELECT * FROM users WHERE id=?',[r.lastInsertRowid]);}
+test('store identities need review, private evidence never reaches buyers, edits revoke the badge',async()=>{
+ const s=await seller(),p=await listing(s),admin=await staff();
+ await stores.submitStore(s.uid,{name:'Test Shop',description:'Real description',version:0,official:true});
+ let cat=await m.catalogue(new URLSearchParams({seller:String(s.id)}));assert.equal(cat.items[0].seller_name,'Member shop '+s.id);assert.equal(cat.items[0].official_store,false);
+ const row=await db.get('SELECT * FROM market_stores WHERE seller_member_id=?',[s.id]);
+ await assert.rejects(stores.reviewStore(admin.id,row.id,{version:1,status:'APPROVED',official:true}),e=>e.status===400);
+ await stores.reviewStore(admin.id,row.id,{version:1,status:'APPROVED',official:true,verification_note:'PRIVATE-authorisation-test-reference'});
+ cat=await m.catalogue(new URLSearchParams({seller:String(s.id),official:'1'}));assert.equal(cat.total,1);assert.equal(cat.items[0].seller_name,'Test Shop');assert.equal(cat.shops.find(x=>x.id===s.id).official,true);assert.ok(!JSON.stringify(cat).includes('PRIVATE-authorisation'));
+ await assert.rejects(stores.submitStore(s.uid,{name:'Stale shop',description:'',version:1}),e=>e.status===409);
+ await stores.submitStore(s.uid,{name:'Different brand',description:'',version:2});
+ assert.equal((await m.catalogue(new URLSearchParams({seller:String(s.id),official:'1'}))).total,0);
+ await assert.rejects(stores.reviewStore(admin.id,row.id,{version:2,status:'APPROVED',official:false}),e=>e.status===409);
+ assert.equal((await m.preview([{id:p,qty:1}])).lines[0].product.seller_name,'Member shop '+s.id);
+});
+test('promotion prices agree across search, sort, bag and quote snapshots, then expire safely',async()=>{
+ const s=await seller(),p=await listing(s,4000000),other=await listing(s,3500000),admin=await staff(),b=await buyer();
+ const input={version:0,enabled:true,label:'Test offer',price_kobo:3000000,starts_ms:Date.now()-1000,ends_ms:Date.now()+3600000};
+ await stores.promotion(admin.id,p,input);
+ const cat=await m.catalogue(new URLSearchParams({seller:String(s.id),promotions:'1',max_kobo:'3100000',sort:'price-low'}));assert.equal(cat.total,1);assert.equal(cat.items[0].id,p);assert.equal(cat.items[0].price,30000);assert.equal(cat.items[0].promotion.label,'Test offer');
+ const sorted=await m.catalogue(new URLSearchParams({seller:String(s.id),sort:'price-low'}));assert.deepEqual(sorted.items.map(x=>x.id),[p,other]);
+ assert.equal((await m.preview([{id:p,qty:2}])).total_kobo,6000000);
+ await m.createRequest(b.id,request([{id:p,qty:1}],3000000));assert.equal((await m.buyerRequests(b.id))[0].shops[0].items[0].unit_kobo,3000000);
+ await assert.rejects(stores.promotion(admin.id,p,input),e=>e.status===409);
+ await db.run('UPDATE market_promotions SET ends_ms=0 WHERE listing_id=?',[p]);
+ assert.equal((await m.preview([{id:p,qty:1}])).total_kobo,4000000);
+ await assert.rejects(m.createRequest(b.id,request([{id:p,qty:1}],3000000)),e=>e.status===409);
+ assert.equal((await m.catalogue(new URLSearchParams({seller:String(s.id),promotions:'1'}))).total,0);
+ await stores.promotion(admin.id,p,{...input,version:1});await db.run('UPDATE market_listings SET price_kobo=4500000 WHERE id=?',[p]);
+ assert.equal((await m.preview([{id:p,qty:1}])).total_kobo,4500000);
+ await stores.promotion(admin.id,p,{enabled:false,version:2});assert.equal(Number((await db.get('SELECT enabled FROM market_promotions WHERE listing_id=?',[p])).enabled),0);
+});
+test('promotion boundaries, scheduled starts, role guards and inactive sellers are enforced',async()=>{
+ const s=await seller(),p=await listing(s,4000000),admin=await staff(),b=await buyer(),memberToken=issueToken(await db.get('SELECT * FROM users WHERE id=?',[s.uid]));
+ const body={version:0,enabled:true,label:'Valid offer',price_kobo:3000000,starts_ms:Date.now()+3600000,ends_ms:Date.now()+7200000};
+ for(const change of [{price_kobo:4000000},{price_kobo:1999999},{ends_ms:0},{ends_ms:Date.now()+100*86400000}])await assert.rejects(stores.promotion(admin.id,p,{...body,...change}),e=>e.status===400);
+ assert.equal((await endpoint('POST',`/api/admin/market/listings/${p}/promotion`,memberToken,body)).status,403);
+ assert.equal((await endpoint('GET','/api/admin/market/stores',auth.buyerToken(b))).status,401);
+ assert.equal((await endpoint('POST',`/api/admin/market/listings/${p}/promotion`,issueToken(admin),body)).status,200);
+ assert.equal((await m.preview([{id:p,qty:1}])).total_kobo,4000000);
+ await db.run("UPDATE members SET status='SUSPENDED' WHERE id=?",[s.id]);
+ assert.equal((await m.catalogue(new URLSearchParams({seller:String(s.id)}))).total,0);
+ await assert.rejects(stores.submitStore(s.uid,{name:'Suspended Shop',description:'',version:0}),e=>e.status===403);
+ await assert.rejects(stores.promotion(admin.id,p,{...body,version:1}),e=>e.status===409);
+ await db.migrate();
+});
