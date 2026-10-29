@@ -103,6 +103,7 @@ async function loadAll() {
     await refreshQueue(token);
     await refreshWithdrawals(token);
     await refreshMarketListings(token);
+    await refreshMarketRequests(token);
     await refreshReconciliation(token);
     await refreshAudit(token);
 
@@ -241,3 +242,11 @@ async function refreshAudit(token) {
 }
 
 if (OBIT.getSession('staff')) loadAll();
+
+async function refreshMarketRequests(token) {
+  const target=document.getElementById('marketRequestsBody');
+  try {
+    const rows=await OBIT.get('/api/admin/market/requests',{token});
+    target.innerHTML=rows.map(r=>`<tr><td>${escapeMarket(r.reference)}</td><td>₦${(Number(r.subtotal_kobo)/100).toLocaleString('en-NG')}</td><td>${escapeMarket(r.destination.city)}, ${escapeMarket(r.destination.state)}</td><td>${Number(r.waiting_count)} awaiting / ${Number(r.seller_count)} sellers</td><td>${escapeMarket(r.status)}</td></tr>`).join('')||'<tr><td colspan="5">No quote requests yet.</td></tr>';
+  } catch (e) { target.innerHTML='<tr><td colspan="5">Quote requests could not be loaded. Refresh to try again.</td></tr>'; }
+}

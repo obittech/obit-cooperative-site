@@ -1,0 +1,36 @@
+import { Router, HttpError } from '../router.js';
+import { get, run, atomic } from '../db.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requireBuyer, requestBuyerCode, verifyBuyerCode } from '../services/market-buyer-auth.js';
+import { catalogue, preview, buyerCart, changeCart, mergeCart, saveAddress, STATES,
+  createRequest,buyerRequests,cancelRequest,setInventory,sellerRequests,respondToRequest,operationsRequests } from '../services/market-commerce.js';
+
+export const marketCommerceRouter=new Router();
+function privateResponse(req,res){res.setHeader?.('Cache-Control','no-store');}
+marketCommerceRouter.get('/api/market/capabilities',async(req,res)=>res.json(200,{
+  email_signin_available:!!process.env.RESEND_API_KEY,payments_available:false,
+  mode:'quote_requests',stock_reserved:false,delivery_countries:['NG'],states:STATES
+}));
+marketCommerceRouter.get('/api/market/catalog',async(req,res)=>res.json(200,await catalogue(new URL(req.url,'http://localhost').searchParams)));
+marketCommerceRouter.post('/api/market/cart-preview',async(req,res)=>res.json(200,await preview(req.body?.items)));
+marketCommerceRouter.post('/api/market/buyer/request-code',privateResponse,async(req,res)=>res.json(200,await requestBuyerCode(req.body?.email)));
+marketCommerceRouter.post('/api/market/buyer/verify-code',privateResponse,async(req,res)=>res.json(200,await verifyBuyerCode(req.body?.challenge,req.body?.code)));
+marketCommerceRouter.get('/api/market/buyer/me',privateResponse,requireBuyer,async(req,res)=>{
+  const address=await get('SELECT recipient,phone,address,city,state,country FROM market_addresses WHERE buyer_id=?',[req.buyer.id]);
+  res.json(200,{buyer:{id:Number(req.buyer.id),email:req.buyer.email,display_name:req.buyer.display_name},address:address||null});
+});
+marketCommerceRouter.post('/api/market/buyer/address',privateResponse,requireBuyer,async(req,res)=>res.json(200,await saveAddress(req.buyer.id,req.body)));
+marketCommerceRouter.post('/api/market/buyer/logout',privateResponse,requireBuyer,async(req,res)=>{
+  await atomic(()=>run('UPDATE market_buyers SET session_version=session_version+1 WHERE id=?',[req.buyer.id]));res.json(200,{ok:true});
+});
+marketCommerceRouter.get('/api/market/cart',privateResponse,requireBuyer,async(req,res)=>res.json(200,await buyerCart(req.buyer.id)));
+marketCommerceRouter.post('/api/market/cart/item',privateResponse,requireBuyer,async(req,res)=>res.json(200,await changeCart(req.buyer.id,req.body?.id,req.body?.qty)));
+marketCommerceRouter.post('/api/market/cart/merge',privateResponse,requireBuyer,async(req,res)=>res.json(200,await mergeCart(req.buyer.id,req.body?.items)));
+marketCommerceRouter.post('/api/market/requests',privateResponse,requireBuyer,async(req,res)=>res.json(201,await createRequest(req.buyer.id,req.body)));
+marketCommerceRouter.get('/api/market/requests',privateResponse,requireBuyer,async(req,res)=>res.json(200,await buyerRequests(req.buyer.id)));
+marketCommerceRouter.post('/api/market/requests/:id/cancel',privateResponse,requireBuyer,async(req,res,params)=>res.json(200,await cancelRequest(req.buyer.id,params.id)));
+marketCommerceRouter.patch('/api/market/seller/listings/:id/inventory',requireAuth('member'),async(req,res,params)=>res.json(200,await setInventory(req.user.id,params.id,req.body)));
+marketCommerceRouter.get('/api/market/seller/requests',privateResponse,requireAuth('member'),async(req,res)=>res.json(200,await sellerRequests(req.user.id)));
+marketCommerceRouter.post('/api/market/seller/requests/:id/respond',requireAuth('member'),async(req,res,params)=>res.json(200,await respondToRequest(req.user.id,params.id,req.body)));
+
+marketCommerceRouter.get('/api/admin/market/requests',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await operationsRequests()));
