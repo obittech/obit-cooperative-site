@@ -32,13 +32,14 @@ function publicListing(row) {
   return {
     id: row.id, title: row.title, description: row.description,
     price: Number(row.price_kobo || 0) / 100, currency: row.currency,
+    seller_id: Number(row.seller_member_id), seller_name: row.seller_member_id ? 'Member shop '+Number(row.seller_member_id) : null,
     category: row.category, status: row.status, created_at: row.created_at, image_url: row.image_url || null,
   };
 }
 
 safePayRouter.get('/api/market/listings', async (req, res) => {
   const community = await anchorCommunity();
-  const rows = await all(`SELECT l.id,l.title,l.description,l.price_kobo,l.currency,l.category,l.status,l.created_at,l.image_url
+  const rows = await all(`SELECT l.id,l.seller_member_id,l.title,l.description,l.price_kobo,l.currency,l.category,l.status,l.created_at,l.image_url
     FROM market_listings l JOIN members m ON m.id=l.seller_member_id
     WHERE l.community_id=? AND l.status='ACTIVE' AND m.status='ACTIVE'
     ORDER BY l.id DESC LIMIT 100`, [community.id]);
@@ -85,7 +86,7 @@ safePayRouter.post('/api/market/listings', requireAuth('member'), async (req, re
 
 safePayRouter.get('/api/market/my-listings', requireAuth('member'), async (req, res) => {
   const member = await memberForUser(req.user.id);
-  const rows = await all('SELECT id,title,description,category,price_kobo,currency,status,created_at,image_url FROM market_listings WHERE seller_member_id=? ORDER BY id DESC LIMIT 100', [member.id]);
+  const rows = await all('SELECT id,seller_member_id,title,description,category,price_kobo,currency,status,created_at,image_url FROM market_listings WHERE seller_member_id=? ORDER BY id DESC LIMIT 100', [member.id]);
   res.json(200, rows.map(row => ({...publicListing(row), status:row.status})));
 });
 

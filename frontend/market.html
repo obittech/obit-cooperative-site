@@ -2,26 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Obit Market | Shop and Plan Your Purchase</title>
+  <title>Obit Market | Shop, Sell and Grow Together</title>
   <meta name="description" content="Shop products from active Obit Cooperative members. Explore categories and estimate weekly or monthly payments. Membership is optional for buyers.">
   <link rel="canonical" href="https://obitcooperative.com/market.html">
   <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="safepay.css?v=20261006-store-1">
+<link rel="stylesheet" href="marketplace.css?v=20261029-1">
 </head>
 <body class="market-page">
 <a class="skip-link" href="#main-content">Skip to main content</a>
-<div class="market-topline">A marketplace for our community. <span>Member sellers. Everyone welcome.</span></div>
-<header class="market-header"><div class="container market-nav">
-  <a class="market-brand" href="market.html"><img src="assets/obit-logo.png" alt="Obit Cooperative"><span>OBIT <b>MARKET</b><small>Choose it. Plan for it.</small></span></a>
-  <nav aria-label="Market navigation"><a href="#shop">Shop</a><a href="#plan">Payment planner</a><a href="#how-it-works">How it works</a></nav>
-  <a class="btn btn-secondary account-link" href="portal.html">My account <span aria-hidden="true">↗</span></a>
-</div></header>
+<div class="market-topline"><div class="container"><span>OBIT COOPERATIVE COMMUNITY MARKETPLACE</span><a href="#sellerPanel">Sell on Obit Market</a><a href="https://obitcooperative.com/">Visit the Cooperative ↗</a></div></div>
+<header class="market-header"><div class="container market-nav"><a class="market-brand" href="market.html"><img src="assets/obit-logo.png" alt="Obit Cooperative"><span>OBIT <b>MARKET</b><small>Shop. Sell. Grow together.</small></span></a><form id="globalSearch" class="global-search" role="search"><label class="sr-only" for="marketSearch">Search products</label><input id="marketSearch" type="search" placeholder="Search products, categories and more" autocomplete="off"><button type="submit">Search</button></form><div class="header-actions"><a href="portal.html">Account</a><button id="wishlistButton" type="button">♡ <span>Saved</span> <b id="savedCount">0</b></button><button id="cartButton" type="button">Bag <b id="cartCount">0</b></button></div></div><div class="market-subnav container"><a href="#shop">All categories</a><a href="#shop" data-quick-category="Solar & Power">Solar &amp; Power</a><a href="#shop" data-quick-category="Home Appliances">Home essentials</a><a href="#shop" data-quick-category="Phones & Computing">Phones &amp; computing</a><a href="#plan">Payment planner</a><button id="bulkButton" type="button">Bulk purchase enquiry</button></div></header>
 <main id="main-content"><div class="container">
-  <section class="market-hero">
-    <div class="hero-copy"><span class="eyebrow">EVERYDAY NEEDS. BIGGER POSSIBILITIES.</span>
-      <h1>The things you need.<br><span>A plan that fits.</span></h1>
-      <p>Power your home, equip your business and make everyday life easier. Discover products from active Obit Cooperative members.</p>
-      <div class="hero-buttons"><a class="btn" href="#shop">Explore products <span aria-hidden="true">→</span></a><a class="hero-plan-link" href="#plan">Explore pay small small</a></div>
-      <div class="hero-tags"><span>Pay once</span><span>Plan weekly</span><span>Plan monthly</span></div>
+  <section class="market-hero ecommerce-hero">
+    <div class="hero-copy"><span class="eyebrow">YOUR COMMUNITY. YOUR MARKETPLACE.</span>
+      <h1>Find what you need.<br><span>Build what comes next.</span></h1>
+      <p>Discover products for your home, work and everyday life. Shop approved member listings, save your favourites and prepare your next purchase.</p>
+      <div class="hero-buttons"><a class="btn" href="#shop">Explore products <span aria-hidden="true">→</span></a><a class="hero-plan-link" href="#plan">Plan your purchase</a></div>
+      <div class="hero-tags"><span>Member sellers</span><span>Open to every buyer</span><span>Built for Nigeria</span></div>
     </div>
     <div class="hero-display" aria-label="Illustration of home and business products">
       <span class="display-label">MAKE ROOM FOR WHAT’S NEXT</span>
@@ -32,20 +29,20 @@
         <g transform="translate(178 124)"><rect x="0" y="12" width="224" height="131" rx="9" fill="url(#appliance)" stroke="#acbdb9"/><rect x="-5" y="0" width="234" height="24" rx="6" fill="#f8fcfa" stroke="#acbdb9"/><rect x="100" y="5" width="36" height="7" rx="3" fill="#93a6a2"/><rect x="19" y="103" width="20" height="16" rx="3" fill="#125348"/><path d="M169 106h33M169 113h33M169 120h33" stroke="#a6b8b1" stroke-width="3"/><rect x="20" y="143" width="13" height="8" fill="#81958c"/><rect x="190" y="143" width="13" height="8" fill="#81958c"/></g>
         <g transform="translate(388 87) rotate(10 40 88)"><rect width="79" height="169" rx="13" fill="#182e35"/><rect x="5" y="6" width="69" height="156" rx="9" fill="#cbe8d8"/><path d="M5 101Q27 47 74 53v109H5Z" fill="#42a782"/><path d="M5 139Q30 101 74 119v43H5Z" fill="#15594c"/><rect x="25" y="9" width="29" height="6" rx="3" fill="#182e35"/></g>
       </svg>
-      <div class="hero-mini-card"><span class="mini-check">✓</span><div><strong>Start with a clear plan</strong><small>See the full price and payment estimates</small></div></div>
+      <div class="hero-mini-card"><span class="mini-check">✓</span><div><strong>Start with a clear plan</strong><small>Compare products and plan your budget</small></div></div>
       <span class="illustration-note">Product illustrations</span>
     </div>
   </section>
-  <div class="market-benefits"><span><b>✓</b> Active member sellers</span><span><b>✓</b> Open to all buyers</span><span><b>✓</b> Clear product prices</span><span><b>✓</b> Obit SafePay coming soon</span></div>
+  <div class="market-benefits"><span><b>✓</b> Active member sellers</span><span><b>✓</b> Open to all buyers</span><span><b>✓</b> Clear product prices</span><span><b>✓</b> Payments awaiting approval</span></div>
 
+  <section class="discovery-section"><div class="section-heading"><div><span class="eyebrow">DISCOVER YOUR NEXT FIND</span><h2>Shop by category</h2></div><a href="#shop">Explore the store →</a></div><div id="categoryShowcase" class="category-showcase"></div></section>
   <section id="shop" class="market-section">
     <div class="section-heading"><div><span class="eyebrow">FIND YOUR NEXT PURCHASE</span><h2>What are you looking for?</h2></div><button class="text-button" id="btnRefresh" type="button">Refresh listings ↻</button></div>
-    <div class="shop-controls"><label class="market-search"><span class="sr-only">Search products</span><span aria-hidden="true">⌕</span><input id="marketSearch" type="search" placeholder="Try solar, freezer, phone or laptop" autocomplete="off"></label><label class="market-sort"><span class="sr-only">Sort products</span><select id="marketSort"><option value="newest">Newest first</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select></label></div>
-    <div id="categoryFilters" class="category-filters" aria-label="Product categories"></div>
-    <div class="catalog-heading"><h3>Member products</h3><span id="listingCount" aria-live="polite"></span></div>
+    <div class="catalog-layout"><aside class="catalog-sidebar"><h3>Categories</h3><div id="categoryFilters" class="category-filters" aria-label="Product categories"></div><div class="seller-help"><b>Have products to sell?</b><p>Active cooperative members can submit listings for approval.</p><a href="apply.html">Become a seller →</a></div></aside><div class="catalog-main"><div class="shop-controls"><label>Seller<select id="sellerFilter"><option value="">All member shops</option></select></label><label>Minimum price (₦)<input id="priceMin" type="number" min="0" step="1" inputmode="numeric" placeholder="Any"></label><label>Maximum price (₦)<input id="priceMax" type="number" min="0" step="1" inputmode="numeric" placeholder="Any"></label><label>Sort products<select id="marketSort"><option value="newest">Newest arrivals</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select></label></div><div id="filterError" role="status"></div>
+    <div class="catalog-heading"><h3 id="catalogTitle">Explore member products</h3><span id="listingCount" aria-live="polite"></span></div>
     <div id="marketAlert" role="status" aria-live="polite"></div>
     <div id="listingGrid" class="listing-grid" aria-busy="true"><p>Loading member products.</p></div>
-    <div id="pilotNotice" class="market-notice"><strong>Browse today. Payments open later.</strong><span>Checkout and instalment plans are not yet available. Do not send payment for a listing through this page.</span></div>
+    </div></div><div id="pilotNotice" class="market-notice"><strong>Browse today. Payments open later.</strong><span>Checkout and instalment plans are not yet available. Do not send payment for a listing through this page.</span></div>
   </section>
 
   <section id="plan" class="payment-planner market-section">
@@ -67,10 +64,13 @@
       <label class="field description-field">Description<textarea id="listingDescription" maxlength="2000" rows="4" placeholder="Describe the product, condition, warranty and what is included"></textarea></label>
     </div><button class="btn" id="btnSubmitListing" type="submit">Submit for review</button></form><p id="sellerAlert" role="status" aria-live="polite"></p><h3>Your listings</h3><div id="myListings" class="listing-grid"></div>
   </section>
-  <section class="market-section safepay-note"><div><span class="eyebrow">OBIT SAFEPAY</span><h2>Confidence at every step.</h2></div><p>When live payments open, funds will go to the Obit SafePay Escrow account through the approved payment provider. Delivery confirmation and dispute handling will guide settlement.</p></section>
+  <section class="market-section safepay-note"><div><span class="eyebrow">OBIT SAFEPAY</span><h2>Confidence at every step.</h2></div><p>When live payments open, payment and escrow services will be provided by the approved financial provider under its confirmed terms. Delivery, dispute and settlement arrangements will be shown before purchase.</p></section>
 </div></main>
-<footer class="market-footer"><div class="container"><a class="market-brand" href="market.html"><img src="assets/obit-logo.png" alt=""><span>OBIT <b>MARKET</b></span></a><p>Member sellers. Everyone welcome.</p><div><a href="index.html">Cooperative</a><a href="market-terms.html">Terms</a><a href="market-privacy.html">Privacy</a></div><small>© 2026 Obit Market</small></div></footer>
-<nav class="mobile-market-nav" aria-label="Mobile market navigation"><a href="#shop">⌕<span>Shop</span></a><a href="#plan">₦<span>Planner</span></a><a href="#how-it-works">?<span>How it works</span></a><a href="portal.html">○<span>Account</span></a></nav>
+<footer class="market-footer"><div class="container"><a class="market-brand" href="market.html"><img src="assets/obit-logo.png" alt=""><span>OBIT <b>MARKET</b></span></a><p>Member sellers. Everyone welcome.</p><div><a href="https://obitcooperative.com/">Cooperative</a><a href="market-terms.html">Terms</a><a href="market-privacy.html">Privacy</a></div><small>© 2026 Obit Market · Technology infrastructure by Obit Technologies Limited</small></div></footer>
+<nav class="mobile-market-nav" aria-label="Mobile market navigation"><a href="#shop">⌕<span>Shop</span></a><a href="#plan">₦<span>Planner</span></a><button id="mobileCart" type="button">▢<span>Bag</span></button><a href="portal.html">○<span>Account</span></a></nav>
 <dialog id="productDialog" class="product-dialog"><button id="closeProduct" class="dialog-close" type="button" aria-label="Close product details">×</button><div id="productDetails"></div></dialog>
-<script src="js/config.js"></script><script src="js/api.js"></script><script src="js/market.js?v=20261006-store-1"></script>
+<dialog id="cartDialog" class="commerce-dialog"><button class="dialog-close" type="button" data-close="cartDialog" aria-label="Close shopping bag">×</button><span class="eyebrow">YOUR NEXT PURCHASE</span><h2>Your shopping bag</h2><p class="muted-note">Saved in this browser. Prices and availability are checked against the latest loaded catalogue.</p><div id="cartLines"></div><div id="cartSummary"></div><p class="checkout-note">Live checkout is not available yet. No payment or delivery booking is made here.</p><button class="btn checkout-disabled" type="button" disabled>Checkout awaiting payment-provider approval</button><button id="refreshCart" class="text-button" type="button">Refresh prices and availability</button></dialog>
+<dialog id="bulkDialog" class="commerce-dialog"><button class="dialog-close" type="button" data-close="bulkDialog" aria-label="Close bulk enquiry">×</button><span class="eyebrow">BUY FOR YOUR BUSINESS</span><h2>Prepare a bulk enquiry</h2><p>This creates a request for you to review and share with Obit support. It does not place an order or send a message.</p><form id="bulkForm"><label class="field">Product or requirements<input name="product" required maxlength="200" placeholder="What would you like to source?"></label><label class="field">Quantity<input name="quantity" required type="number" min="1" max="100000" step="1" value="10"></label><label class="field">Delivery town or state<input name="location" required maxlength="120" placeholder="Abuja, FCT"></label><label class="field">Additional requirements<textarea name="notes" maxlength="1000" rows="3" placeholder="Specifications, timing or questions"></textarea></label><button class="btn" type="submit">Prepare enquiry draft</button><p id="bulkStatus" role="status"></p><label id="bulkDraftWrap" class="field" hidden>Enquiry draft — review or copy<textarea id="bulkDraft" readonly rows="10"></textarea></label></form><small>Share the draft with admin@obitcooperative.com when ready.</small></dialog>
+<div id="marketToast" class="market-toast" role="status" aria-live="polite" hidden></div>
+<script src="js/market-state.js?v=20261029-1"></script><script src="js/config.js"></script><script src="js/api.js"></script><script src="js/market.js?v=20261029-1"></script>
 </body></html>
