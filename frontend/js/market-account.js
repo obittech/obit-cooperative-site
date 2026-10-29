@@ -17,12 +17,12 @@ $('buyerCodeForm').addEventListener('submit',event=>{event.preventDefault();busy
  await Promise.all([refreshBag(),refreshRequests()]);
 });});
 $('buyerAddressForm').addEventListener('submit',event=>{event.preventDefault();busy(event.target,async()=>{
- const values=Object.fromEntries(new FormData(event.target));values.country='NG';await MarketCommerce.saveAddress(values);addressDirty=false;message('Delivery details saved.');updateRequestButton();
+ const values=Object.fromEntries(new FormData(event.target));values.country='NG';await MarketCommerce.saveAddress(values);addressDirty=false;message('Delivery details saved.');updateRequestButton();ObitMobile.setAccountView('bag',true);
 });});
 $('buyerAddressForm').addEventListener('input',()=>{addressDirty=true;updateRequestButton();});
 $('buyerLogout').addEventListener('click',async()=>{try{await MarketCommerce.logout();message('Signed out of all shopping sessions.');}catch(e){message(e.message);}});
 document.addEventListener('market:signout',()=>{challenge='';$('buyerEmailForm').reset();$('buyerEmailForm').hidden=false;$('buyerCodeForm').reset();$('buyerCodeForm').hidden=true;bag=null;$('accountBag').textContent='';$('buyerRequests').textContent='';$('buyerAddressForm').reset();showSession();});
-function updateRequestButton(){const ready=!!bag?.items.length&&bag.lines.every(l=>l.available)&&!!MarketCommerce.profile()?.address&&!addressDirty;$('submitQuoteRequest').disabled=!ready||submitting;}
+function updateRequestButton(){const ready=!!bag?.items.length&&bag.lines.every(l=>l.available)&&!!MarketCommerce.profile()?.address&&!addressDirty;$('submitQuoteRequest').disabled=!ready||submitting;const a=MarketCommerce.profile()?.address;$('accountDeliverySummary').textContent=addressDirty?'Save your delivery changes before requesting quotes.':a?`Delivery to ${a.recipient} · ${a.city}, ${a.state}`:'Add your delivery details to request seller quotes.';const badge=$('accountBagCount');if(badge){const count=bag?.items.reduce((n,i)=>n+i.qty,0)||0;badge.textContent=count;badge.hidden=count===0;}}
 async function refreshBag(){
  try{bag=await MarketCommerce.cart();
  $('accountBag').innerHTML=bag.lines.length?bag.lines.map(l=>`<article class="account-bag-line"><div><h3>${html(l.product?.title||'Unavailable product #'+l.id)}</h3><p>${html(l.product?.seller_name||'')} · Quantity ${l.qty}</p><p>${l.available?l.product?.stock_quantity===null?'Stock to be confirmed by seller':'Stock available at last check':'Unavailable — edit your bag before requesting'}</p></div><strong>${l.available?naira(l.subtotal_kobo):'Unavailable'}</strong></article>`).join(''):'<p>Your bag is empty. Add products from the marketplace.</p>';
@@ -48,7 +48,7 @@ $('submitQuoteRequest').addEventListener('click',async()=>{
   if(draft?.signature!==signature){draft={signature,key:Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('')};sessionStorage.setItem('obit_market_quote_draft',JSON.stringify(draft));}
   const result=await MarketCommerce.call('POST','/api/market/requests',{...body,request_key:draft.key});
   message(`${result.reference}: ${result.replayed?'Your existing request is shown below.':'Quote request sent to the member sellers.'} No payment was collected.`);
-  await refreshRequests();$('buyerRequests').scrollIntoView({block:'start',behavior:'smooth'});
+  await refreshRequests();ObitMobile.setAccountView('requests');$('buyerRequests').scrollIntoView({block:'start',behavior:'smooth'});
  }catch(e){message(e.message);}finally{submitting=false;updateRequestButton();}
 });
 $('refreshAccountBag').addEventListener('click',refreshBag);$('refreshRequests').addEventListener('click',refreshRequests);

@@ -2,7 +2,7 @@ function money(value){return '₦'+Number(value||0).toLocaleString('en-NG',{maxi
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function imageUrl(value){try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:'';}catch{return '';}}
 const categories=['All products','Solar & Power','Home Appliances','Phones & Computing','Business Equipment','Other'];
-let publicListings=[],selectedCategory='All products',rhythm='monthly',savedView=false,catalogLoaded=false;
+let publicListings=[],selectedCategory='All products',rhythm='monthly',savedView=new URLSearchParams(location.search).get('saved')==='1',catalogLoaded=false;
 let catalogPage=1,catalogPages=0,catalogTotal=0,catalogShops=[],catalogTimer,catalogSequence=0,bagSequence=0;
 let cartQueue=Promise.resolve(),buyerReady=Promise.resolve();
 const CART_KEY='obit_market_bag_v1',SAVED_KEY='obit_market_saved_v1';
@@ -11,7 +11,7 @@ let cart=ObitMarketState.normalize(stored(CART_KEY,[]));
 let saved=Array.isArray(stored(SAVED_KEY,[]))?stored(SAVED_KEY,[]).filter(x=>Number.isSafeInteger(x)&&x>0).slice(0,100):[];
 function persist(){try{if(!MarketCommerce.signedIn())localStorage.setItem(CART_KEY,JSON.stringify(cart));localStorage.setItem(SAVED_KEY,JSON.stringify(saved));}catch{toast('Your browser could not save these selections.');}updateBadges();}
 function toast(message){const el=document.getElementById('marketToast');el.textContent=message;el.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>{el.hidden=true},4000);}
-function updateBadges(){document.getElementById('cartCount').textContent=cart.reduce((n,r)=>n+r.qty,0);document.getElementById('savedCount').textContent=saved.length;document.getElementById('wishlistButton').setAttribute('aria-pressed',String(savedView));}
+function updateBadges(){document.getElementById('cartCount').textContent=cart.reduce((n,r)=>n+r.qty,0);document.getElementById('savedCount').textContent=saved.length;document.getElementById('wishlistButton').setAttribute('aria-pressed',String(savedView));const count=cart.reduce((n,r)=>n+r.qty,0),badge=document.getElementById('mobileCartCount');if(badge){badge.textContent=count;badge.hidden=count===0;}document.getElementById('mobileSaved')?.setAttribute('aria-pressed',String(savedView));document.getElementById('mobileShopLink')?.setAttribute('aria-current',savedView?'false':'page');}
 function changeBag(id,quantity){
  const task=cartQueue.catch(()=>{}).then(async()=>{
   await buyerReady;
@@ -40,7 +40,7 @@ async function renderCart(){
   if(MarketCommerce.signedIn()){cart=ObitMarketState.normalize(result.items);persist();}
   document.getElementById('bagStorageNote').textContent=MarketCommerce.signedIn()?'Saved to your shopping account. Prices and availability are checked with the server.':'Saved in this browser. Sign in to keep your bag across devices. Prices and availability are checked with the server.';
   document.getElementById('cartLines').innerHTML=result.lines.length?result.lines.map(line=>{const p=line.product;return `<article class="bag-line"><div><h3>${escapeHtml(p?.title||'Unavailable listing #'+line.id)}</h3><p>${line.available?money(p.price)+' each':p?'Requested quantity is unavailable.':'This listing is not currently available.'}</p><small>${escapeHtml(p?.seller_name||'')}</small></div><label>Quantity<input type="number" min="1" max="99" step="1" data-cart-qty="${line.id}" value="${line.qty}"></label><strong>${line.available?money(line.subtotal_kobo/100):'Unavailable'}</strong><button type="button" data-cart-remove="${line.id}" aria-label="Remove ${escapeHtml(p?.title||'unavailable listing')}">Remove</button></article>`}).join(''):'<div class="empty-catalog"><h3>Your bag is waiting for your next find.</h3><p>Explore member products and add what you like.</p></div>';
-  document.getElementById('cartSummary').innerHTML=`<div class="bag-total"><span>Available products subtotal (${result.count} items)</span><strong>${money(result.total_kobo/100)}</strong></div><p>Delivery is quoted separately. Unavailable products are excluded. Adding an item does not reserve stock.</p>`;
+  document.getElementById('cartSummary').innerHTML=`<div class="bag-total"><span>Available products subtotal (${result.count} ${result.count===1?'item':'items'})</span><strong>${money(result.total_kobo/100)}</strong></div><p>Delivery is quoted separately. Unavailable products are excluded. Adding an item does not reserve stock.</p>`;
   document.querySelectorAll('[data-cart-qty]').forEach(input=>input.addEventListener('change',()=>changeBag(Number(input.dataset.cartQty),Number(input.value)).catch(e=>{toast(e.message);renderCart();})));
   document.querySelectorAll('[data-cart-remove]').forEach(btn=>btn.addEventListener('click',()=>changeBag(Number(btn.dataset.cartRemove),0).catch(e=>toast(e.message))));
  }catch(e){if(sequence!==bagSequence)return;document.getElementById('cartLines').textContent='Your selections are saved. We could not check their current prices.';document.getElementById('cartSummary').textContent=e.message;}
@@ -71,12 +71,13 @@ function productMedia(item){
 }
 function bindImageFallback(root){root.querySelectorAll('.product-media img').forEach(img=>img.addEventListener('error',()=>img.remove(),{once:true}));}
 function renderCategories(){
+ const mobileCategory=document.getElementById('mobileCategoryFilter');if(mobileCategory?.options.length)mobileCategory.value=selectedCategory;
  document.getElementById('categoryFilters').innerHTML=categories.map(category=>`<button type="button" data-category="${escapeHtml(category)}" class="${category===selectedCategory?'selected':''}" aria-pressed="${category===selectedCategory}">${escapeHtml(category)}</button>`).join('');
  document.querySelectorAll('[data-category]').forEach(button=>button.addEventListener('click',()=>{selectedCategory=button.dataset.category;renderCategories();renderMarket();}));
 }
 function renderMarket(){catalogPage=1;clearTimeout(catalogTimer);catalogSequence++;catalogTimer=setTimeout(loadMarket,250);}
 function paintMarket(rows){
- document.getElementById('catalogTitle').textContent=savedView?'Your saved products':'Explore member products';
+ document.getElementById('catalogTitle').textContent=savedView?'Your saved products':selectedCategory==='All products'?'Explore member products':selectedCategory;
  document.getElementById('listingCount').textContent=`${catalogTotal} product${catalogTotal===1?'':'s'}`;
  document.getElementById('catalogPageLabel').textContent=catalogPages?`Page ${catalogPage} of ${catalogPages}`:'No matching products';
  document.getElementById('catalogPrevious').disabled=catalogPage<=1;
@@ -110,7 +111,7 @@ async function loadMarket(){
 function openProduct(id){
  const item=publicListings.find(product=>Number(product.id)===id);if(!item)return;
  const detail=document.getElementById('productDetails');
- detail.innerHTML=`<div class="product-detail-grid">${productMedia(item)}<div><span class="eyebrow">${escapeHtml(item.category)}</span><h2 id="productTitle">${escapeHtml(item.title)}</h2><span class="seller-marker">✓ Active cooperative member seller</span><div class="detail-price">${money(item.price)}</div><p>${escapeHtml(item.description||'The seller has not added further product details.')}</p><div class="detail-actions"><button class="btn" id="detailAddBag" type="button">Add to bag</button><button class="btn btn-secondary" id="estimateProduct" type="button">Estimate a payment plan →</button><div class="detail-notice">Checkout is not yet available. Final payment, delivery and eligibility terms will be confirmed before purchase.</div></div></div></div>`;
+ detail.innerHTML=`<div class="product-detail-grid">${productMedia(item)}<div><span class="eyebrow">${escapeHtml(item.category)}</span><h2 id="productTitle">${escapeHtml(item.title)}</h2><span class="seller-marker">✓ ${escapeHtml(item.seller_name||'Active cooperative member seller')}</span><div class="detail-price">${money(item.price)}</div><p>${escapeHtml(item.description||'The seller has not added further product details.')}</p><div class="detail-actions"><button class="btn" id="detailAddBag" type="button">Add to bag</button><button class="btn btn-secondary" id="estimateProduct" type="button">Estimate a payment plan →</button><div class="detail-notice">Checkout is not yet available. Final payment, delivery and eligibility terms will be confirmed before purchase.</div></div></div></div>`;
  const dialog=document.getElementById('productDialog');dialog.setAttribute('aria-labelledby','productTitle');bindImageFallback(detail);dialog.showModal();
  document.getElementById('detailAddBag').addEventListener('click',()=>{addToCart(id);dialog.close();showBag();});
  document.getElementById('estimateProduct').addEventListener('click',()=>{document.getElementById('planAmount').value=item.price;updatePlan();dialog.close();document.getElementById('plan').scrollIntoView({block:'start'});document.getElementById('planAmount').focus({preventScroll:true});});
