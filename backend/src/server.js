@@ -56,6 +56,8 @@ const allowedOrigins = new Set(
     .map((value) => value.trim())
     .filter(Boolean)
 );
+// Explicit alias for the existing Obit Market frontend.
+allowedOrigins.add('https://marketplace.obitcooperative.com');
 const WEBHOOK_PATTERN = /^\/api\/webhooks\/payments\/([^/]+)\/?$/;
 const SAFEPAY_WEBHOOK_PATTERN = /^\/api\/webhooks\/safepay\/([^/]+)\/?$/;
 
