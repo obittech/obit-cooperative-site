@@ -14,14 +14,14 @@ $('buyerCodeForm').addEventListener('submit',event=>{event.preventDefault();busy
  await MarketCommerce.verify(challenge,event.target.elements.code.value.trim());
  showSession();message('You are signed in.');
  try{const result=await MarketCommerce.connectGuest();if(result.skipped_items?.length)message('Signed in. Some guest bag items are unavailable and could not be added.');}catch(e){message('Signed in. Your guest bag could not be synced: '+e.message);}
- await Promise.all([refreshBag(),refreshRequests()]);
+ await Promise.all([refreshBag(),refreshRequests(),OrderUI.refresh()]);
 });});
 $('buyerAddressForm').addEventListener('submit',event=>{event.preventDefault();busy(event.target,async()=>{
  const values=Object.fromEntries(new FormData(event.target));values.country='NG';await MarketCommerce.saveAddress(values);addressDirty=false;message('Delivery details saved.');updateRequestButton();ObitMobile.setAccountView('bag',true);
 });});
 $('buyerAddressForm').addEventListener('input',()=>{addressDirty=true;updateRequestButton();});
 $('buyerLogout').addEventListener('click',async()=>{try{await MarketCommerce.logout();message('Signed out of all shopping sessions.');}catch(e){message(e.message);}});
-document.addEventListener('market:signout',()=>{challenge='';$('buyerEmailForm').reset();$('buyerEmailForm').hidden=false;$('buyerCodeForm').reset();$('buyerCodeForm').hidden=true;bag=null;$('accountBag').textContent='';$('buyerRequests').textContent='';$('buyerAddressForm').reset();showSession();});
+document.addEventListener('market:signout',()=>{challenge='';$('buyerEmailForm').reset();$('buyerEmailForm').hidden=false;$('buyerCodeForm').reset();$('buyerCodeForm').hidden=true;bag=null;OrderUI.clear();$('accountBag').textContent='';$('buyerRequests').textContent='';$('buyerAddressForm').reset();showSession();});
 function updateRequestButton(){const ready=!!bag?.items.length&&bag.lines.every(l=>l.available)&&!!MarketCommerce.profile()?.address&&!addressDirty;$('submitQuoteRequest').disabled=!ready||submitting;const a=MarketCommerce.profile()?.address;$('accountDeliverySummary').textContent=addressDirty?'Save your delivery changes before requesting quotes.':a?`Delivery to ${a.recipient} · ${a.city}, ${a.state}`:'Add your delivery details to request seller quotes.';const badge=$('accountBagCount');if(badge){const count=bag?.items.reduce((n,i)=>n+i.qty,0)||0;badge.textContent=count;badge.hidden=count===0;}}
 async function refreshBag(){
  try{bag=await MarketCommerce.cart();
@@ -32,7 +32,8 @@ async function refreshBag(){
 }
 async function refreshRequests(){
  try{const requests=await MarketCommerce.call('GET','/api/market/requests');
- $('buyerRequests').innerHTML=requests.length?requests.map(r=>`<article class="quote-card"><div class="account-welcome"><div><h3>${html(r.reference)}</h3><span class="status-badge">${r.status==='CANCELLED'?'Cancelled':'Quote request'}</span></div>${r.status==='REQUESTED'?`<button type="button" class="text-button" data-cancel-request="${r.id}">Cancel request</button>`:''}</div><p>Products: <strong>${naira(r.subtotal_kobo)}</strong> · Delivery to ${html(r.address.city)}, ${html(r.address.state)}</p>${r.shops.map(s=>`<section class="quote-shop"><h4>Member shop ${Number(s.seller_member_id)} · ${html({REQUESTED:'Awaiting seller',QUOTED:'Seller quoted',DECLINED:'Seller declined',CANCELLED:'Cancelled'}[s.status]||s.status)}</h4><ul>${s.items.map(i=>`<li>${html(i.title)} × ${Number(i.quantity)} — ${naira(Number(i.unit_kobo)*Number(i.quantity))}</li>`).join('')}</ul>${s.status==='QUOTED'?`<p>Delivery estimate: <strong>${naira(s.delivery_kobo)}</strong> · ${Number(s.delivery_days)} days</p>`:''}${s.seller_note?`<p class="quote-note">${html(s.seller_note)}</p>`:''}</section>`).join('')}<p class="fine-print">No payment collected. No stock reserved. Delivery estimates are subject to confirmation before purchase.</p></article>`).join(''):'<p>Your quote requests will appear here.</p>';
+ $('buyerRequests').innerHTML=requests.length?requests.map(r=>`<article class="quote-card"><div class="account-welcome"><div><h3>${html(r.reference)}</h3><span class="status-badge">${r.status==='CANCELLED'?'Cancelled':'Quote request'}</span></div>${r.status==='REQUESTED'&&r.shops.every(s=>!s.order)?`<button type="button" class="text-button" data-cancel-request="${r.id}">Cancel request</button>`:''}</div><p>Products: <strong>${naira(r.subtotal_kobo)}</strong> · Delivery to ${html(r.address.city)}, ${html(r.address.state)}</p>${r.shops.map(s=>`<section class="quote-shop"><h4>Member shop ${Number(s.seller_member_id)} · ${html({REQUESTED:'Awaiting seller',QUOTED:'Seller quoted',DECLINED:'Seller declined',CANCELLED:'Cancelled'}[s.status]||s.status)}</h4><ul>${s.items.map(i=>`<li>${html(i.title)} × ${Number(i.quantity)} — ${naira(Number(i.unit_kobo)*Number(i.quantity))}</li>`).join('')}</ul>${s.status==='QUOTED'?`<p>Delivery estimate: <strong>${naira(s.delivery_kobo)}</strong> · ${Number(s.delivery_days)} days</p>`:''}${s.status==='QUOTED'&&r.status==='REQUESTED'?(s.order?`<p>Order ${html(s.order.reference)} created. See Orders for its current status.</p>`:`<button class="btn" type="button" data-accept-quote="${Number(s.id)}">Review quote &amp; create unpaid order</button>`):''}${s.seller_note?`<p class="quote-note">${html(s.seller_note)}</p>`:''}</section>`).join('')}<p class="fine-print">Quote requests do not reserve stock. Accepting a quote creates a separate unpaid order with a short stock reservation. No payment is collected.</p></article>`).join(''):'<p>Your quote requests will appear here.</p>';
+ $('buyerRequests').querySelectorAll('[data-accept-quote]').forEach(button=>button.addEventListener('click',()=>{const shop=requests.flatMap(r=>r.shops).find(s=>Number(s.id)===Number(button.dataset.acceptQuote));if(shop)OrderUI.review(shop);}));
  $('buyerRequests').querySelectorAll('[data-cancel-request]').forEach(button=>button.addEventListener('click',async()=>{button.disabled=true;try{await MarketCommerce.call('POST',`/api/market/requests/${Number(button.dataset.cancelRequest)}/cancel`,{});sessionStorage.removeItem('obit_market_quote_draft');await refreshRequests();message('Quote request cancelled.');}catch(e){button.disabled=false;message(e.message);}}));
  }catch(e){message(e.message);}
 }
@@ -60,7 +61,9 @@ $('refreshAccountBag').addEventListener('click',refreshBag);$('refreshRequests')
   await MarketCommerce.initialise();showSession();
   if(MarketCommerce.signedIn()){
    try{const result=await MarketCommerce.connectGuest();if(result.skipped_items?.length)message('Some guest bag items are unavailable and could not be added.');}catch(e){message(e.message);}
-   await Promise.all([refreshBag(),refreshRequests()]);
+   await Promise.all([refreshBag(),refreshRequests(),OrderUI.refresh()]);
   }
  }catch(e){showSession();message(e.message);}
 })();
+
+document.addEventListener('market:order-created',refreshRequests);

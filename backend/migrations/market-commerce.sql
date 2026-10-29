@@ -71,3 +71,33 @@ CREATE TABLE IF NOT EXISTS market_promotions (
   enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
   version INTEGER NOT NULL DEFAULT 1, updated_at __TIME__ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Purchase orders are separate from quote requests and legacy SafePay orders.
+-- This release cannot create a paid order or authorise dispatch.
+CREATE TABLE IF NOT EXISTS market_purchase_orders (
+  id __ID__, reference TEXT NOT NULL UNIQUE,
+  buyer_id __INT__ NOT NULL REFERENCES market_buyers(id),
+  shop_id __INT__ NOT NULL UNIQUE REFERENCES market_request_shops(id),
+  seller_member_id __INT__ NOT NULL REFERENCES members(id),
+  subtotal_kobo __INT__ NOT NULL CHECK(subtotal_kobo>0),
+  delivery_kobo __INT__ NOT NULL CHECK(delivery_kobo>=0),
+  total_kobo __INT__ NOT NULL CHECK(total_kobo>0), address_json TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'AWAITING_PAYMENT' CHECK(status IN ('AWAITING_PAYMENT','CANCELLED','EXPIRED')),
+  created_ms __INT__ NOT NULL, expires_ms __INT__ NOT NULL,
+  cancelled_ms __INT__, cancel_actor TEXT, cancel_reason TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_market_purchase_orders_buyer ON market_purchase_orders(buyer_id,id);
+CREATE INDEX IF NOT EXISTS idx_market_purchase_orders_seller ON market_purchase_orders(seller_member_id,id);
+CREATE INDEX IF NOT EXISTS idx_market_purchase_orders_expiry ON market_purchase_orders(status,expires_ms);
+CREATE TABLE IF NOT EXISTS market_purchase_order_items (
+  id __ID__, order_id __INT__ NOT NULL REFERENCES market_purchase_orders(id),
+  listing_id __INT__ NOT NULL REFERENCES market_listings(id),
+  title TEXT NOT NULL, quantity INTEGER NOT NULL CHECK(quantity BETWEEN 1 AND 99),
+  unit_kobo __INT__ NOT NULL CHECK(unit_kobo>0), UNIQUE(order_id,listing_id)
+);
+CREATE INDEX IF NOT EXISTS idx_market_order_stock ON market_purchase_order_items(listing_id,order_id);
+CREATE TABLE IF NOT EXISTS market_purchase_order_events (
+  id __ID__, order_id __INT__ NOT NULL REFERENCES market_purchase_orders(id),
+  kind TEXT NOT NULL CHECK(kind IN ('CREATED','CANCELLED','EXPIRED')),
+  occurred_ms __INT__ NOT NULL, note TEXT NOT NULL DEFAULT '', UNIQUE(order_id,kind)
+);

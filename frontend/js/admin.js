@@ -104,6 +104,7 @@ async function loadAll() {
     await refreshWithdrawals(token);
     await refreshMarketListings(token);
     await refreshMarketRequests(token);
+    await refreshMarketOrders(token);
     await refreshMarketStores(token);
     await refreshReconciliation(token);
     await refreshAudit(token);
@@ -269,3 +270,9 @@ async function refreshMarketPromotions(token,listings){
   target.querySelectorAll('[data-promotion]').forEach(form=>form.addEventListener('submit',async e=>{e.preventDefault();const button=form.querySelector('button');button.disabled=true;try{await OBIT.post(`/api/admin/market/listings/${form.dataset.promotion}/promotion`,{version:Number(form.dataset.version),enabled:form.elements.enabled.checked,label:form.elements.label.value,price_kobo:Math.round(Number(form.elements.price.value)*100),starts_ms:Date.parse(form.elements.starts.value+'Z'),ends_ms:Date.parse(form.elements.ends.value+'Z')},{token});await refreshMarketPromotions(token,listings);}catch(err){form.querySelector('[role=status]').textContent=err.message;button.disabled=false;}}));
  }catch(err){target.textContent=err.message;}
 }
+
+async function refreshMarketOrders(token){
+ const target=document.getElementById('marketOrdersBody');
+ try{const rows=await OBIT.get('/api/admin/market/orders',{token});target.innerHTML=rows.map(o=>`<tr><td>${escapeMarket(o.reference)}</td><td>₦${(o.total_kobo/100).toLocaleString('en-NG')}</td><td>${escapeMarket(o.destination.city)}, ${escapeMarket(o.destination.state)}</td><td>${escapeMarket(o.status)}</td><td>${escapeMarket(new Date(o.expires_ms).toLocaleString('en-NG',{timeZone:'Africa/Lagos'}))} (Nigeria time)</td></tr>`).join('')||'<tr><td colspan="5">No purchase orders yet.</td></tr>';}catch(e){target.textContent=e.message;}
+}
+document.getElementById('refreshMarketOrders').addEventListener('click',()=>refreshMarketOrders(OBIT.getSession('staff')));
