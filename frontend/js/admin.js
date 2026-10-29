@@ -104,6 +104,7 @@ async function loadAll() {
     await refreshWithdrawals(token);
     await refreshMarketListings(token);
     await refreshMarketRequests(token);
+    await refreshMarketStores(token);
     await refreshReconciliation(token);
     await refreshAudit(token);
 
@@ -118,6 +119,7 @@ async function loadAll() {
 
 async function refreshMarketListings(token) {
   const rows = await OBIT.get('/api/admin/market/listings', { token });
+  await refreshMarketPromotions(token,rows);
   document.getElementById('marketListingsBody').innerHTML = rows.map((item) => {
     const actions = item.status === 'DRAFT'
       ? `<button class="btn btn-secondary" data-market-id="${item.id}" data-market-decision="APPROVE">Approve</button> <button class="btn btn-secondary" data-market-id="${item.id}" data-market-decision="REJECT">Reject</button>`
@@ -249,4 +251,21 @@ async function refreshMarketRequests(token) {
     const rows=await OBIT.get('/api/admin/market/requests',{token});
     target.innerHTML=rows.map(r=>`<tr><td>${escapeMarket(r.reference)}</td><td>₦${(Number(r.subtotal_kobo)/100).toLocaleString('en-NG')}</td><td>${escapeMarket(r.destination.city)}, ${escapeMarket(r.destination.state)}</td><td>${Number(r.waiting_count)} awaiting / ${Number(r.seller_count)} sellers</td><td>${escapeMarket(r.status)}</td></tr>`).join('')||'<tr><td colspan="5">No quote requests yet.</td></tr>';
   } catch (e) { target.innerHTML='<tr><td colspan="5">Quote requests could not be loaded. Refresh to try again.</td></tr>'; }
+}
+
+async function refreshMarketStores(token){
+ const target=document.getElementById('marketStores');
+ try{
+  const rows=await OBIT.get('/api/admin/market/stores',{token});
+  target.innerHTML=rows.map(s=>`<form class="card" data-store-review="${Number(s.id)}" data-version="${Number(s.version)}"><h3>${escapeMarket(s.name)}</h3><p>${escapeMarket(s.description)}</p><p>${escapeMarket(s.member_code)} · Member ${escapeMarket(s.member_status)} · Store ${escapeMarket(s.status)}</p><label class="field">Decision<select name="decision"><option value="APPROVED" ${s.status==='APPROVED'?'selected':''}>Approve</option><option value="REJECTED" ${s.status==='REJECTED'?'selected':''}>Reject / remove approval</option></select></label><label><input name="official" type="checkbox" ${Number(s.official)===1?'checked':''}> Official store. I have checked brand ownership or written authorisation.</label><label class="field">Private review note / authorisation reference<textarea name="evidence" maxlength="1000" rows="2">${escapeMarket(s.verification_note)}</textarea></label><button class="btn" type="submit">Save review</button><p role="status"></p></form>`).join('')||'<p>No store profiles submitted yet.</p>';
+  target.querySelectorAll('[data-store-review]').forEach(form=>form.addEventListener('submit',async e=>{e.preventDefault();const button=form.querySelector('button');button.disabled=true;try{await OBIT.post(`/api/admin/market/stores/${form.dataset.storeReview}/review`,{version:Number(form.dataset.version),status:form.elements.decision.value,official:form.elements.official.checked,verification_note:form.elements.evidence.value},{token});await refreshMarketStores(token);}catch(err){form.querySelector('[role=status]').textContent=err.message;button.disabled=false;}}));
+ }catch(err){target.textContent=err.message;}
+}
+async function refreshMarketPromotions(token,listings){
+ const target=document.getElementById('marketPromotions');
+ try{
+  const rows=await OBIT.get('/api/admin/market/promotions',{token}),byId=new Map(rows.map(p=>[Number(p.listing_id),p]));
+  target.innerHTML=listings.filter(l=>l.status==='ACTIVE').map(l=>{const p=byId.get(Number(l.id));return `<form class="card" data-promotion="${Number(l.id)}" data-version="${Number(p?.version||0)}"><h3>${escapeMarket(l.title)}</h3><p>Listing price ₦${Number(l.price).toLocaleString('en-NG')}</p><label><input name="enabled" type="checkbox" ${Number(p?.enabled)===1?'checked':''}> Enable promotion</label><label class="field">Label<input name="label" maxlength="60" value="${escapeMarket(p?.label||'Member offer')}"></label><label class="field">Promotional price (₦)<input name="price" type="number" min="20000" max="3000000" step="0.01" value="${p?Number(p.price_kobo)/100:''}"></label><label class="field">Starts at (UTC)<input name="starts" type="datetime-local" value="${p?new Date(Number(p.starts_ms)).toISOString().slice(0,16):''}"></label><label class="field">Ends at (UTC)<input name="ends" type="datetime-local" value="${p?new Date(Number(p.ends_ms)).toISOString().slice(0,16):''}"></label><p class="muted-note">UTC is one hour behind Nigeria time. Maximum duration: 90 days. A listing price change stops the promotion. No crossed-out reference prices are shown.</p><button class="btn" type="submit">Save promotion</button><p role="status"></p></form>`;}).join('')||'<p>Approve real products before scheduling promotions.</p>';
+  target.querySelectorAll('[data-promotion]').forEach(form=>form.addEventListener('submit',async e=>{e.preventDefault();const button=form.querySelector('button');button.disabled=true;try{await OBIT.post(`/api/admin/market/listings/${form.dataset.promotion}/promotion`,{version:Number(form.dataset.version),enabled:form.elements.enabled.checked,label:form.elements.label.value,price_kobo:Math.round(Number(form.elements.price.value)*100),starts_ms:Date.parse(form.elements.starts.value+'Z'),ends_ms:Date.parse(form.elements.ends.value+'Z')},{token});await refreshMarketPromotions(token,listings);}catch(err){form.querySelector('[role=status]').textContent=err.message;button.disabled=false;}}));
+ }catch(err){target.textContent=err.message;}
 }

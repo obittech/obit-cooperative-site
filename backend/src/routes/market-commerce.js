@@ -1,3 +1,4 @@
+import {sellerStore,submitStore,reviewStores,reviewStore,promotion,promotions} from '../services/market-stores.js';
 import { Router, HttpError } from '../router.js';
 import { get, run, atomic } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -34,3 +35,10 @@ marketCommerceRouter.get('/api/market/seller/requests',privateResponse,requireAu
 marketCommerceRouter.post('/api/market/seller/requests/:id/respond',requireAuth('member'),async(req,res,params)=>res.json(200,await respondToRequest(req.user.id,params.id,req.body)));
 
 marketCommerceRouter.get('/api/admin/market/requests',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await operationsRequests()));
+
+marketCommerceRouter.get('/api/market/seller/store',privateResponse,requireAuth('member'),async(req,res)=>res.json(200,await sellerStore(req.user.id)));
+marketCommerceRouter.post('/api/market/seller/store',privateResponse,requireAuth('member'),async(req,res)=>res.json(200,await submitStore(req.user.id,req.body)));
+marketCommerceRouter.get('/api/admin/market/stores',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await reviewStores()));
+marketCommerceRouter.post('/api/admin/market/stores/:id/review',privateResponse,requireAuth('staff','admin'),async(req,res,params)=>res.json(200,await reviewStore(req.user.id,params.id,req.body)));
+marketCommerceRouter.get('/api/admin/market/promotions',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await promotions()));
+marketCommerceRouter.post('/api/admin/market/listings/:id/promotion',privateResponse,requireAuth('staff','admin'),async(req,res,params)=>res.json(200,await promotion(req.user.id,params.id,req.body)));
