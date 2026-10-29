@@ -2,3 +2,5 @@
 @media(max-width:700px){.account-header>.container{padding:16px 0;align-items:start}.account-header nav{flex-direction:column;gap:12px;font-size:10px;text-align:right}.account-header .market-brand{min-width:0;font-size:17px}.account-header .market-brand img{width:35px;height:35px}.account-main{padding:28px 0}.account-intro h1{font-size:30px}.account-columns{grid-template-columns:1fr}.account-card{padding:23px 18px}.account-form-row{grid-template-columns:1fr}.account-welcome{align-items:start;flex-direction:column;gap:0}.seller-quote-grid{grid-template-columns:1fr}.catalog-pagination{gap:12px}.account-bag-line{flex-direction:column}}
 
 .add-bag:disabled{opacity:.45;cursor:not-allowed}
+
+.account-footer{background:transparent;border-top:1px solid #dce5d5;padding:24px 0;color:#52694c}.account-footer a{color:#155e43}.account-footer p{margin:0 0 10px}
