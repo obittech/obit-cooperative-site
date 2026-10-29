@@ -88,6 +88,7 @@ test('catalogue paginates beyond 100 and enforces filters without SQL interpolat
  assert.ok(third.items[0].price>first.items[0].price);
  assert.equal((await m.catalogue(new URLSearchParams({seller:String(s.id),q:"' OR 1=1 --"}))).total,0);
  assert.equal((await m.catalogue(new URLSearchParams({ids:''}))).total,0);
+ for(const q of ['%','_','!'])assert.equal((await m.catalogue(new URLSearchParams({seller:String(s.id),q}))).total,0);
  await assert.rejects(m.catalogue(new URLSearchParams({sort:'DROP TABLE users'})),e=>e.status===400);
 });
 test('quote requests split sellers, snapshot prices and deduplicate concurrent submissions',async()=>{
