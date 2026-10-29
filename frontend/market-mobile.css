@@ -1,0 +1,249 @@
+/* Phone-first interaction layer shared by the store and shopping account. */
+.mobile-only,.phone-hero-title{display:none}
+.shop-controls .mobile-category-label{display:none}
+.market-page{--phone-nav-height:72px}
+.market-page :is(button,a,input,select,textarea){-webkit-tap-highlight-color:transparent}
+.market-page :is(button,a):focus-visible{outline:3px solid #bd943f;outline-offset:3px}
+.mobile-market-nav svg{width:23px;height:23px;flex:none}
+.mobile-market-nav .mobile-badge{position:absolute;top:3px;left:calc(50% + 6px);min-width:19px;height:19px;padding:0 4px;border-radius:12px;background:#bd943f;color:#fff;display:grid;place-items:center;font-size:11px;line-height:1;font-weight:750}
+.bag-primary-action .btn{width:100%;margin:8px 0}
+.delivery-summary{font-size:14px;line-height:1.6;color:#345c44;padding:12px 14px;background:#f0f5eb;border-radius:9px}
+@media(max-width:768px){
+ .market-page{font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%;padding-bottom:calc(var(--phone-nav-height) + env(safe-area-inset-bottom));background:#f5f6f2}
+ .market-page .container{width:calc(100% - 32px);max-width:100%;min-width:0}
+ .market-page :is(input,select,textarea){font-size:16px!important;max-width:100%;min-height:48px;border-radius:10px}
+ .market-page :is(button,.btn){touch-action:manipulation}
+ .market-page .btn{min-height:48px;font-size:15px;line-height:1.35;padding:13px 18px;justify-content:center;text-align:center}
+ .market-page .text-button{min-height:44px;font-size:14px}
+ .market-page .eyebrow{font-size:11px;line-height:1.5;letter-spacing:.08em}
+ .market-page .market-topline{display:none}
+ .market-page .market-header{position:sticky;top:0;z-index:30;padding-top:env(safe-area-inset-top);background:#fff;box-shadow:0 3px 14px #183d2410}
+ .market-page .market-nav{min-height:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 0 12px}
+ .market-page .market-brand{min-width:0;max-width:calc(100% - 60px);font-size:19px;gap:9px;line-height:1.2}
+ .market-page .market-brand img{width:36px;height:36px;flex:none}
+ .market-page .market-brand small{font-size:10px;line-height:1.5;margin-top:3px}
+ .market-page .header-actions{margin-left:auto;gap:0}
+ .market-page .header-actions>a,.market-page #cartButton{display:none}
+ .market-page #wishlistButton{width:44px;height:44px;min-height:44px;justify-content:center;gap:2px;border-radius:50%;background:#f6f3e9;font-size:23px;position:relative}
+ .market-page #wishlistButton span{display:none}
+ .market-page #wishlistButton b{min-width:17px;height:17px;font-size:10px}
+ .market-page .global-search{flex:1 0 100%;order:3;width:100%;height:48px;border:1px solid #d8e1d2;border-radius:12px;background:#f4f6f0;margin:0}
+ .market-page .global-search input{font-size:16px;min-height:46px;background:transparent;border-radius:0;padding:0 12px}
+ .market-page .global-search button{font-size:14px;min-width:75px;padding:0 13px;background:#155e43;color:#fff}
+ .market-page .market-subnav{display:none}
+ .market-page main{padding-top:14px}
+ .market-page section[id]{scroll-margin-top:140px}
+ .market-page .ecommerce-hero{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);padding:18px 16px;gap:5px;min-height:174px;border-radius:16px;overflow:hidden}
+ .market-page .hero-copy{min-width:0;padding:0}
+ .market-page .hero-copy>.eyebrow,.market-page .hero-copy>p,.market-page .hero-tags,.market-page .hero-plan-link{display:none}
+ .market-page .hero-copy h1{font-size:27px;line-height:1.13;letter-spacing:-.9px;margin:0 0 16px;color:#16442f}
+ .market-page .hero-buttons{display:block;margin:0}
+ .market-page .hero-buttons .btn{font-size:13px;min-height:44px;padding:10px 14px;white-space:normal}
+ .market-page .hero-display{min-height:140px;height:100%;padding:0;background:transparent}
+ .market-page .hero-products{width:100%;height:150px;transform:none}
+ .market-page .hero-display:before{width:135px;height:135px;right:0;top:10px}
+ .market-page .display-label,.market-page .hero-mini-card,.market-page .illustration-note{display:none}
+ .market-page .market-benefits{display:flex;gap:18px;overflow-x:auto;white-space:nowrap;font-size:12px;padding:11px 13px;margin-top:10px;border-radius:10px;scrollbar-width:none}
+ .market-page .market-benefits::-webkit-scrollbar{display:none}
+ .market-page .market-benefits>div{flex:0 0 auto}
+ .market-page .discovery-section{margin-top:22px}
+ .market-page h2{font-size:23px;line-height:1.2;letter-spacing:-.4px}
+ .market-page .section-heading{align-items:center;gap:8px;margin-bottom:12px}
+ .market-page .section-heading .eyebrow{display:none}
+ .market-page .section-heading>a{font-size:13px;min-height:44px;display:flex;align-items:center;white-space:nowrap}
+ .market-page .section-heading .text-button{font-size:13px;white-space:normal;text-align:right;flex:0 0 76px}
+ .market-page .category-showcase{display:flex;gap:8px;overflow-x:auto;padding:0 0 8px;scroll-snap-type:x proximity;scrollbar-width:none}
+ .market-page .category-showcase button{flex:0 0 86px;min-width:86px;min-height:112px;justify-content:start;padding:10px 5px;border-radius:13px;scroll-snap-align:start}
+ .market-page .category-showcase svg{width:54px;height:54px;padding:6px;margin-bottom:7px;border-radius:12px}
+ .market-page .category-showcase b{font-size:12px;line-height:1.25;color:#294f39}
+ .market-page .category-showcase span{display:none}
+ .market-page .market-section{margin:22px 0}
+ .market-page .catalog-layout{display:block}
+ .market-page .catalog-sidebar{padding:0;border:0;background:none}
+ .market-page .catalog-sidebar>h3,.market-page .seller-help{display:none}
+ .market-page .category-filters{display:flex;flex-direction:row;overflow-x:auto;gap:7px;padding:0 0 12px;scrollbar-width:none}
+ .market-page .category-filters button{flex:0 0 auto;min-height:44px;border:1px solid #dce4d5;border-radius:24px;padding:10px 15px;white-space:nowrap;background:#fff;font-size:13px;color:#35543b}
+ .market-page .category-filters button.selected{background:#155e43;border-color:#155e43;color:#fff}
+ .market-page .mobile-filter-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:48px;margin:0 0 12px;padding:12px 16px;border:1px solid #d9e3d1;border-radius:12px;background:white;color:#19492f;font-size:15px;font-weight:650;cursor:pointer}
+ .mobile-filter-toggle>span{font-size:20px;transition:transform .15s}
+ .mobile-filter-toggle[aria-expanded=true]>span{transform:rotate(180deg)}
+ .market-page .shop-controls{display:none;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:16px;border-radius:13px;margin:0 0 16px}
+ .market-page .shop-controls[data-mobile-open=true]{display:grid}
+ .market-page .shop-controls label{font-size:13px;color:#405f3d;gap:7px}
+ .market-page .shop-controls input,.market-page .shop-controls select{font-size:16px;padding:0 10px;min-height:48px}
+ .market-page #closeMobileFilters{display:flex;grid-column:1/-1;width:100%;background:#155e43;color:white}
+ .market-page #filterError,.market-page #marketAlert{font-size:14px;line-height:1.5}
+ .market-page .catalog-heading{padding:6px 0 12px;align-items:center}
+ .market-page .catalog-heading h3{font-size:16px;line-height:1.4;margin:0}
+ .market-page .catalog-heading>span{font-size:13px;white-space:nowrap}
+ .market-page .listing-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .market-page .listing{position:relative;border-radius:13px;background:#fff}
+ .market-page .listing>.product-media{aspect-ratio:1.08;min-height:0}
+ .market-page .product-placeholder{height:100%;min-height:0;aspect-ratio:auto}
+ .market-page .product-placeholder svg{max-height:100px}
+ .market-page .product-placeholder small{font-size:10px;bottom:8px;padding:0 6px;line-height:1.3}
+ .market-page .product-body{padding:11px;min-width:0}
+ .market-page .product-body>.category,.market-page .product-body>.shop-link,.market-page .full-price-label,.market-page .product-body .product-estimate{display:none}
+ .market-page .listing h3{font-size:15px;line-height:1.35;min-height:41px;margin:0 0 6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:normal}
+ .market-page .stock-label{font-size:12px;line-height:1.4;margin:0 0 4px;color:#4d7044}
+ .market-page .stock-label.out{color:#985222}
+ .market-page .listing .price{font-size:21px;line-height:1.35;margin:4px 0 12px;letter-spacing:-.5px;overflow-wrap:anywhere}
+ .market-page .product-actions{display:flex;margin:0;gap:0}
+ .market-page .product-actions .add-bag{width:100%;min-height:44px;font-size:13px;border-radius:9px;padding:9px 7px}
+ .market-page .product-actions .save-product{position:absolute;top:7px;right:7px;z-index:2;width:44px;height:44px;min-height:44px;border-radius:50%;background:#ffffffed;border:1px solid #dce5d6;box-shadow:0 2px 5px #143b2110;font-size:23px!important}
+ .market-page .product-actions .save-product[aria-pressed=true]{background:#f9efd6;color:#9b6e1e}
+ .market-page .product-body .text-button{min-height:44px;font-size:13px;margin:0;align-self:stretch;text-align:center;padding:8px 0}
+ .market-page .catalog-pagination{gap:10px;margin:20px 0;font-size:13px;justify-content:space-between}
+ .market-page .catalog-pagination button{min-height:48px;padding:11px 16px;font-size:14px;border-radius:10px}
+ .market-page .market-notice{padding:14px;border-radius:12px;gap:6px;font-size:13px;line-height:1.6}
+ .market-page .empty-catalog{padding:26px 18px}
+ .market-page .empty-catalog h3{font-size:20px;line-height:1.3;display:block;margin:0}
+ .market-page .empty-catalog p{font-size:15px;line-height:1.6}
+ .market-page .empty-catalog a{display:inline-flex;align-items:center;min-height:44px;font-size:14px}
+ .market-page .payment-planner{display:block;padding:22px 18px;border-radius:16px}
+ .market-page .planner-intro p,.market-page .planner-result p{font-size:15px;line-height:1.6}
+ .market-page .planner-controls label{font-size:14px}
+ .market-page .rhythm-toggle button{min-height:48px;font-size:15px}
+ .market-page .planner-result{padding:22px 18px}
+ .market-page .purchase-steps{grid-template-columns:1fr;gap:20px}
+ .market-page .purchase-steps h3{font-size:18px}
+ .market-page .purchase-steps p,.market-page .seller-invite p,.market-page .safepay-note p{font-size:15px;line-height:1.65}
+ .market-page .seller-invite{display:block;padding:24px 20px;border-radius:16px}
+ .market-page .seller-invite .btn{width:100%;font-size:15px}
+ .market-page .seller-login{font-size:14px;min-height:44px;padding:12px 0}
+ .market-page #sellerPanel{padding:22px 16px}
+ .market-page #sellerPanel .listing-grid{grid-template-columns:1fr}
+ .market-page #sellerPanel .listing h3{display:block;min-height:0;font-size:18px}
+ .market-page #sellerPanel .product-body{padding:0}
+ .market-page #sellerPanel .product-body>.category{display:block}
+ .market-page .seller-stock-form{gap:10px;align-items:end}
+ .market-page .seller-stock-form label,.market-page .seller-quote-grid label{font-size:14px}
+ .market-page .seller-stock-form button{width:auto!important;flex:1;min-height:48px;font-size:14px}
+ .market-page .seller-quote-grid{grid-template-columns:1fr;gap:12px}
+ .market-page .seller-quote-grid input,.market-page .seller-quote-grid textarea{font-size:16px;min-height:48px;padding:12px}
+ .market-page .commerce-dialog,.market-page .product-dialog{position:fixed;inset:auto 0 0;margin:0;width:100%;max-width:none;max-height:calc(100dvh - env(safe-area-inset-top) - 12px);padding:56px 18px calc(24px + env(safe-area-inset-bottom));border-radius:20px 20px 0 0;border:0;box-sizing:border-box;overscroll-behavior:contain}
+ .market-page .dialog-close{position:sticky;top:0;display:block;float:none;margin:-44px 0 0 auto;width:44px;height:44px;min-height:44px;background:#f1f5ed;z-index:5}
+ .market-page .commerce-dialog>h2,.market-page .product-dialog h2{font-size:25px;margin-top:12px}
+ .market-page .commerce-dialog>p,.market-page .commerce-dialog .muted-note{font-size:14px;line-height:1.6;color:#526b45}
+ .market-page .commerce-dialog .field{font-size:14px}
+ .market-page .commerce-dialog .field input,.market-page .commerce-dialog .field textarea{font-size:16px;min-height:48px}
+ .market-page .product-detail-grid{grid-template-columns:1fr;gap:20px}
+ .market-page .product-detail-grid .product-media{max-height:230px;border-radius:13px}
+ .market-page .product-detail-grid p{font-size:15px;line-height:1.6}
+ .market-page .product-detail-grid .seller-marker{font-size:14px}
+ .market-page .detail-price{font-size:30px;margin:14px 0}
+ .market-page .detail-notice{font-size:13px;line-height:1.6}
+ .market-page .bag-line{grid-template-columns:minmax(0,1fr) 78px;gap:10px 14px;padding:18px 0}
+ .market-page .bag-line h3{font-size:16px;line-height:1.4}
+ .market-page .bag-line p,.market-page .bag-line small{font-size:13px;line-height:1.5}
+ .market-page .bag-line label{font-size:12px;color:#536c45}
+ .market-page .bag-line input{width:76px;min-height:48px;font-size:16px}
+ .market-page .bag-line strong{font-size:17px;grid-column:1}
+ .market-page .bag-line button{font-size:13px;min-height:44px;padding:8px 0;grid-column:2;justify-self:stretch;text-align:center}
+ .market-page .bag-total{font-size:14px;align-items:center;line-height:1.5;padding-top:20px}
+ .market-page .bag-total strong{font-size:25px;white-space:nowrap}
+ .market-page .commerce-dialog #cartSummary p{font-size:13px;color:#5a704e;line-height:1.6}
+ .market-page .commerce-dialog .checkout-note{font-size:13px;line-height:1.5}
+ .market-page .bag-primary-action{position:sticky;bottom:0;z-index:4;background:#fff;padding:10px 0;margin-top:8px}
+ .market-page .bag-primary-action .btn{display:flex;width:100%;min-height:52px;font-size:15px;margin:0}
+ .market-page .checkout-disabled{display:none}
+ .market-page #refreshCart{width:100%;min-height:44px;font-size:14px}
+ .market-page .market-footer{padding:24px 0;margin-top:22px}
+ .market-page .market-footer>.container{display:flex;flex-direction:column;align-items:start;gap:14px}
+ .market-page .market-footer p,.market-page .market-footer small{font-size:13px;line-height:1.6}
+ .market-page .market-footer a{font-size:14px;min-height:44px;display:inline-flex;align-items:center}
+ .market-page .mobile-market-nav{position:fixed;inset:auto 0 0;z-index:40;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:5px max(6px,env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left));background:#fff;border-top:1px solid #e0e7da;box-shadow:0 -3px 18px #20452508;min-height:var(--phone-nav-height);box-sizing:border-box}
+ .market-page .mobile-market-nav :is(a,button){position:relative;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;min-width:0;min-height:60px;width:100%;margin:0;border:0;border-radius:12px;padding:6px 2px;background:none;color:#53684f;text-decoration:none;font:inherit;cursor:pointer}
+ .market-page .mobile-market-nav span{font-size:11px;font-weight:600;line-height:1.2}
+ .market-page .mobile-market-nav [aria-current=page],.market-page .mobile-market-nav [aria-pressed=true]{background:#edf4e7;color:#155e43}
+ .market-page .mobile-market-nav .mobile-badge{display:grid}
+ .market-page .mobile-market-nav .mobile-badge[hidden]{display:none}
+ .market-page .market-toast{bottom:calc(var(--phone-nav-height) + env(safe-area-inset-bottom) + 12px);max-width:calc(100% - 32px);width:max-content;padding:13px 16px;font-size:14px;line-height:1.5;z-index:60}
+ .market-page:has(input:focus,textarea:focus)>.mobile-market-nav{display:none}
+ .account-page .account-header{position:sticky;top:0;z-index:30;padding-top:env(safe-area-inset-top);background:#fff}
+ .account-page .account-header>.container{display:flex;align-items:center;justify-content:space-between;min-height:64px;padding:8px 0;gap:12px;box-sizing:border-box}
+ .account-page .account-header .market-brand{font-size:17px;max-width:calc(100% - 100px);gap:7px}
+ .account-page .account-header .market-brand img{width:32px;height:32px}
+ .account-page .account-header .market-brand small{font-size:9px}
+ .account-page .account-header nav{display:block;font-size:13px;max-width:120px;text-align:right}
+ .account-page .account-header nav a{display:flex;align-items:center;min-height:44px;font-size:13px;line-height:1.4}
+ .account-page .account-header nav a+ a{display:none}
+ .account-page .account-main{padding:24px 0 20px}
+ .account-page .account-intro{margin:0 0 22px}
+ .account-page .account-intro .eyebrow{font-size:11px}
+ .account-page .account-intro h1{font-size:29px;line-height:1.12;margin:12px 0 15px;letter-spacing:-.8px}
+ .account-page .account-intro p{font-size:15px;line-height:1.6;margin:0}
+ .account-page .account-card{padding:22px 18px;border-radius:16px}
+ .account-page .account-card h2{font-size:23px;line-height:1.25;margin:10px 0 14px}
+ .account-page .account-card>p{font-size:15px;line-height:1.6}
+ .account-page .account-card .field{font-size:14px;gap:8px;margin-bottom:18px}
+ .account-page .account-card :is(input,select,textarea){font-size:16px;min-height:52px;border-radius:10px;padding:12px}
+ .account-page .account-card .btn{font-size:16px;width:100%;min-height:52px;border-radius:11px}
+ .account-page .account-card .fine-print,.account-page .fine-print{font-size:13px;line-height:1.65}
+ .account-page .account-card .text-button{font-size:14px;min-height:44px}
+ .account-page .account-welcome{display:flex;flex-direction:column;align-items:start;gap:0;margin-bottom:16px}
+ .account-page .account-welcome h2{font-size:20px;margin:8px 0;overflow-wrap:anywhere}
+ .account-page #buyerLogout{font-size:13px;min-height:44px;text-align:left;padding:9px 0}
+ .account-page .account-mobile-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;position:sticky;top:calc(64px + env(safe-area-inset-top));z-index:20;background:#e8eee1;border:1px solid #dde6d3;border-radius:13px;padding:5px;margin:0 0 18px;scroll-margin-top:calc(72px + env(safe-area-inset-top))}
+ .account-mobile-tabs button{min-height:46px;font-size:15px;font-weight:650;background:none;border:0;border-radius:10px;color:#536b48;cursor:pointer}
+ .account-mobile-tabs button[aria-selected=true]{background:#fff;color:#155e43;box-shadow:0 2px 6px #24402010}
+ .account-page .account-columns{display:block}
+ .account-page .account-form-row{grid-template-columns:1fr}
+ .account-page #buyerAccount[data-mobile-view=bag] .address-panel,.account-page #buyerAccount[data-mobile-view=bag] .request-history{display:none}
+ .account-page #buyerAccount[data-mobile-view=delivery] #request,.account-page #buyerAccount[data-mobile-view=delivery] .request-history{display:none}
+ .account-page #buyerAccount[data-mobile-view=requests] .account-columns{display:none}
+ .account-page .request-history{margin:0}
+ .account-page .account-bag-line{display:grid;grid-template-columns:minmax(0,1fr);gap:5px;padding:16px 0}
+ .account-page .account-bag-line h3{font-size:16px;line-height:1.4}
+ .account-page .account-bag-line p{font-size:13px;line-height:1.5}
+ .account-page .account-bag-line strong{font-size:18px}
+ .account-page .account-actions{display:grid;grid-template-columns:1fr;gap:7px;margin:16px 0}
+ .account-page .request-explainer{font-size:14px;padding:15px;line-height:1.6}
+ .account-page .delivery-summary{font-size:14px;line-height:1.6;margin-bottom:3px}
+ .account-page #editDeliveryFromBag{font-size:14px;min-height:48px;text-align:left;display:block;padding:8px 0}
+ .account-page #request>a{display:flex;align-items:center;justify-content:center;min-height:48px;font-size:15px}
+ .account-page .quote-card{padding:16px;border-radius:12px;margin:16px 0}
+ .account-page .quote-card h3{font-size:15px;line-height:1.5}
+ .account-page .quote-card :is(p,li){font-size:14px;line-height:1.6}
+ .account-page .quote-card ul{padding-left:20px}
+ .account-page .quote-card h4{font-size:15px;line-height:1.5}
+ .account-page .quote-card .status-badge{font-size:12px}
+ .account-page .quote-card .text-button{width:100%;min-height:48px;text-align:left}
+ .account-page .account-alert:not(:empty){font-size:14px;line-height:1.6;padding:14px}
+ .account-page .account-footer{font-size:13px;line-height:1.6;padding:22px 0;margin-bottom:10px}
+ .account-page .account-footer a{font-size:14px;display:inline-flex;align-items:center;min-height:44px}
+}
+@media(max-width:350px){
+ .market-page .container{width:calc(100% - 24px)}
+ .market-page .hero-copy h1{font-size:24px}
+ .market-page .listing h3{font-size:14px;min-height:38px}
+ .market-page .listing .price{font-size:18px}
+ .market-page .product-body{padding:9px}
+ .market-page .product-actions .save-product{width:44px;height:44px;right:4px;top:4px}
+ .market-page .catalog-pagination{font-size:12px;gap:6px}
+ .market-page .catalog-pagination button{font-size:13px;padding:10px 12px}
+ .account-page .account-card{padding:20px 14px}
+ .account-page .account-header .market-brand{font-size:15px}
+}
+@media(prefers-reduced-motion:reduce){.market-page *{scroll-behavior:auto!important;transition:none!important}}
+
+@media(max-width:768px){
+ .market-page .wide-hero-title{display:none}.market-page .phone-hero-title{display:block}
+ .market-page .ecommerce-hero{grid-template-columns:minmax(0,1fr) 100px;min-height:108px;padding:14px 16px;gap:10px}
+ .market-page .hero-copy h1{font-size:25px;margin:0;line-height:1.14}
+ .market-page .hero-buttons{display:none}.market-page .hero-display{min-height:90px;height:90px}.market-page .hero-products{height:90px}
+ .market-page .hero-display:before{width:90px;height:90px;top:0}
+ .market-page .market-benefits{flex-wrap:nowrap;justify-content:start;min-height:42px;box-sizing:border-box}
+ .market-page .market-benefits>span{flex:0 0 auto}
+ .market-page .discovery-section .section-heading>a{display:none}
+ .market-page .discovery-section h2{font-size:21px;margin:0;line-height:1.3}
+ .market-page .category-showcase button{min-height:100px;padding:8px 5px}
+ .market-page .category-showcase svg{width:48px;height:48px;margin-bottom:6px}
+ .market-page .catalog-sidebar{display:none}
+ .market-page .mobile-category-label{display:grid;grid-column:1/-1}
+}
+
+.mobile-shop-toolbar{display:contents}
+@media(max-width:768px){.market-page #shop>.section-heading{display:none}.market-page .mobile-shop-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 48px;gap:8px;margin-bottom:12px}.market-page .mobile-filter-toggle{margin:0}.market-page #mobileRefresh{display:flex;align-items:center;justify-content:center;width:48px;height:48px;min-height:48px;border:1px solid #d9e3d1;border-radius:12px;background:white;color:#155e43;padding:0}}
+
+@media(max-width:768px){.market-page .market-brand{min-height:44px}.account-page .account-header .market-brand{min-height:44px}}

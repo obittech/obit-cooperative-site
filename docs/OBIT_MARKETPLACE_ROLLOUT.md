@@ -57,3 +57,9 @@ Monitor API failures, code send failures, rate limits and seller quote response 
 ### Verification
 
 Marketplace integration tests run against both SQLite and PostgreSQL in CI. They cover shopper/member token separation, OTP consumption/expiry/lockout, failed email delivery, cart isolation/merging, prices and unavailable stock, catalogue pagination beyond 100, duplicate request replay, price changes, quantity limits, seller ownership, quote privacy and cancellation. Existing payment and KYC regression suites remain required. Browser QA uses an ignored isolated runner and fictional accounts only.
+
+## Phone-first interface — 29 October 2026
+
+The storefront and shopping account now share a phone layout for viewports up to 768px: a compact search header, five-button bottom navigation, collapsible category/price/seller/sort controls, larger product actions, bag/product bottom sheets, safe-area spacing and 16px form inputs. Desktop filters and account panels remain visible above that breakpoint. Phone account navigation separates Bag, Delivery and Requests; saving delivery details returns to the bag, and a submitted quote opens Requests. Saved-products links can open directly from the account page.
+
+Browser QA checks used 320px, 390px and 430px frames (with no horizontal document overflow), plus a 1024px desktop frame. Checks covered filters, saved products, bag sheet dimensions, account tab visibility and field sizing. These are browser viewport checks, not a claim of testing every physical handset. Existing provider/payment restrictions are unchanged.
