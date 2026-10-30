@@ -122,3 +122,12 @@ table.app-table tr:hover td{background:#fafcfb}
 .portal-millionaires p{color:var(--muted)}
 .portal-millionaires-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
 @media(max-width:720px){.portal-millionaires-actions{flex-direction:column}.portal-millionaires-actions .btn{width:100%;text-align:center;min-height:48px}}
+
+/* Inline interest choices remain visible on touch screens. */
+.interest-options{border:0;padding:0;margin:8px 0 22px;min-width:0}
+.interest-options legend{font-size:16px;font-weight:700;color:var(--ink);padding:0}
+.interest-options>p{font-size:14px;color:var(--muted);margin:6px 0 12px}
+.interest-choice{display:flex;align-items:center;gap:12px;min-height:48px;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;cursor:pointer;color:var(--ink);background:#fbfcfb}
+.interest-choice input{appearance:auto;-webkit-appearance:checkbox;flex:0 0 22px;width:22px;height:22px;margin:0;accent-color:var(--green)}
+.interest-choice:has(input:checked){border-color:var(--green);background:#eaf7ee}
+.interest-choice:focus-within{outline:2px solid var(--green);outline-offset:2px}

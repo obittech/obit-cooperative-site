@@ -48,8 +48,7 @@ function applyMembershipPathPreset() {
   const occupation = document.getElementById('occupation_category');
   if (type && preset.membership_type) type.value = preset.membership_type;
   if (occupation && preset.occupation_category) occupation.value = preset.occupation_category;
-  const interests = document.getElementById('interests');
-  if (interests) Array.from(interests.options).forEach(o => { o.selected = preset.interests.includes(o.value); });
+  setInterestChoices(preset.interests);
   const alert = document.getElementById('alertBox');
   if (alert) alert.innerHTML = `<div class="alert alert-success">Selected path: <strong>${preset.label}</strong>. We have pre-filled the closest membership options. You can change them before continuing.</div>`;
 }
@@ -125,6 +124,18 @@ function fieldIds() {
   ];
 }
 
+function setInterestChoices(values) {
+  document.querySelectorAll('#interests input[type="checkbox"]').forEach(input => {
+    input.checked = Array.isArray(values) && values.includes(input.value);
+  });
+}
+
+function restoreInterestChoices(app) {
+  let values = app.interests_json;
+  try { if (typeof values === 'string') values = JSON.parse(values); } catch { values = []; }
+  setInterestChoices(values);
+}
+
 function collectProfileFields() {
   const data = {};
   fieldIds().forEach((id) => {
@@ -132,8 +143,7 @@ function collectProfileFields() {
     if (!el.value) return;
     data[id] = el.type === 'number' ? Number(el.value) : el.value;
   });
-  const interests = Array.from(document.getElementById('interests').selectedOptions).map((o) => o.value);
-  if (interests.length) data.interests = interests;
+  data.interests = Array.from(document.querySelectorAll('#interests input[type="checkbox"]:checked')).map(input => input.value);
   return data;
 }
 
@@ -326,6 +336,7 @@ async function restoreExistingApplication() {
       const el = document.getElementById(id);
       if (app[id] !== undefined && app[id] !== null) el.value = app[id];
     });
+    restoreInterestChoices(app);
     fillReviewSummary(app);
     const target = STATUS_TO_STEP[app.status] || 'profile';
     goToStep(target);

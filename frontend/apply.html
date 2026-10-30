@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20261013-millionaires" />
-  <link rel="stylesheet" href="app.css?v=20261013-millionaires" />
+  <link rel="stylesheet" href="app.css?v=20261030-interest-checkboxes" />
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -116,17 +116,16 @@
               <input id="next_of_kin_phone" />
             </label>
           </div>
-          <label class="field">What are you interested in? (select any)
-            <select id="interests" multiple size="4">
-              <option>Savings</option>
-              <option>Business Support</option>
-              <option>Financing</option>
-              <option>FFK / Community Hub</option>
-              <option>Agriculture</option>
-              <option>Training</option>
-            </select>
-            <small>Hold Ctrl/Cmd to select more than one.</small>
-          </label>
+          <fieldset id="interests" class="interest-options" aria-describedby="interestsHelp">
+            <legend>What are you interested in?</legend>
+            <p id="interestsHelp">Optional. Tap each box to select or clear it. You can choose more than one.</p>
+            <label class="interest-choice" for="interest-0"><input id="interest-0" name="interests" type="checkbox" value="Savings"><span>Savings</span></label>
+            <label class="interest-choice" for="interest-1"><input id="interest-1" name="interests" type="checkbox" value="Business Support"><span>Business Support</span></label>
+            <label class="interest-choice" for="interest-2"><input id="interest-2" name="interests" type="checkbox" value="Financing"><span>Financing</span></label>
+            <label class="interest-choice" for="interest-3"><input id="interest-3" name="interests" type="checkbox" value="FFK / Community Hub"><span>FFK / Community Hub</span></label>
+            <label class="interest-choice" for="interest-4"><input id="interest-4" name="interests" type="checkbox" value="Agriculture"><span>Agriculture</span></label>
+            <label class="interest-choice" for="interest-5"><input id="interest-5" name="interests" type="checkbox" value="Training"><span>Training</span></label>
+          </fieldset>
           <div class="btn-row">
             <button class="btn btn-primary btn-block" id="btnStartOrSave">Save & Continue</button>
           </div>
@@ -212,6 +211,6 @@
   <script src="js/config.js"></script>
   <script src="js/nav.js?v=20260924-2"></script>
   <script src="js/api.js"></script>
-  <script src="js/apply.js?v=20260928-savings-1"></script>
+  <script src="js/apply.js?v=20261030-interest-checkboxes"></script>
 </body>
 </html>
