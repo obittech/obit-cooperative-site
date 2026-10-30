@@ -123,6 +123,7 @@ async function loadAll() {
 async function refreshMarketListings(token) {
   const rows = await OBIT.get('/api/admin/market/listings', { token });
   await refreshMarketPromotions(token,rows);
+  await MarketVideoAdmin.refresh(token);
   document.getElementById('marketListingsBody').innerHTML = rows.map((item) => {
     const actions = item.status === 'DRAFT'
       ? `<button class="btn btn-secondary" data-market-id="${item.id}" data-market-decision="APPROVE">Approve</button> <button class="btn btn-secondary" data-market-id="${item.id}" data-market-decision="REJECT">Reject</button>`
