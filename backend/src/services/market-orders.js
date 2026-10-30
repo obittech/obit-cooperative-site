@@ -1,5 +1,5 @@
 import {validateRequestPickup,orderDeliveries,shipmentSummaries,deliveryTestAvailable} from './market-delivery.js';
-import {checkoutConfig,effectiveOrderStatus} from './market-payment-state.js';
+import {checkoutConfig,effectiveOrderStatus,committedSql} from './market-payment-state.js';
 import crypto from 'node:crypto';
 import {all,get,run,atomic} from '../db.js';
 import {HttpError} from '../router.js';
@@ -32,7 +32,7 @@ export async function acceptQuote(buyerId,shopId,body){
   if(current.status!=='REQUESTED'||shop.status!=='QUOTED')throw new HttpError(409,'This quote is unavailable');
   const now=Date.now(),quoted=dateMs(shop.updated_at);
   if(!Number.isFinite(quoted)||quoted+QUOTE_MS<=now)throw new HttpError(409,'This quote expired. Request a new seller quote.');
-  const active=await get("SELECT COUNT(*) AS n FROM market_purchase_orders WHERE buyer_id=? AND status='AWAITING_PAYMENT' AND expires_ms>?",[buyerId,now]);
+  const active=await get("SELECT COUNT(*) AS n FROM market_purchase_orders WHERE buyer_id=? AND status='AWAITING_PAYMENT' AND expires_ms>? AND NOT "+committedSql('market_purchase_orders.id'),[buyerId,now]);
   const recent=await get('SELECT COUNT(*) AS n FROM market_purchase_orders WHERE buyer_id=? AND created_ms>?',[buyerId,now-3600000]);
   if(Number(active.n)>=2||Number(recent.n)>=10)throw new HttpError(429,'You can hold up to two unpaid orders at a time and create ten per hour.');
   await validateRequestPickup(shop.request_id);
