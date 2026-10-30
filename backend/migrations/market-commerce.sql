@@ -118,3 +118,30 @@ CREATE TABLE IF NOT EXISTS market_payment_events (
  kind TEXT NOT NULL, occurred_ms __INT__ NOT NULL, note TEXT NOT NULL,
  UNIQUE(attempt_id,kind)
 );
+
+CREATE TABLE IF NOT EXISTS market_pickup_locations (
+ id __ID__, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, address TEXT NOT NULL,
+ city TEXT NOT NULL, state TEXT NOT NULL, hours TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'DRAFT' CHECK(status IN ('DRAFT','ACTIVE','PAUSED')),
+ version INTEGER NOT NULL DEFAULT 1, verification_note TEXT NOT NULL DEFAULT '',
+ verified_by __INT__ REFERENCES users(id), verified_ms __INT__, updated_ms __INT__ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_market_pickup_public ON market_pickup_locations(status,state);
+CREATE TABLE IF NOT EXISTS market_request_delivery (
+ id __ID__, request_id __INT__ NOT NULL UNIQUE REFERENCES market_purchase_requests(id),
+ method TEXT NOT NULL CHECK(method IN ('DOOR','PICKUP')),
+ pickup_id __INT__ REFERENCES market_pickup_locations(id), snapshot_json TEXT
+);
+CREATE TABLE IF NOT EXISTS market_shipments (
+ id __ID__, order_id __INT__ NOT NULL UNIQUE REFERENCES market_purchase_orders(id),
+ reference TEXT NOT NULL UNIQUE, mode TEXT NOT NULL CHECK(mode='test'),
+ method TEXT NOT NULL CHECK(method IN ('DOOR','PICKUP')),
+ status TEXT NOT NULL CHECK(status IN ('PREPARING','IN_TRANSIT','DELIVERY_FAILED','READY_FOR_PICKUP','DELIVERED')),
+ version INTEGER NOT NULL DEFAULT 1, created_ms __INT__ NOT NULL, updated_ms __INT__ NOT NULL
+);
+CREATE TABLE IF NOT EXISTS market_shipment_events (
+ id __ID__, shipment_id __INT__ NOT NULL REFERENCES market_shipments(id),
+ command_key TEXT NOT NULL, payload_hash TEXT NOT NULL, status TEXT NOT NULL,
+ note TEXT NOT NULL, actor TEXT NOT NULL, occurred_ms __INT__ NOT NULL,
+ UNIQUE(shipment_id,command_key)
+);

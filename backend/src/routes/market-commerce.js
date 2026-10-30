@@ -1,3 +1,4 @@
+import {pickupLocations,pickupOperations,savePickup,reviewPickup,deliveryTestAvailable,startShipment,updateShipment,readDelivery} from '../services/market-delivery.js';
 import {checkoutConfig} from '../services/market-payment-state.js';
 import {initializeCheckout,verifyCheckout,reconcileCheckout,paymentOperations} from '../services/market-payments.js';
 import {acceptQuote,buyerOrders,sellerOrders,cancelOrder,operationsOrders,HOLD_MS} from '../services/market-orders.js';
@@ -13,7 +14,7 @@ export const marketCommerceRouter=new Router();
 function privateResponse(req,res){res.setHeader?.('Cache-Control','no-store');}
 marketCommerceRouter.get('/api/market/capabilities',async(req,res)=>res.json(200,{
   email_signin_available:!!process.env.RESEND_API_KEY,payments_available:false,payment_provider:'monnify',test_checkout_available:checkoutConfig().available,checkout_mode:checkoutConfig().mode,
-  mode:'quotes_and_unpaid_orders',stock_reserved:false,orders_available:true,reservation_minutes:HOLD_MS/60000,delivery_countries:['NG'],states:STATES
+  mode:'quotes_and_unpaid_orders',stock_reserved:false,orders_available:true,delivery_booking_available:false,delivery_test_available:deliveryTestAvailable(),reservation_minutes:HOLD_MS/60000,delivery_countries:['NG'],states:STATES
 }));
 marketCommerceRouter.get('/api/market/catalog',async(req,res)=>res.json(200,await catalogue(new URL(req.url,'http://localhost').searchParams)));
 marketCommerceRouter.post('/api/market/cart-preview',async(req,res)=>res.json(200,await preview(req.body?.items)));
@@ -57,3 +58,16 @@ marketCommerceRouter.post('/api/market/orders/:id/checkout',privateResponse,requ
 marketCommerceRouter.post('/api/market/orders/:id/payment/verify',privateResponse,requireBuyer,async(req,res,params)=>res.json(200,await verifyCheckout(req.buyer.id,params.id)));
 marketCommerceRouter.get('/api/admin/market/payments',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await paymentOperations()));
 marketCommerceRouter.post('/api/admin/market/orders/:id/payment/reconcile',privateResponse,requireAuth('staff','admin'),async(req,res,params)=>res.json(200,await reconcileCheckout(params.id)));
+
+marketCommerceRouter.get('/api/market/delivery/options',async(req,res)=>res.json(200,{home_delivery:'SELLER_QUOTE',booking_available:false,pickup_locations:await pickupLocations(new URL(req.url,'http://localhost').searchParams.get('state')||'')}));
+marketCommerceRouter.get('/api/admin/market/pickup-locations',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await pickupOperations(req.user.id)));
+marketCommerceRouter.post('/api/admin/market/pickup-locations',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(201,await savePickup(req.user.id,null,req.body)));
+marketCommerceRouter.post('/api/admin/market/pickup-locations/:id',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await savePickup(req.user.id,p.id,req.body)));
+marketCommerceRouter.post('/api/admin/market/pickup-locations/:id/review',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await reviewPickup(req.user.id,p.id,req.body)));
+marketCommerceRouter.get('/api/market/orders/:id/delivery',privateResponse,requireBuyer,async(req,res,p)=>res.json(200,await readDelivery({kind:'BUYER',id:req.buyer.id},p.id)));
+marketCommerceRouter.post('/api/market/orders/:id/delivery/receipt',privateResponse,requireBuyer,async(req,res,p)=>res.json(200,await updateShipment({kind:'BUYER',id:req.buyer.id},p.id,{...req.body,status:'DELIVERED'})));
+marketCommerceRouter.post('/api/market/seller/orders/:id/delivery/start',privateResponse,requireAuth('member'),async(req,res,p)=>res.json(200,await startShipment({kind:'SELLER',id:req.user.id},p.id)));
+marketCommerceRouter.post('/api/market/seller/orders/:id/delivery/update',privateResponse,requireAuth('member'),async(req,res,p)=>res.json(200,await updateShipment({kind:'SELLER',id:req.user.id},p.id,req.body)));
+marketCommerceRouter.get('/api/admin/market/orders/:id/delivery',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await readDelivery({kind:'STAFF',id:req.user.id},p.id)));
+marketCommerceRouter.post('/api/admin/market/orders/:id/delivery/start',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await startShipment({kind:'STAFF',id:req.user.id},p.id)));
+marketCommerceRouter.post('/api/admin/market/orders/:id/delivery/update',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await updateShipment({kind:'STAFF',id:req.user.id},p.id,req.body)));
