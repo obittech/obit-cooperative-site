@@ -11,6 +11,7 @@ export const orderStatus=effectiveOrderStatus;
 async function expire(row,now=Date.now()){
  if(orderStatus(row,now)!=='EXPIRED'||row.status!=='AWAITING_PAYMENT')return;
  await run('UPDATE market_purchase_orders SET status=status WHERE id=?',[row.id]);
+ if(await get("SELECT id FROM market_bank_payments WHERE order_id=? AND status IN ('CONFIRMED','CLAIMED','REVIEW')",[row.id]))return;
  if(await get('SELECT id FROM market_payment_attempts WHERE order_id=? AND stock_committed=1',[row.id]))return;
  const changed=await run("UPDATE market_purchase_orders SET status='EXPIRED' WHERE id=? AND status='AWAITING_PAYMENT' AND expires_ms<=?",[row.id,now]);
  if(changed.changes===1)await run("INSERT INTO market_purchase_order_events (order_id,kind,occurred_ms,note) VALUES (?,'EXPIRED',?,'Stock reservation expired. Check payment status before trying again.')",[row.id,row.expires_ms]);
@@ -24,7 +25,7 @@ export async function acceptQuote(buyerId,shopId,body){
   const shop=await get(`SELECT s.*,r.buyer_id,r.status AS request_status,r.address_json FROM market_request_shops s JOIN market_purchase_requests r ON r.id=s.request_id WHERE s.id=? AND r.buyer_id=?`,[id,buyerId]);
   if(!shop)throw new HttpError(404,'Quote not found');
   await run('UPDATE market_purchase_requests SET status=status WHERE id=?',[shop.request_id]);
-  const existing=await get('SELECT o.*,p.status AS payment_status,p.stock_committed FROM market_purchase_orders o LEFT JOIN market_payment_attempts p ON p.order_id=o.id WHERE o.shop_id=? AND o.buyer_id=?',[id,buyerId]);
+  const existing=await get('SELECT o.*,p.status AS payment_status,p.stock_committed,b.status AS bank_status FROM market_purchase_orders o LEFT JOIN market_payment_attempts p ON p.order_id=o.id LEFT JOIN market_bank_payments b ON b.order_id=o.id WHERE o.shop_id=? AND o.buyer_id=?',[id,buyerId]);
   if(existing){if(Number(existing.total_kobo)!==expected)throw new HttpError(409,'This quote already has an order with a different reviewed total');await expire(existing);return {id:Number(existing.id),reference:existing.reference,status:orderStatus(existing),replayed:true};}
   // Re-read after the parent lock: cancellation may have committed while waiting.
   const current=await get('SELECT status FROM market_purchase_requests WHERE id=?',[shop.request_id]);
@@ -64,9 +65,10 @@ async function orderRows(where,args,privateAddress=false){
  const states=await all('SELECT id,status,cancel_actor,cancel_reason,cancelled_ms FROM market_purchase_orders WHERE id IN ('+marks+')',ids);
  const payments=await all('SELECT order_id,reference,status,mode,amount_kobo,currency,stock_committed,review_reason FROM market_payment_attempts WHERE order_id IN ('+marks+')',ids);
  const paymentEvents=await all('SELECT p.order_id,e.kind,e.occurred_ms,e.note FROM market_payment_events e JOIN market_payment_attempts p ON p.id=e.attempt_id WHERE p.order_id IN ('+marks+')',ids);
+ const bankPayments=await all('SELECT * FROM market_bank_payments WHERE order_id IN ('+marks+')',ids);
  const deliveries=await orderDeliveries(ids),shipments=await shipmentSummaries(ids);
  const stateMap=new Map(states.map(r=>[Number(r.id),r]));
- return rows.map(row=>{const payment=payments.find(p=>Number(p.order_id)===Number(row.id));const r={...row,...stateMap.get(Number(row.id)),payment_status:payment?.status,stock_committed:payment?.stock_committed},a=JSON.parse(r.address_json);return {id:Number(r.id),reference:r.reference,shop_id:Number(r.shop_id),seller_id:Number(r.seller_member_id),status:orderStatus(r),created_ms:Number(r.created_ms),expires_ms:Number(r.expires_ms),subtotal_kobo:Number(r.subtotal_kobo),delivery_kobo:Number(r.delivery_kobo),total_kobo:Number(r.total_kobo),destination:{city:a.city,state:a.state},...(privateAddress?{address:a}:{}),cancel_actor:r.cancel_actor,cancel_reason:r.cancel_reason,payment_available:checkoutConfig().available&&orderStatus(r)==='AWAITING_PAYMENT'&&(!payment||payment.status==='READY'),checkout_mode:checkoutConfig().mode,payment:payment?{reference:payment.reference,status:payment.status,mode:payment.mode,amount_kobo:Number(payment.amount_kobo),currency:payment.currency,review_reason:payment.review_reason}:null,cancellation_available:orderStatus(r)==='AWAITING_PAYMENT'&&(!payment||payment.status==='FAILED'),dispatch_allowed:false,delivery_test_available:deliveryTestAvailable()&&orderStatus(r)==='TEST_PAID'&&deliveries.get(Number(r.id))?.available!==false,fulfilment:deliveries.get(Number(r.id))||{method:'DOOR',pickup:null},shipment:shipments.get(Number(r.id))||null,
+ return rows.map(row=>{const bank=bankPayments.find(p=>Number(p.order_id)===Number(row.id));const payment=payments.find(p=>Number(p.order_id)===Number(row.id));const r={...row,...stateMap.get(Number(row.id)),payment_status:payment?.status,stock_committed:payment?.stock_committed,bank_status:bank?.status},a=JSON.parse(r.address_json);return {id:Number(r.id),reference:r.reference,shop_id:Number(r.shop_id),seller_id:Number(r.seller_member_id),status:orderStatus(r),created_ms:Number(r.created_ms),expires_ms:Number(r.expires_ms),subtotal_kobo:Number(r.subtotal_kobo),delivery_kobo:Number(r.delivery_kobo),total_kobo:Number(r.total_kobo),destination:{city:a.city,state:a.state},...(privateAddress?{address:a}:{}),bank_payment:bank?{status:bank.status,amount_kobo:Number(bank.amount_kobo),bank_name:bank.bank_name,account_name:bank.account_name,account_number:bank.account_number,confirmed_ms:bank.confirmed_ms?Number(bank.confirmed_ms):null,receipt_reference:bank.status==='CONFIRMED'?'OBMR-'+r.reference:null}:null,cancel_actor:r.cancel_actor,cancel_reason:r.cancel_reason,payment_available:checkoutConfig().available&&orderStatus(r)==='AWAITING_PAYMENT'&&(!payment||payment.status==='READY'),checkout_mode:checkoutConfig().mode,payment:payment?{reference:payment.reference,status:payment.status,mode:payment.mode,amount_kobo:Number(payment.amount_kobo),currency:payment.currency,review_reason:payment.review_reason}:null,cancellation_available:!bank&&orderStatus(r)==='AWAITING_PAYMENT'&&(!payment||payment.status==='FAILED'),dispatch_allowed:false,delivery_test_available:deliveryTestAvailable()&&orderStatus(r)==='TEST_PAID'&&deliveries.get(Number(r.id))?.available!==false,fulfilment:deliveries.get(Number(r.id))||{method:'DOOR',pickup:null},shipment:shipments.get(Number(r.id))||null,
   items:items.filter(i=>Number(i.order_id)===Number(r.id)).map(i=>({listing_id:Number(i.listing_id),title:i.title,quantity:Number(i.quantity),unit_kobo:Number(i.unit_kobo)})),
   events:[...events,...paymentEvents].filter(e=>Number(e.order_id)===Number(r.id)).sort((a,b)=>Number(a.occurred_ms)-Number(b.occurred_ms)).map(e=>({kind:e.kind,occurred_ms:Number(e.occurred_ms),note:e.note}))};});
 }
@@ -84,6 +86,7 @@ export async function cancelOrder(actor,id,body){
   let row=await get('SELECT * FROM market_purchase_orders WHERE id=? AND '+clause,[id,owner]);
   if(!row)throw new HttpError(404,'Order not found');
   await run('UPDATE market_purchase_orders SET status=status WHERE id=?',[id]);row=await get('SELECT * FROM market_purchase_orders WHERE id=?',[id]);
+  if(await get('SELECT id FROM market_bank_payments WHERE order_id=?',[id]))throw new HttpError(409,'Contact payment support before cancelling a bank-transfer order.');
   const payment=await get('SELECT status,stock_committed FROM market_payment_attempts WHERE order_id=?',[id]);
   if(payment&&(Number(payment.stock_committed)||payment.status!=='FAILED'))throw new HttpError(409,'Check payment status before cancellation. Confirmed or uncertain payments require review.');
   await expire(row);
@@ -94,6 +97,6 @@ export async function cancelOrder(actor,id,body){
  });
 }
 export async function operationsOrders(){
- const rows=await all('SELECT o.id,o.reference,o.status,o.total_kobo,o.address_json,o.created_ms,o.expires_ms,p.status AS payment_status,p.stock_committed FROM market_purchase_orders o LEFT JOIN market_payment_attempts p ON p.order_id=o.id ORDER BY o.id DESC LIMIT 100');
+ const rows=await all('SELECT o.id,o.reference,o.status,o.total_kobo,o.address_json,o.created_ms,o.expires_ms,p.status AS payment_status,p.stock_committed,b.status AS bank_status FROM market_purchase_orders o LEFT JOIN market_payment_attempts p ON p.order_id=o.id LEFT JOIN market_bank_payments b ON b.order_id=o.id ORDER BY o.id DESC LIMIT 100');
  return rows.map(r=>{const a=JSON.parse(r.address_json);return {id:Number(r.id),reference:r.reference,status:orderStatus(r),total_kobo:Number(r.total_kobo),created_ms:Number(r.created_ms),expires_ms:Number(r.expires_ms),destination:{city:a.city,state:a.state}};});
 }

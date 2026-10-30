@@ -1,3 +1,4 @@
+import {bankTransferConfig,startBankTransfer,claimBankTransfer,bankPaymentOperations,confirmBankTransfer} from '../services/market-bank-transfer.js';
 import {submitVideo,videoReviews,reviewVideo} from '../services/market-media.js';
 import {pickupLocations,pickupOperations,savePickup,reviewPickup,deliveryTestAvailable,startShipment,updateShipment,readDelivery} from '../services/market-delivery.js';
 import {checkoutConfig} from '../services/market-payment-state.js';
@@ -14,7 +15,7 @@ import { catalogue, preview, buyerCart, changeCart, mergeCart, saveAddress, STAT
 export const marketCommerceRouter=new Router();
 function privateResponse(req,res){res.setHeader?.('Cache-Control','no-store');}
 marketCommerceRouter.get('/api/market/capabilities',async(req,res)=>res.json(200,{
-  email_signin_available:!!process.env.RESEND_API_KEY,payments_available:false,payment_provider:'monnify',test_checkout_available:checkoutConfig().available,checkout_mode:checkoutConfig().mode,
+  bank_transfer_available:bankTransferConfig().available,bank_transfer_whatsapp:bankTransferConfig().whatsapp,email_signin_available:!!process.env.RESEND_API_KEY,payments_available:false,payment_provider:'monnify',test_checkout_available:checkoutConfig().available,checkout_mode:checkoutConfig().mode,
   mode:'quotes_and_unpaid_orders',stock_reserved:false,orders_available:true,delivery_booking_available:false,delivery_test_available:deliveryTestAvailable(),reservation_minutes:HOLD_MS/60000,delivery_countries:['NG'],states:STATES
 }));
 marketCommerceRouter.get('/api/market/catalog',async(req,res)=>res.json(200,await catalogue(new URL(req.url,'http://localhost').searchParams)));
@@ -76,3 +77,8 @@ marketCommerceRouter.post('/api/admin/market/orders/:id/delivery/update',private
 marketCommerceRouter.post('/api/market/seller/listings/:id/video',privateResponse,requireAuth('member'),async(req,res,params)=>res.json(200,await submitVideo(req.user.id,params.id,req.body)));
 marketCommerceRouter.get('/api/admin/market/videos',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await videoReviews(req.user.id)));
 marketCommerceRouter.post('/api/admin/market/listings/:id/video/decision',privateResponse,requireAuth('staff','admin'),async(req,res,params)=>res.json(200,await reviewVideo(req.user.id,params.id,req.body)));
+
+marketCommerceRouter.post('/api/market/orders/:id/bank-transfer',privateResponse,requireBuyer,async(req,res,p)=>res.json(200,await startBankTransfer(req.buyer.id,p.id,req.body)));
+marketCommerceRouter.post('/api/market/orders/:id/bank-transfer/paid',privateResponse,requireBuyer,async(req,res,p)=>res.json(200,await claimBankTransfer(req.buyer.id,p.id)));
+marketCommerceRouter.get('/api/admin/market/bank-transfers',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await bankPaymentOperations()));
+marketCommerceRouter.post('/api/admin/market/orders/:id/bank-transfer/confirm',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await confirmBankTransfer(req.user.id,p.id,req.body)));

@@ -525,3 +525,32 @@ test('listing and initial video commit together and invalid video rolls back the
  assert.equal(await db.get('SELECT id FROM market_listings WHERE title=?',[tag+' rejected initial video']),undefined);
  const hidden=await m.catalogue(new URLSearchParams({videos:'1',q:tag+' video listing'}));assert.equal(hidden.total,0);
 });
+
+const bank=await import('../src/services/market-bank-transfer.js');
+function enableBank(){Object.assign(process.env,{MARKET_TRANSFER_ENABLED:'true',MARKET_TRANSFER_BANK_NAME:'Test Bank',MARKET_TRANSFER_ACCOUNT_NAME:'Test Company',MARKET_TRANSFER_ACCOUNT_NUMBER:'0123456789'});}
+test('internal checkout requires account configuration and order ownership',async()=>{
+ const f=await paymentFixture(),b=await buyer();process.env.MARKET_TRANSFER_ENABLED='false';
+ await assert.rejects(bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total}),e=>e.status===503);
+ enableBank();await assert.rejects(bank.startBankTransfer(b.id,f.o.id,{expected_total_kobo:f.q.total}),e=>e.status===404);
+ await assert.rejects(bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:1}),e=>e.status===409);
+ assert.equal((await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total})).status,'READY');
+ assert.equal((await endpoint('POST',`/api/admin/market/orders/${f.o.id}/bank-transfer/confirm`,auth.buyerToken(f.b))).status,401);
+});
+test('payment notification remains pending until bank credit is confirmed, with stock and credit deduplication',async()=>{
+ enableBank();const f=await paymentFixture();await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total});
+ const [a,b]=await Promise.all([bank.claimBankTransfer(f.b.id,f.o.id),bank.claimBankTransfer(f.b.id,f.o.id)]);assert.equal(a.status,'CLAIMED');assert.equal(b.status,'CLAIMED');
+ const u=new URL(a.whatsapp_url);assert.equal(u.pathname,'/2348030567787');assert.ok(u.searchParams.get('text').includes(f.o.reference));
+ assert.equal((await orders.buyerOrders(f.b.id))[0].status,'PAYMENT_PENDING');assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),3);
+ await assert.rejects(orders.cancelOrder({buyerId:f.b.id},f.o.id,{reason:'Cancel now'}),e=>e.status===409);
+ const staff=await db.run("INSERT INTO users (email,role) VALUES (?,'staff')",[`${tag}-bank-staff@example.test`]);const body={bank_credit_checked:true,bank_reference:'BANK-TEST-UNIQUE-0001',amount_kobo:f.q.total};
+ await assert.rejects(bank.confirmBankTransfer(staff.lastInsertRowid,f.o.id,{...body,bank_credit_checked:false}),e=>e.status===400);
+ await assert.rejects(bank.confirmBankTransfer(staff.lastInsertRowid,f.o.id,{...body,amount_kobo:1}),e=>e.status===409);
+ await bank.confirmBankTransfer(staff.lastInsertRowid,f.o.id,body);await bank.confirmBankTransfer(staff.lastInsertRowid,f.o.id,body);
+ assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),2);
+ await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);const o=(await orders.buyerOrders(f.b.id))[0];assert.equal(o.status,'PAID');assert.equal(o.bank_payment.receipt_reference,'OBMR-'+o.reference);
+ const g=await paymentFixture();await bank.startBankTransfer(g.b.id,g.o.id,{expected_total_kobo:g.q.total});await bank.claimBankTransfer(g.b.id,g.o.id);
+ await assert.rejects(bank.confirmBankTransfer(staff.lastInsertRowid,g.o.id,{...body,amount_kobo:g.q.total}),e=>e.status===409);
+});
+test('late transfer notification goes to review and does not revive the reservation',async()=>{
+ enableBank();const f=await paymentFixture();await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total});await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);assert.equal((await bank.claimBankTransfer(f.b.id,f.o.id)).status,'REVIEW');assert.equal(Number((await db.get('SELECT expires_ms FROM market_purchase_orders WHERE id=?',[f.o.id])).expires_ms),0);
+});

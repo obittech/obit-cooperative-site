@@ -281,6 +281,7 @@ async function refreshMarketOrders(token){
 document.getElementById('refreshMarketOrders').addEventListener('click',()=>refreshMarketOrders(OBIT.getSession('staff')));
 
 async function refreshMarketPayments(token){
+ refreshBankPayments(token);
  const target=document.getElementById('marketPaymentsBody');
  try{const [rows,caps]=await Promise.all([OBIT.get('/api/admin/market/payments',{token}),OBIT.get('/api/market/capabilities')]);
  document.getElementById('marketPaymentReadiness').textContent=caps.test_checkout_available?'Monnify sandbox only. Reconciliation queries the provider and cannot initiate a refund or dispatch.':'Monnify live collection is disabled. Sandbox credentials and an isolated test environment are required to test checkout.';
@@ -289,3 +290,12 @@ async function refreshMarketPayments(token){
  }catch(e){target.textContent=e.message;}
 }
 document.getElementById('refreshMarketPayments').addEventListener('click',()=>refreshMarketPayments(OBIT.getSession('staff')));
+
+async function refreshBankPayments(token){
+ let root=document.getElementById('bankTransferAdmin');
+ if(!root){root=document.createElement('section');root.id='bankTransferAdmin';document.getElementById('marketPaymentReadiness').before(root);}
+ try{const rows=await OBIT.get('/api/admin/market/bank-transfers',{token});
+ root.innerHTML='<h3>Internal bank-transfer verification</h3><p>Verify the actual bank credit before confirming. A customer notification is not proof of payment. Follow up on delivery through WhatsApp.</p>'+rows.map(p=>`<article class="card"><h4>${escapeMarket(p.order_reference)}</h4><p>₦${(Number(p.amount_kobo)/100).toLocaleString('en-NG')} · ${escapeMarket(p.status)}</p><p>${escapeMarket(p.bank_name)} · ${escapeMarket(p.account_name)} · ${escapeMarket(p.account_number)}</p>${['CLAIMED','REVIEW'].includes(p.status)?`<form data-confirm-bank="${Number(p.order_id)}" data-amount="${Number(p.amount_kobo)}"><label class="field">Actual bank transaction reference<input name="bank_reference" minlength="6" maxlength="120" required></label><label><input type="checkbox" name="checked" required> I verified this exact amount as a credit in the receiving bank account.</label><button class="btn" type="submit">Confirm bank credit &amp; issue receipt</button><p role="status"></p></form>`:p.status==='CONFIRMED'?'<p>Payment confirmed. Receipt available in the buyer account.</p>':'<p>Customer has not clicked I Have Paid.</p>'}</article>`).join('');
+ root.querySelectorAll('[data-confirm-bank]').forEach(f=>f.addEventListener('submit',async e=>{e.preventDefault();const b=f.querySelector('button');b.disabled=true;try{await OBIT.post(`/api/admin/market/orders/${f.dataset.confirmBank}/bank-transfer/confirm`,{bank_reference:f.elements.bank_reference.value,amount_kobo:Number(f.dataset.amount),bank_credit_checked:f.elements.checked.checked},{token});await refreshBankPayments(token);await refreshMarketOrders(token);}catch(err){f.querySelector('[role=status]').textContent=err.message;b.disabled=false;}}));
+ }catch(e){root.textContent=e.message;}
+}

@@ -17,6 +17,7 @@ export async function initializeCheckout(buyerId,orderId,body={}){
  const cfg=enabled(),id=integer(orderId,1,Number.MAX_SAFE_INTEGER,'order');
  const claim=await atomic(async()=>{
   const row=await ownOrder(buyerId,id);await lockOrder(row);
+  if(await get('SELECT id FROM market_bank_payments WHERE order_id=?',[id]))throw new HttpError(409,'An internal transfer checkout already exists. Contact support.');
   const order=await ownOrder(buyerId,id),old=await get('SELECT * FROM market_payment_attempts WHERE order_id=?',[id]);
   if(old){if(body.expected_total_kobo!==Number(old.amount_kobo))throw new HttpError(409,'Review the original payment total.');if(!['SUCCEEDED','REVIEW'].includes(old.status)&&effectiveOrderStatus(order)!=='AWAITING_PAYMENT')throw new HttpError(409,'This reservation is no longer active. Check payment status before trying again.');if(old.status==='READY')await validateRequestPickup((await get('SELECT request_id FROM market_request_shops WHERE id=?',[order.shop_id])).request_id);return {old};}
   await validateRequestPickup((await get('SELECT request_id FROM market_request_shops WHERE id=?',[order.shop_id])).request_id);

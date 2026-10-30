@@ -155,3 +155,13 @@ CREATE TABLE IF NOT EXISTS market_listing_videos (
  reviewed_by __INT__ REFERENCES users(id), reviewed_ms __INT__, review_note TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_market_videos_review ON market_listing_videos(status,submitted_ms);
+
+-- Internal bank-transfer records, separate from provider sandbox attempts.
+CREATE TABLE IF NOT EXISTS market_bank_payments (
+ id __ID__, order_id __INT__ NOT NULL UNIQUE REFERENCES market_purchase_orders(id),
+ status TEXT NOT NULL CHECK(status IN ('READY','CLAIMED','CONFIRMED','REVIEW')),
+ amount_kobo __INT__ NOT NULL CHECK(amount_kobo>0), bank_name TEXT NOT NULL,
+ account_name TEXT NOT NULL, account_number TEXT NOT NULL,
+ created_ms __INT__ NOT NULL, claimed_ms __INT__, confirmed_ms __INT__,
+ bank_reference TEXT UNIQUE, confirmed_by __INT__ REFERENCES users(id)
+);
