@@ -554,3 +554,71 @@ test('payment notification remains pending until bank credit is confirmed, with 
 test('late transfer notification goes to review and does not revive the reservation',async()=>{
  enableBank();const f=await paymentFixture();await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total});await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);assert.equal((await bank.claimBankTransfer(f.b.id,f.o.id)).status,'REVIEW');assert.equal(Number((await db.get('SELECT expires_ms FROM market_purchase_orders WHERE id=?',[f.o.id])).expires_ms),0);
 });
+
+const care=await import('../src/services/market-aftercare.js');
+async function livePaidFixture(){
+ enableBank();const f=await paymentFixture(),admin=await staff();
+ await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total});await bank.claimBankTransfer(f.b.id,f.o.id);
+ await bank.confirmBankTransfer(admin.id,f.o.id,{bank_credit_checked:true,bank_reference:'INBOUND-'+crypto.randomUUID(),amount_kobo:f.q.total});
+ return {...f,admin,actor:{kind:'STAFF',id:admin.id},customer:{kind:'BUYER',id:f.b.id}};
+}
+test('manual fulfilment requires bank confirmation, staff access and buyer ownership',async()=>{
+ const f=await paymentFixture(),admin=await staff(),b=await buyer(),actor={kind:'STAFF',id:admin.id};
+ await assert.rejects(care.updateManualDelivery(actor,f.o.id,{status:'PREPARING',version:0,note:'Order preparation started'}),e=>e.status===409);
+ await assert.rejects(care.readAftercare({kind:'BUYER',id:b.id},f.o.id),e=>e.status===404);
+ await assert.rejects(care.readAftercare({kind:'STAFF',id:f.s.uid},f.o.id),e=>e.status===403);
+ const token=auth.buyerToken(f.b);
+ assert.equal((await endpoint('POST',`/api/admin/market/orders/${f.o.id}/fulfilment`,token,{status:'PREPARING',version:0,note:'Should be refused'})).status,401);
+ assert.equal((await endpoint('GET',`/api/market/orders/${f.o.id}/aftercare`,auth.buyerToken(b))).status,404);
+});
+test('manual delivery progresses after payment and only its buyer can confirm receipt',async()=>{
+ const f=await livePaidFixture();
+ await care.updateManualDelivery(f.actor,f.o.id,{status:'PREPARING',version:0,note:'Paid goods are being prepared'});
+ await assert.rejects(care.updateManualDelivery(f.actor,f.o.id,{status:'IN_TRANSIT',version:1,note:'Ready for dispatch'}),e=>e.status===400);
+ const dispatch={status:'IN_TRANSIT',version:1,carrier:'Test operations team',tracking_reference:'TEST-HANDOVER-'+f.o.id,note:'Actual handover recorded for this isolated test'};
+ const concurrent=await Promise.allSettled([care.updateManualDelivery(f.actor,f.o.id,dispatch),care.updateManualDelivery(f.actor,f.o.id,dispatch)]);
+ assert.equal(concurrent.filter(r=>r.status==='fulfilled').length,1);
+ await assert.rejects(care.updateManualDelivery(f.actor,f.o.id,{status:'RECEIVED',version:2,note:'Staff cannot confirm buyer receipt'}),e=>e.status===409);
+ await assert.rejects(care.updateManualDelivery(f.customer,f.o.id,{status:'RECEIVED',version:2,note:'Receipt must be acknowledged'}),e=>e.status===409);
+ await care.updateManualDelivery(f.customer,f.o.id,{status:'RECEIVED',version:2,note:'Buyer received the goods',receipt_confirmed:true});
+ assert.equal((await care.readAftercare(f.customer,f.o.id)).delivery.status,'RECEIVED');
+ const history=(await orders.buyerOrders(f.b.id))[0];assert.equal(history.aftercare.delivery.status,'RECEIVED');assert.equal(history.aftercare.events.length,3);
+ assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),2);
+});
+test('return requests deduplicate, block dispatch, allow inspection and cap refund approvals',async()=>{
+ const f=await livePaidFixture(),reason='The item is damaged and needs review';
+ const r=await Promise.all([care.requestReturn(f.b.id,f.o.id,{reason}),care.requestReturn(f.b.id,f.o.id,{reason})]);assert.equal(r[0].id,r[1].id);
+ await assert.rejects(care.updateManualDelivery(f.actor,f.o.id,{status:'PREPARING',version:0,note:'Must resolve the problem first'}),e=>e.status===409);
+ await care.decideReturn(f.admin.id,f.o.id,{status:'RETURN_AUTHORISED',version:1,note:'Return arrangements agreed with the customer'});
+ await assert.rejects(care.decideReturn(f.admin.id,f.o.id,{status:'APPROVED',version:2,amount_kobo:f.q.total,note:'Inspection still required'}),e=>e.status===409);
+ await care.decideReturn(f.admin.id,f.o.id,{status:'RECEIVED',version:2,note:'Returned item received and inspected'});
+ await assert.rejects(care.decideReturn(f.admin.id,f.o.id,{status:'APPROVED',version:3,amount_kobo:f.q.total+1,note:'Amount above payment must fail'}),e=>e.status===409);
+ await care.decideReturn(f.admin.id,f.o.id,{status:'APPROVED',version:3,amount_kobo:f.q.total,note:'Full refund approved after inspection'});
+ assert.equal((await care.readAftercare(f.customer,f.o.id)).return_case.refunded_kobo,0);
+});
+test('refund recording requires bank checks, caps cumulative payments, deduplicates references and protects privacy',async()=>{
+ const f=await livePaidFixture();await care.requestReturn(f.b.id,f.o.id,{reason:'Goods not delivered, requesting a full refund'});
+ await care.decideReturn(f.admin.id,f.o.id,{status:'APPROVED',version:1,amount_kobo:f.q.total,note:'Non-delivery checked and refund approved'});
+ const body={amount_kobo:Math.floor(f.q.total/2),version:2,bank_reference:'DEBIT-'+crypto.randomUUID(),bank_debit_checked:true,recipient_checked:true};
+ await assert.rejects(care.recordRefund(f.admin.id,f.o.id,{...body,bank_debit_checked:false}),e=>e.status===400);
+ await assert.rejects(care.recordRefund(f.admin.id,f.o.id,{...body,recipient_checked:false}),e=>e.status===400);
+ const result=await Promise.all([care.recordRefund(f.admin.id,f.o.id,body),care.recordRefund(f.admin.id,f.o.id,body)]);assert.equal(result[0].receipt_reference,result[1].receipt_reference);
+ let publicView=await care.readAftercare(f.customer,f.o.id);assert.equal(publicView.return_case.status,'PARTIALLY_REFUNDED');assert.equal(publicView.return_case.refunded_kobo,body.amount_kobo);assert.ok(!JSON.stringify(publicView).includes(body.bank_reference));
+ assert.ok(JSON.stringify(await care.readAftercare(f.actor,f.o.id)).includes(body.bank_reference));
+ await assert.rejects(care.recordRefund(f.admin.id,f.o.id,{...body,version:3,bank_reference:'DEBIT-'+crypto.randomUUID(),amount_kobo:f.q.total}),e=>e.status===409);
+ await care.recordRefund(f.admin.id,f.o.id,{...body,version:3,bank_reference:'DEBIT-'+crypto.randomUUID(),amount_kobo:f.q.total-body.amount_kobo});
+ assert.equal((await care.readAftercare(f.customer,f.o.id)).return_case.status,'REFUNDED');
+ await assert.rejects(care.recordRefund(f.admin.id,f.o.id,{...body,version:4,bank_reference:'DEBIT-'+crypto.randomUUID(),amount_kobo:1}),e=>e.status===409);
+ const g=await livePaidFixture();await care.requestReturn(g.b.id,g.o.id,{reason:'Another non-delivery case for this order'});await care.decideReturn(g.admin.id,g.o.id,{status:'APPROVED',version:1,amount_kobo:g.q.total,note:'Separate order refund approved for testing'});
+ await assert.rejects(care.recordRefund(g.admin.id,g.o.id,{...body}),e=>e.status===409);
+ await db.migrate();assert.equal((await care.readAftercare(f.customer,f.o.id)).return_case.refunded_kobo,f.q.total);
+});
+test('refund and dispatch races cannot progress a case or duplicate records',async()=>{
+ const f=await livePaidFixture();await care.updateManualDelivery(f.actor,f.o.id,{status:'PREPARING',version:0,note:'Preparation started for this order'});
+ await care.requestReturn(f.b.id,f.o.id,{reason:'Stop this order and review the payment'});
+ const result=await Promise.allSettled([care.updateManualDelivery(f.actor,f.o.id,{version:1,status:'IN_TRANSIT',carrier:'Test team',tracking_reference:'TEST-123',note:'Must not dispatch during a return case'}),care.decideReturn(f.admin.id,f.o.id,{version:1,status:'APPROVED',amount_kobo:f.q.total,note:'Cancellation and refund approved after review'})]);
+ assert.equal(result[0].status,'rejected');assert.equal(result[1].status,'fulfilled');
+ const body={amount_kobo:f.q.total,version:2,bank_debit_checked:true,recipient_checked:true};
+ const refunds=await Promise.allSettled([care.recordRefund(f.admin.id,f.o.id,{...body,bank_reference:'DEBIT-'+crypto.randomUUID()}),care.recordRefund(f.admin.id,f.o.id,{...body,bank_reference:'DEBIT-'+crypto.randomUUID()})]);
+ assert.equal(refunds.filter(r=>r.status==='fulfilled').length,1);
+});
