@@ -1,7 +1,11 @@
 // portal.js
 
 function showAlert(message, type = 'error') {
-  document.getElementById('alertBox').innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+  const alert = document.createElement('div');
+  alert.className = `alert alert-${type}`;
+  alert.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  alert.textContent = message;
+  document.getElementById('alertBox').replaceChildren(alert);
 }
 function clearAlert() { const el = document.getElementById('alertBox'); if (el) el.innerHTML = ''; }
 
@@ -23,7 +27,11 @@ document.getElementById('btnRequestSetup').addEventListener('click', async () =>
     const res = await OBIT.post('/api/auth/request-portal-setup', { identifier });
     document.getElementById('setupUserId').value = res.user_id;
     showAlert(res.message || 'Verification code sent. Check your email.', 'success');
-  } catch (err) { showAlert(err.message); }
+  } catch (err) {
+    showAlert(err.message === 'No membership application matches that email or phone'
+      ? 'Password setup is for existing members. If you are new, select Create a shopping account or Apply for membership above. If you have already applied, check your membership email or contact support.'
+      : err.message);
+  }
 });
 
 document.getElementById('btnSetPassword').addEventListener('click', async () => {

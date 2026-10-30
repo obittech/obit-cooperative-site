@@ -41,13 +41,23 @@
       <div id="loggedOutView">
         <div class="app-header auth-shell" style="text-align:center;margin:0 auto 30px">
           <div class="eyebrow green">MEMBER PORTAL — BETA</div>
-          <h1>Log in to your account</h1>
+          <h1>Welcome to Obit</h1>
+          <p>New here? Choose how you want to get started.</p>
         </div>
 
+        <section class="card auth-shell" aria-labelledby="newAccountHeading" style="margin-bottom:24px">
+          <h2 id="newAccountHeading">Create an account</h2>
+          <p class="muted-note">Shopping for the first time? Create your shopping account with an email verification code. Cooperative membership is optional for buyers.</p>
+          <a class="btn btn-primary btn-block" href="market-account.html" style="margin:16px 0">Create a shopping account</a>
+          <p class="muted-note">Want to sell or join the cooperative? Start your membership application. Selling requires active membership and listing approval.</p>
+          <a class="btn btn-secondary btn-block" href="apply.html" style="margin-top:16px">Apply for membership</a>
+        </section>
+
         <div class="card auth-shell">
+          <h2 style="margin-bottom:16px">Already a cooperative member?</h2>
           <div class="tab-row">
             <button class="active" id="tabLogin">Log In</button>
-            <button id="tabSetup">First time? Set your password</button>
+            <button id="tabSetup">Approved member: Set password</button>
           </div>
 
           <div id="alertBox"></div>
@@ -60,11 +70,11 @@
               <input id="loginPassword" type="password" />
             </label>
             <button class="btn btn-primary btn-block" id="btnLogin">Log In</button>
-            <p class="muted-note">Portal access opens once your membership application is approved and activated. Applied recently? <a href="apply.html">Check your application</a>.</p>
+            <p class="muted-note">This login is for cooperative members with an approved, active membership. Shopping accounts use <a href="market-account.html">email sign-in</a>. Need help with an existing application? <a href="https://wa.me/2348030567787">Contact support</a>.</p>
           </div>
 
           <div id="setupForm" style="display:none">
-            <p class="muted-note" style="margin-bottom:14px">Enter the email address used for your approved membership. We'll send a 6-digit verification code to that email.</p>
+            <p class="muted-note" style="margin-bottom:14px">For approved members setting a password for the first time. Enter your membership email to receive a six-digit code. Have not applied yet? <a href="apply.html">Start your membership application</a>.</p>
             <label class="field">Registered email
               <input id="setupIdentifier" type="email" placeholder="you@example.com" autocomplete="email" />
             </label>
@@ -202,6 +212,6 @@
   <script src="js/config.js"></script>
   <script src="js/nav.js?v=20260924-2"></script>
   <script src="js/api.js"></script>
-  <script src="js/portal.js?v=20260928-savings-1"></script>
+  <script src="js/portal.js?v=20261030-account-entry"></script>
 </body>
 </html>
