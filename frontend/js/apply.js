@@ -162,7 +162,7 @@ function fillReviewSummary(app) {
 
 async function saveProfileAndContinue() {
   clearAlert();
-  const required = ['full_legal_name', 'phone', 'email', 'address', 'state', 'membership_type'];
+  const required = ['full_legal_name', 'phone', 'email', 'address', 'state', 'lga', 'membership_type'];
   const missing = required.filter((id) => !document.getElementById(id).value);
   if (missing.length) return showAlert('Please fill in all required fields before continuing.');
 
@@ -334,8 +334,9 @@ async function restoreExistingApplication() {
     state.application = app;
     fieldIds().forEach((id) => {
       const el = document.getElementById(id);
-      if (app[id] !== undefined && app[id] !== null) el.value = app[id];
+      if (!['state', 'lga'].includes(id) && app[id] !== undefined && app[id] !== null) el.value = app[id];
     });
+    window.ObitLocations.restore(document.getElementById('state'), document.getElementById('lga'), app.state, app.lga);
     restoreInterestChoices(app);
     fillReviewSummary(app);
     const target = STATUS_TO_STEP[app.status] || 'profile';
@@ -374,6 +375,10 @@ document.getElementById('btnInitPayment').addEventListener('click', initPayment)
 document.getElementById('btnSaveSavingsDraft').addEventListener('click', saveSavingsDraft);
 
 async function initializeApplicationPage() {
+  const stateSelect = document.getElementById('state');
+  const lgaSelect = document.getElementById('lga');
+  stateSelect.addEventListener('change', () => window.ObitLocations.fillLgas(stateSelect, lgaSelect));
+  window.ObitLocations.fillLgas(stateSelect, lgaSelect);
   applyMembershipPathPreset();
   await restoreExistingApplication();
 
