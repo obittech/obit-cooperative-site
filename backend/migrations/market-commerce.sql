@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS market_shipment_events (
 
 -- Seller videos have their own review. Editing a video never approves it.
 CREATE TABLE IF NOT EXISTS market_listing_videos (
- listing_id __INT__ PRIMARY KEY REFERENCES market_listings(id),
+ id __ID__, listing_id __INT__ NOT NULL UNIQUE REFERENCES market_listings(id),
  video_url TEXT NOT NULL, description TEXT NOT NULL,
  status TEXT NOT NULL CHECK(status IN ('PENDING','APPROVED','REJECTED')),
  version __INT__ NOT NULL DEFAULT 1, submitted_ms __INT__ NOT NULL,
