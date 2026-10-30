@@ -12,3 +12,9 @@ test('checkout renders transfer details without uploads and keeps notification p
  const paid=await render({...base,status:'CONFIRMED',confirmed_ms:Date.now(),receipt_reference:'OBMR-TEST'});assert.match(paid,/OBMR-TEST/);assert.match(paid,/Print \/ save receipt/);assert.match(paid,/Submit support request/);assert.match(paid,/staff and the buyer/);
  const off=await render(null,false);assert.match(off,/data-bank-start="1" disabled/);
 });
+test('seller after-sales view is read-only while buyer retains receipt and problem controls',()=>{
+ const ctx={};vm.createContext(ctx);vm.runInContext(fs.readFileSync('frontend/js/market-aftercare.js','utf8')+'\nglobalThis.aftercare=AftercareUI;',ctx);
+ const o={id:1,total_kobo:2000000,aftercare:{delivery:{status:'IN_TRANSIT',method:'DOOR',carrier:'Delivery team',tracking_reference:'HANDOVER-1',version:2},events:[],return_case:null}};
+ const seller=ctx.aftercare.card(o,'SELLER');assert.match(seller,/In transit/);assert.match(seller,/HANDOVER-1/);assert.doesNotMatch(seller,/<form|Submit support request|Confirm goods received/);
+ const buyer=ctx.aftercare.card(o,'BUYER');assert.match(buyer,/Confirm goods received/);assert.match(buyer,/Submit support request/);
+});
