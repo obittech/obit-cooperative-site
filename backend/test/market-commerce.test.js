@@ -485,3 +485,43 @@ test('a pickup closure after checkout puts a received test payment into review w
  const point=await activePickup(),f=await pickupOrder(point);testCheckout();
  try{await initialiseFixture(f);const row=await paymentRow(f.o.id);await delivery.reviewPickup(point.admin.id,point.id,{version:2,status:'PAUSED',verification_note:'Collection operation temporarily closed'});assert.equal((await orders.buyerOrders(f.b.id))[0].fulfilment.available,false);await assert.rejects(initialiseFixture(f),e=>e.status===409);mockMonnify(()=>receiptFor(row));const result=await pay.verifyCheckout(f.b.id,f.o.id);assert.equal(result.status,'REVIEW');assert.equal(result.review_reason,'PICKUP_UNAVAILABLE');assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),3);}finally{resetCheckout();}
 });
+
+const media=await import('../src/services/market-media.js');
+test('product video links accept single YouTube videos and public HTTPS MP4 only',()=>{
+ for(const link of ['https://youtu.be/abcdefghijk','https://www.youtube.com/watch?v=abcdefghijk&t=10','https://www.youtube.com/shorts/abcdefghijk'])assert.equal(media.videoInput(link).url,'https://www.youtube.com/watch?v=abcdefghijk');
+ assert.equal(media.videoInput('https://cdn.obitcooperative.com/item.mp4').kind,'mp4');
+ for(const link of ['javascript:alert(1)','http://cdn.example.com/x.mp4','https://user:pass@cdn.example.com/x.mp4','https://127.0.0.1/x.mp4','https://localhost/x.mp4','https://host.internal/x.mp4','https://youtube.com/playlist?list=abc','https://youtube.com/watch?v=bad','https://cdn.example.com/x.html','https://cdn.example.com:443/x.mp4#bad'])assert.throws(()=>media.videoInput(link),e=>e.status===400);
+});
+test('videos stay private pending review, edits withdraw approval and stale staff review fails',async()=>{
+ const s=await seller(),other=await seller(),id=await listing(s),staff=await db.run("INSERT INTO users (email,role) VALUES (?,'staff')",[`${tag}-${++seq}@example.test`]);
+ const body={version:0,video_url:'https://youtu.be/abcdefghijk',description:'Seller demonstrates the actual item and its controls.'};
+ await assert.rejects(media.submitVideo(other.uid,id,body),e=>e.status===404);
+ const created=await media.submitVideo(s.uid,id,body);assert.equal(created.status,'PENDING');
+ const state=()=>m.preview([{id,qty:1}]);assert.equal((await state()).lines[0].product.video,null);
+ await assert.rejects(media.reviewVideo(s.uid,id,{version:1,decision:'APPROVE',confirmed:true,note:'Checked the actual product video.'}),e=>e.status===403);
+ await assert.rejects(media.reviewVideo(staff.lastInsertRowid,id,{version:1,decision:'APPROVE',note:'Checked the actual product video.'}),e=>e.status===400);
+ await media.reviewVideo(staff.lastInsertRowid,id,{version:1,decision:'APPROVE',confirmed:true,note:'Checked product match and publication permission.'});
+ assert.equal((await m.catalogue(new URLSearchParams({videos:'1',q:tag}))).items.some(x=>x.id===id),true);
+ assert.equal((await state()).lines[0].product.video.kind,'youtube');assert.equal((await state()).lines[0].product.video.review_note,undefined);
+ await media.submitVideo(s.uid,id,{...body,version:2,video_url:'https://cdn.obitcooperative.com/new.mp4'});assert.equal((await state()).lines[0].product.video,null);
+ await assert.rejects(media.reviewVideo(staff.lastInsertRowid,id,{version:2,decision:'APPROVE',confirmed:true,note:'Outdated product video review.'}),e=>e.status===409);
+ await media.reviewVideo(staff.lastInsertRowid,id,{version:3,decision:'REJECT',note:'The item shown does not match the listing.'});assert.equal((await state()).lines[0].product.video,null);
+ await db.migrate();assert.equal(Number((await db.get('SELECT version FROM market_listing_videos WHERE listing_id=?',[id])).version),4);
+});
+test('video routes require authentication and seller ownership',async()=>{
+ assert.equal((await endpoint('GET','/api/admin/market/videos','')).status,401);
+ const s=await seller(),id=await listing(s),token=issueToken({id:s.uid,role:'member',session_version:0});
+ assert.equal((await endpoint('GET','/api/admin/market/videos',token)).status,403);
+ assert.equal((await endpoint('POST',`/api/market/seller/listings/${id}/video`,token,{version:0,video_url:'https://youtu.be/abcdefghijk',description:'A close look at this product and its controls.'})).status,200);
+});
+test('listing and initial video commit together and invalid video rolls back the listing',async()=>{
+ const {safePayRouter}=await import('../src/routes/safepay.js');const s=await seller(),token=issueToken({id:s.uid,role:'member',session_version:0});
+ const match=safePayRouter.match('POST','/api/market/listings');
+ async function submit(body){const req={headers:{authorization:'Bearer '+token},body};const res={json(status,data){this.status=status;this.data=data;},setHeader(){}};for(const h of match.handlers)await h(req,res,match.params);return res;}
+ const body={title:tag+' video listing',price:'25000',category:'Other',video_url:'https://youtu.be/abcdefghijk',video_description:'A demonstration of this actual item and its controls.'};
+ const result=await submit(body);assert.equal(result.status,201);
+ assert.equal((await db.get('SELECT status FROM market_listing_videos WHERE listing_id=?',[result.data.id])).status,'PENDING');
+ await assert.rejects(submit({...body,title:tag+' rejected initial video',video_url:'https://localhost/x.mp4'}),e=>e.status===400);
+ assert.equal(await db.get('SELECT id FROM market_listings WHERE title=?',[tag+' rejected initial video']),undefined);
+ const hidden=await m.catalogue(new URLSearchParams({videos:'1',q:tag+' video listing'}));assert.equal(hidden.total,0);
+});

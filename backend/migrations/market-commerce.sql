@@ -145,3 +145,13 @@ CREATE TABLE IF NOT EXISTS market_shipment_events (
  note TEXT NOT NULL, actor TEXT NOT NULL, occurred_ms __INT__ NOT NULL,
  UNIQUE(shipment_id,command_key)
 );
+
+-- Seller videos have their own review. Editing a video never approves it.
+CREATE TABLE IF NOT EXISTS market_listing_videos (
+ listing_id __INT__ PRIMARY KEY REFERENCES market_listings(id),
+ video_url TEXT NOT NULL, description TEXT NOT NULL,
+ status TEXT NOT NULL CHECK(status IN ('PENDING','APPROVED','REJECTED')),
+ version __INT__ NOT NULL DEFAULT 1, submitted_ms __INT__ NOT NULL,
+ reviewed_by __INT__ REFERENCES users(id), reviewed_ms __INT__, review_note TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_market_videos_review ON market_listing_videos(status,submitted_ms);

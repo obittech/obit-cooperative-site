@@ -1,3 +1,4 @@
+import {initialVideo} from '../services/market-media.js';
 import {heldStockSql} from '../services/market-stock.js';
 // routes/safepay.js
 // Obit Market + Obit SafePay MVP.
@@ -9,7 +10,7 @@ import {heldStockSql} from '../services/market-stock.js';
 
 import crypto from 'node:crypto';
 import { Router, HttpError } from '../router.js';
-import { get, all, run } from '../db.js';
+import { get, all, run, atomic } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { audit } from '../utils/audit.js';
 import { createEscrow, safePayProviderStatus } from '../services/safepay-provider.js';
@@ -80,17 +81,19 @@ safePayRouter.post('/api/market/listings', requireAuth('member'), async (req, re
   if (typeof category !== 'string' || category.trim().length < 2 || category.trim().length > 60) throw new HttpError(400, 'Category must be 2 to 60 characters');
   if (!Number.isSafeInteger(priceKobo) || priceKobo < 2000000) throw new HttpError(400, 'SafePay marketplace listings must be at least ₦20,000 during the pilot');
   if (priceKobo > 300000000) throw new HttpError(400, 'SafePay pilot limit is ₦3,000,000 per transaction');
-  const result = await run(`INSERT INTO market_listings (community_id,seller_member_id,title,description,category,price_kobo,image_url,currency,status)
+  const result = await atomic(async()=>{const inserted=await run(`INSERT INTO market_listings (community_id,seller_member_id,title,description,category,price_kobo,image_url,currency,status)
     VALUES (?,?,?,?,?,?,?,'NGN','DRAFT')`, [community.id,member.id,title.trim(),description.trim(),category.trim(),priceKobo,imageUrl]);
+  if(req.body.video_url)await initialVideo(req.user.id,Number(inserted.lastInsertRowid),req.body);
+  return inserted;});
   await audit(req.user.id,'MARKET_LISTING_SUBMITTED','market_listings',Number(result.lastInsertRowid),{price_kobo:priceKobo});
   res.json(201,{id:Number(result.lastInsertRowid),status:'DRAFT'});
 });
 
 safePayRouter.get('/api/market/my-listings', requireAuth('member'), async (req, res) => {
   const member = await memberForUser(req.user.id);
-  const rows = await all('SELECT l.*,i.quantity AS stock_quantity,i.version AS stock_version,'+heldStockSql()+' AS reserved_quantity FROM market_listings l LEFT JOIN market_inventory i ON i.listing_id=l.id WHERE l.seller_member_id=? ORDER BY l.id DESC LIMIT 100', [member.id]);
+  const rows = await all('SELECT l.*,v.video_url,v.description AS video_description,v.status AS video_status,v.version AS video_version,v.review_note AS video_review_note,i.quantity AS stock_quantity,i.version AS stock_version,'+heldStockSql()+' AS reserved_quantity FROM market_listings l LEFT JOIN market_inventory i ON i.listing_id=l.id LEFT JOIN market_listing_videos v ON v.listing_id=l.id WHERE l.seller_member_id=? ORDER BY l.id DESC LIMIT 100', [member.id]);
   res.setHeader?.('Cache-Control','no-store');
-  res.json(200, rows.map(row=>({...publicListing(row),status:row.status,reserved_quantity:Number(row.reserved_quantity)})));
+  res.json(200, rows.map(row=>({...publicListing(row),status:row.status,reserved_quantity:Number(row.reserved_quantity),video_url:row.video_url||null,video_description:row.video_description||'',video_status:row.video_status||null,video_version:Number(row.video_version||0),video_review_note:row.video_review_note||''})));
 });
 
 safePayRouter.get('/api/admin/market/listings', requireAuth('staff', 'admin'), async (req, res) => {

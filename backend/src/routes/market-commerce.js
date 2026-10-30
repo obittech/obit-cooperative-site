@@ -1,3 +1,4 @@
+import {submitVideo,videoReviews,reviewVideo} from '../services/market-media.js';
 import {pickupLocations,pickupOperations,savePickup,reviewPickup,deliveryTestAvailable,startShipment,updateShipment,readDelivery} from '../services/market-delivery.js';
 import {checkoutConfig} from '../services/market-payment-state.js';
 import {initializeCheckout,verifyCheckout,reconcileCheckout,paymentOperations} from '../services/market-payments.js';
@@ -71,3 +72,7 @@ marketCommerceRouter.post('/api/market/seller/orders/:id/delivery/update',privat
 marketCommerceRouter.get('/api/admin/market/orders/:id/delivery',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await readDelivery({kind:'STAFF',id:req.user.id},p.id)));
 marketCommerceRouter.post('/api/admin/market/orders/:id/delivery/start',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await startShipment({kind:'STAFF',id:req.user.id},p.id)));
 marketCommerceRouter.post('/api/admin/market/orders/:id/delivery/update',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await updateShipment({kind:'STAFF',id:req.user.id},p.id,req.body)));
+
+marketCommerceRouter.post('/api/market/seller/listings/:id/video',privateResponse,requireAuth('member'),async(req,res,params)=>res.json(200,await submitVideo(req.user.id,params.id,req.body)));
+marketCommerceRouter.get('/api/admin/market/videos',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await videoReviews(req.user.id)));
+marketCommerceRouter.post('/api/admin/market/listings/:id/video/decision',privateResponse,requireAuth('staff','admin'),async(req,res,params)=>res.json(200,await reviewVideo(req.user.id,params.id,req.body)));

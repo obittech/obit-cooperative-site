@@ -58,3 +58,7 @@ Monnify is the selected marketplace payment provider. The isolated sandbox adapt
 ## Delivery and pickup release
 
 Verified pickup location management, buyer quote preferences, immutable pickup snapshots, order delivery details and isolated tracking simulation are now implemented. The simulator runs only after a verified test payment in an explicit test/development runtime. Live booking and dispatch remain disabled. No production pickup locations or courier connections were created. See [delivery/pickup behaviour and activation requirements](MARKET_DELIVERY_PICKUP.md).
+
+### Public shopping help and product video support
+
+Added a public plain-language shopping guide, approved seller product videos, a video collection filter and independent staff review. Playback is on demand with no autoplay. The requested ElevenLabs-narrated public demonstration is pending real approved listings and authorised product footage. No sample walkthrough or fictional products were published.
