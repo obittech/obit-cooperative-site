@@ -33,6 +33,7 @@ class YouTube:
     def __init__(self, client):
         self.client=client
         self.token=None
+        self.stream_id=None
 
     def request(self, method, path, **kwargs):
         response=self.client.request(method,'https://www.googleapis.com/youtube/v3/'+path,
@@ -73,6 +74,7 @@ class YouTube:
         matches=[s for s in streams if s.get('cdn',{}).get('ingestionInfo',{}).get('streamName')==key]
         if len(matches)!=1:
             raise YouTubeError('Saved stream key does not match one authorized YouTube stream')
+        self.stream_id=matches[0]['id']
         broadcasts=self.items('liveBroadcasts',{'part':'id,snippet,status,contentDetails','mine':'true','maxResults':50,'broadcastType':'all'})
         if any(b.get('status',{}).get('lifeCycleStatus') in ('live','liveStarting','testing','testStarting') for b in broadcasts):
             raise YouTubeError('An existing broadcast is active; no second broadcast started')
@@ -116,6 +118,30 @@ class YouTube:
                 time.sleep(2 ** attempt)
         raise YouTubeError('YouTube broadcast details unavailable after four reads; no replacement event created')
 
+    def observe_playback(self, broadcast_id):
+        # Read only, while the encoder is still running. Never log API payloads:
+        # stream resources can contain ingestion credentials and private text.
+        def state(value, allowed):
+            return value if value in allowed else 'unknown'
+        try:
+            broadcasts=self.request('GET','liveBroadcasts',params={'part':'id,status','id':broadcast_id}).get('items',[])
+            streams=self.request('GET','liveStreams',params={'part':'id,status','id':self.stream_id}).get('items',[])
+            broadcast=next((b for b in broadcasts if b.get('id')==broadcast_id),{})
+            stream=next((s for s in streams if s.get('id')==self.stream_id),{})
+            lifecycle=state(broadcast.get('status',{}).get('lifeCycleStatus'),
+                            ('created','ready','testing','live','complete','revoked','testStarting','liveStarting'))
+            status=stream.get('status',{})
+            ingest=state(status.get('streamStatus'),('created','ready','active','inactive','error'))
+            health=status.get('healthStatus',{})
+            quality=state(health.get('status'),('good','ok','bad','noData'))
+            issues=health.get('configurationIssues',[])
+            count=len(issues) if isinstance(issues,list) else 0
+            print('YouTube playback observation: broadcast='+lifecycle+' ingest='+ingest+
+                  ' health='+quality+' configuration_issues='+str(count),flush=True)
+        except Exception:
+            # A diagnostics read must not interrupt the encoder or expose secrets.
+            print('YouTube playback observation unavailable; encoder continues.',flush=True)
+
     def finish(self, broadcast_id):
         details=self.broadcast_details(broadcast_id,'id,status')
         status=details['status']['lifeCycleStatus']
@@ -125,6 +151,19 @@ class YouTube:
             self.request('POST','liveBroadcasts/transition',params={'part':'status','id':broadcast_id,'broadcastStatus':'complete'})
         else:
             raise YouTubeError('YouTube never entered live playback; event remains pending')
+
+def wait_for_recording(process, duration, youtube, broadcast):
+    deadline=time.monotonic()+duration+90
+    while True:
+        remaining=deadline-time.monotonic()
+        if remaining<=0:
+            process.kill(); process.communicate()
+            raise RuntimeError('Recorded encoder exceeded its bounded runtime')
+        try:
+            return process.communicate(timeout=min(15,remaining))[1]
+        except subprocess.TimeoutExpired:
+            if broadcast:
+                youtube.observe_playback(broadcast)
 
 def run():
     if os.environ.get('ENABLE_RECORDED')!='true':
@@ -154,11 +193,7 @@ def run():
             process.terminate()
         prior={s:signal.signal(s,stop) for s in (signal.SIGTERM,signal.SIGINT)}
         try:
-            try:
-                _,stderr=process.communicate(timeout=duration+90)
-            except subprocess.TimeoutExpired:
-                process.kill(); process.communicate()
-                raise RuntimeError('Recorded encoder exceeded its bounded runtime') from None
+            stderr=wait_for_recording(process,duration,youtube,broadcast)
             if process.returncode!=0:
                 raise RuntimeError(encoder_failure(stderr))
             if broadcast:
