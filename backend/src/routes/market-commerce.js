@@ -1,4 +1,5 @@
-import {bankTransferConfig,startBankTransfer,claimBankTransfer,bankPaymentOperations,confirmBankTransfer} from '../services/market-bank-transfer.js';
+import {readAftercare,updateManualDelivery,requestReturn,decideReturn,recordRefund} from '../services/market-aftercare.js';
+import {verifyCreditForRefund,bankTransferConfig,startBankTransfer,claimBankTransfer,bankPaymentOperations,confirmBankTransfer} from '../services/market-bank-transfer.js';
 import {submitVideo,videoReviews,reviewVideo} from '../services/market-media.js';
 import {pickupLocations,pickupOperations,savePickup,reviewPickup,deliveryTestAvailable,startShipment,updateShipment,readDelivery} from '../services/market-delivery.js';
 import {checkoutConfig} from '../services/market-payment-state.js';
@@ -13,6 +14,13 @@ import { catalogue, preview, buyerCart, changeCart, mergeCart, saveAddress, STAT
   createRequest,buyerRequests,cancelRequest,setInventory,sellerRequests,respondToRequest,operationsRequests } from '../services/market-commerce.js';
 
 export const marketCommerceRouter=new Router();
+marketCommerceRouter.get('/api/market/orders/:id/aftercare',requireBuyer,async(req,res,p)=>{res.setHeader?.('Cache-Control','no-store');res.json(200,await readAftercare({kind:'BUYER',id:req.buyer.id},p.id));});
+marketCommerceRouter.post('/api/market/orders/:id/received',requireBuyer,async(req,res,p)=>res.json(200,await updateManualDelivery({kind:'BUYER',id:req.buyer.id},p.id,{...req.body,status:'RECEIVED'})));
+marketCommerceRouter.post('/api/market/orders/:id/returns',requireBuyer,async(req,res,p)=>res.json(200,await requestReturn(req.buyer.id,p.id,req.body)));
+marketCommerceRouter.get('/api/admin/market/orders/:id/aftercare',requireAuth('staff','admin'),async(req,res,p)=>{res.setHeader?.('Cache-Control','no-store');res.json(200,await readAftercare({kind:'STAFF',id:req.user.id},p.id));});
+marketCommerceRouter.post('/api/admin/market/orders/:id/fulfilment',requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await updateManualDelivery({kind:'STAFF',id:req.user.id},p.id,req.body)));
+marketCommerceRouter.post('/api/admin/market/orders/:id/returns/decision',requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await decideReturn(req.user.id,p.id,req.body)));
+marketCommerceRouter.post('/api/admin/market/orders/:id/refunds/record',requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await recordRefund(req.user.id,p.id,req.body)));
 function privateResponse(req,res){res.setHeader?.('Cache-Control','no-store');}
 marketCommerceRouter.get('/api/market/capabilities',async(req,res)=>res.json(200,{
   bank_transfer_available:bankTransferConfig().available,bank_transfer_whatsapp:bankTransferConfig().whatsapp,email_signin_available:!!process.env.RESEND_API_KEY,payments_available:false,payment_provider:'monnify',test_checkout_available:checkoutConfig().available,checkout_mode:checkoutConfig().mode,
@@ -82,3 +90,5 @@ marketCommerceRouter.post('/api/market/orders/:id/bank-transfer',privateResponse
 marketCommerceRouter.post('/api/market/orders/:id/bank-transfer/paid',privateResponse,requireBuyer,async(req,res,p)=>res.json(200,await claimBankTransfer(req.buyer.id,p.id)));
 marketCommerceRouter.get('/api/admin/market/bank-transfers',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await bankPaymentOperations()));
 marketCommerceRouter.post('/api/admin/market/orders/:id/bank-transfer/confirm',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await confirmBankTransfer(req.user.id,p.id,req.body)));
+
+marketCommerceRouter.post('/api/admin/market/orders/:id/bank-transfer/refund-review',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await verifyCreditForRefund(req.user.id,p.id,req.body)));

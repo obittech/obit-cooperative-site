@@ -1,3 +1,4 @@
+import {aftercareSummaries} from './market-aftercare.js';
 import {validateRequestPickup,orderDeliveries,shipmentSummaries,deliveryTestAvailable} from './market-delivery.js';
 import {checkoutConfig,effectiveOrderStatus,committedSql} from './market-payment-state.js';
 import crypto from 'node:crypto';
@@ -66,9 +67,10 @@ async function orderRows(where,args,privateAddress=false){
  const payments=await all('SELECT order_id,reference,status,mode,amount_kobo,currency,stock_committed,review_reason FROM market_payment_attempts WHERE order_id IN ('+marks+')',ids);
  const paymentEvents=await all('SELECT p.order_id,e.kind,e.occurred_ms,e.note FROM market_payment_events e JOIN market_payment_attempts p ON p.id=e.attempt_id WHERE p.order_id IN ('+marks+')',ids);
  const bankPayments=await all('SELECT * FROM market_bank_payments WHERE order_id IN ('+marks+')',ids);
- const deliveries=await orderDeliveries(ids),shipments=await shipmentSummaries(ids);
+ const deliveries=await orderDeliveries(ids),shipments=await shipmentSummaries(ids),aftercare=await aftercareSummaries(ids);
  const stateMap=new Map(states.map(r=>[Number(r.id),r]));
  return rows.map(row=>{const bank=bankPayments.find(p=>Number(p.order_id)===Number(row.id));const payment=payments.find(p=>Number(p.order_id)===Number(row.id));const r={...row,...stateMap.get(Number(row.id)),payment_status:payment?.status,stock_committed:payment?.stock_committed,bank_status:bank?.status},a=JSON.parse(r.address_json);return {id:Number(r.id),reference:r.reference,shop_id:Number(r.shop_id),seller_id:Number(r.seller_member_id),status:orderStatus(r),created_ms:Number(r.created_ms),expires_ms:Number(r.expires_ms),subtotal_kobo:Number(r.subtotal_kobo),delivery_kobo:Number(r.delivery_kobo),total_kobo:Number(r.total_kobo),destination:{city:a.city,state:a.state},...(privateAddress?{address:a}:{}),bank_payment:bank?{status:bank.status,amount_kobo:Number(bank.amount_kobo),bank_name:bank.bank_name,account_name:bank.account_name,account_number:bank.account_number,confirmed_ms:bank.confirmed_ms?Number(bank.confirmed_ms):null,receipt_reference:bank.status==='CONFIRMED'?'OBMR-'+r.reference:null}:null,cancel_actor:r.cancel_actor,cancel_reason:r.cancel_reason,payment_available:checkoutConfig().available&&orderStatus(r)==='AWAITING_PAYMENT'&&(!payment||payment.status==='READY'),checkout_mode:checkoutConfig().mode,payment:payment?{reference:payment.reference,status:payment.status,mode:payment.mode,amount_kobo:Number(payment.amount_kobo),currency:payment.currency,review_reason:payment.review_reason}:null,cancellation_available:!bank&&orderStatus(r)==='AWAITING_PAYMENT'&&(!payment||payment.status==='FAILED'),dispatch_allowed:false,delivery_test_available:deliveryTestAvailable()&&orderStatus(r)==='TEST_PAID'&&deliveries.get(Number(r.id))?.available!==false,fulfilment:deliveries.get(Number(r.id))||{method:'DOOR',pickup:null},shipment:shipments.get(Number(r.id))||null,
+  aftercare:aftercare.get(Number(r.id)),
   items:items.filter(i=>Number(i.order_id)===Number(r.id)).map(i=>({listing_id:Number(i.listing_id),title:i.title,quantity:Number(i.quantity),unit_kobo:Number(i.unit_kobo)})),
   events:[...events,...paymentEvents].filter(e=>Number(e.order_id)===Number(r.id)).sort((a,b)=>Number(a.occurred_ms)-Number(b.occurred_ms)).map(e=>({kind:e.kind,occurred_ms:Number(e.occurred_ms),note:e.note}))};});
 }
@@ -97,6 +99,6 @@ export async function cancelOrder(actor,id,body){
  });
 }
 export async function operationsOrders(){
- const rows=await all('SELECT o.id,o.reference,o.status,o.total_kobo,o.address_json,o.created_ms,o.expires_ms,p.status AS payment_status,p.stock_committed,b.status AS bank_status FROM market_purchase_orders o LEFT JOIN market_payment_attempts p ON p.order_id=o.id LEFT JOIN market_bank_payments b ON b.order_id=o.id ORDER BY o.id DESC LIMIT 100');
- return rows.map(r=>{const a=JSON.parse(r.address_json);return {id:Number(r.id),reference:r.reference,status:orderStatus(r),total_kobo:Number(r.total_kobo),created_ms:Number(r.created_ms),expires_ms:Number(r.expires_ms),destination:{city:a.city,state:a.state}};});
+ const rows=await all("SELECT o.id,o.reference,o.status,o.total_kobo,o.address_json,o.created_ms,o.expires_ms,p.status AS payment_status,p.stock_committed,b.status AS bank_status,c.status AS return_status FROM market_purchase_orders o LEFT JOIN market_payment_attempts p ON p.order_id=o.id LEFT JOIN market_bank_payments b ON b.order_id=o.id LEFT JOIN market_return_cases c ON c.order_id=o.id ORDER BY CASE WHEN c.status IN ('OPEN','RETURN_AUTHORISED','RECEIVED','APPROVED','PARTIALLY_REFUNDED') THEN 0 ELSE 1 END,o.id DESC LIMIT 100");
+ return rows.map(r=>{const a=JSON.parse(r.address_json);return {id:Number(r.id),reference:r.reference,status:orderStatus(r),return_status:r.return_status||null,total_kobo:Number(r.total_kobo),created_ms:Number(r.created_ms),expires_ms:Number(r.expires_ms),destination:{city:a.city,state:a.state}};});
 }

@@ -165,3 +165,29 @@ CREATE TABLE IF NOT EXISTS market_bank_payments (
  created_ms __INT__ NOT NULL, claimed_ms __INT__, confirmed_ms __INT__,
  bank_reference TEXT UNIQUE, confirmed_by __INT__ REFERENCES users(id)
 );
+
+-- Manual fulfilment is deliberately separate from sandbox courier simulations.
+CREATE TABLE IF NOT EXISTS market_manual_deliveries (
+ id __ID__, order_id __INT__ NOT NULL UNIQUE REFERENCES market_purchase_orders(id),
+ method TEXT NOT NULL CHECK(method IN ('DOOR','PICKUP')),
+ status TEXT NOT NULL CHECK(status IN ('PREPARING','IN_TRANSIT','DELIVERY_FAILED','READY_FOR_PICKUP','RECEIVED')),
+ carrier TEXT NOT NULL DEFAULT '', tracking_reference TEXT NOT NULL DEFAULT '',
+ version INTEGER NOT NULL DEFAULT 1, updated_ms __INT__ NOT NULL
+);
+CREATE TABLE IF NOT EXISTS market_return_cases (
+ id __ID__, order_id __INT__ NOT NULL UNIQUE REFERENCES market_purchase_orders(id),
+ status TEXT NOT NULL CHECK(status IN ('OPEN','RETURN_AUTHORISED','RECEIVED','APPROVED','REJECTED','PARTIALLY_REFUNDED','REFUNDED')),
+ reason TEXT NOT NULL, decision_note TEXT NOT NULL DEFAULT '',
+ approved_kobo __INT__ NOT NULL DEFAULT 0 CHECK(approved_kobo>=0),
+ version INTEGER NOT NULL DEFAULT 1, created_ms __INT__ NOT NULL, updated_ms __INT__ NOT NULL
+);
+CREATE TABLE IF NOT EXISTS market_manual_refunds (
+ id __ID__, case_id __INT__ NOT NULL REFERENCES market_return_cases(id),
+ amount_kobo __INT__ NOT NULL CHECK(amount_kobo>0), bank_reference TEXT NOT NULL UNIQUE,
+ receipt_reference TEXT NOT NULL UNIQUE, recorded_by __INT__ NOT NULL REFERENCES users(id), recorded_ms __INT__ NOT NULL
+);
+CREATE TABLE IF NOT EXISTS market_aftercare_events (
+ id __ID__, order_id __INT__ NOT NULL REFERENCES market_purchase_orders(id),
+ kind TEXT NOT NULL, note TEXT NOT NULL, actor TEXT NOT NULL CHECK(actor IN ('STAFF','BUYER')), occurred_ms __INT__ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_market_aftercare_order ON market_aftercare_events(order_id,id);

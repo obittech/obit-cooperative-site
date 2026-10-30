@@ -45,6 +45,27 @@ export async function claimBankTransfer(buyerId,id){
  });
 }
 export async function bankPaymentOperations(){return all('SELECT b.*,o.reference AS order_reference FROM market_bank_payments b JOIN market_purchase_orders o ON o.id=b.order_id ORDER BY b.id DESC LIMIT 100');}
+export async function verifyCreditForRefund(userId,id,body){
+ const ref=String(body?.bank_reference||'').trim();
+ if(body?.bank_credit_checked!==true||ref.length<6||ref.length>120)throw new HttpError(400,'Verify the actual bank credit and its unique reference first');
+ return atomic(async()=>{
+  if(!await get("SELECT id FROM users WHERE id=? AND status='ACTIVE' AND role IN ('staff','admin')",[userId]))throw new HttpError(403,'Staff access required');
+  await run('UPDATE market_auth_guard SET touched=touched+1 WHERE id=1');
+  await run('UPDATE market_purchase_orders SET status=status WHERE id=?',[id]);
+  const p=await get('SELECT * FROM market_bank_payments WHERE order_id=?',[id]);
+  if(!p||!['CLAIMED','REVIEW'].includes(p.status))throw new HttpError(409,'This payment is not awaiting credit review');
+  if(body.amount_kobo!==Number(p.amount_kobo))throw new HttpError(409,'The actual credit must match this order amount');
+  if(p.bank_reference){if(p.bank_reference!==ref)throw new HttpError(409,'This credit has another recorded reference');return {ok:true,replayed:true};}
+  if(await get('SELECT id FROM market_bank_payments WHERE bank_reference=? AND id<>?',[ref,p.id]))throw new HttpError(409,'This bank credit is already assigned to another order');
+  const now=Date.now();
+  await run("UPDATE market_bank_payments SET status='REVIEW',bank_reference=?,confirmed_ms=?,confirmed_by=? WHERE id=?",[ref,now,userId,p.id]);
+  // No stock commitment or fulfilment permission. Release any remaining hold.
+  await run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[id]);
+  if(!await get('SELECT id FROM market_return_cases WHERE order_id=?',[id]))await run("INSERT INTO market_return_cases (order_id,status,reason,created_ms,updated_ms) VALUES (?,'OPEN','Verified bank credit requires refund review. Goods have not been allocated.',?,?)",[id,now,now]);
+  await run("INSERT INTO market_aftercare_events (order_id,kind,note,actor,occurred_ms) VALUES (?,'CREDIT_REFUND_REVIEW','Staff verified the bank credit for refund review. No goods allocated.','STAFF',?)",[id,now]);
+  await audit(userId,'MARKET_CREDIT_REFUND_REVIEW','market_purchase_orders',id);return {ok:true,replayed:false};
+ });
+}
 export async function confirmBankTransfer(userId,id,body){
  const ref=String(body.bank_reference||'').trim();
  if(body.bank_credit_checked!==true||ref.length<6||ref.length>120)throw new HttpError(400,'Check the actual bank credit and enter its unique transaction reference.');
@@ -68,3 +89,4 @@ export async function confirmBankTransfer(userId,id,body){
   return {status:'CONFIRMED',receipt_reference:'OBMR-'+o.reference};
  });
 }
+

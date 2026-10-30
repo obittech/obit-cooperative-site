@@ -1,5 +1,7 @@
 # Obit Market commerce upgrade
 
+Current follow-up: company bank-transfer checkout and manual fulfilment/returns/refund records supersede the older payment and dispatch limitations below for confirmed internal-transfer orders. See INTERNAL_TRANSFER_CHECKOUT.md and MARKET_AFTERCARE.md. Automated gateways, courier booking, seller settlement and the real operating pilot remain incomplete. Earlier release notes below are historical.
+
 Requested 29 October 2026. Product direction: phone-first marketplace under Obit Cooperative, with technology infrastructure provided by Obit Technologies Limited. Sellers require active cooperative membership. Buyers do not.
 
 ## Delivery sequence and completion criteria
