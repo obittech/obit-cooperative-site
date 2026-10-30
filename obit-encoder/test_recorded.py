@@ -116,4 +116,62 @@ class PlaybackObservationTests(unittest.TestCase):
         process.kill.assert_called_once(); process.communicate.assert_called_once_with()
         youtube.observe_playback.assert_not_called()
 
+class LiveStartTests(unittest.TestCase):
+    def test_waits_for_three_consecutive_ready_active_observations(self):
+        youtube=YouTube(Mock()); youtube.stream_id='stream'; youtube.start_prepared_event=Mock()
+        youtube.request=Mock(side_effect=lambda method,path,**kwargs: {'items':[
+            {'id':'event','status':{'lifeCycleStatus':'ready'}} if path=='liveBroadcasts' else
+            {'id':'stream','status':{'streamStatus':'active','healthStatus':{'status':'good'}}}]})
+        with patch('sys.stdout',new_callable=io.StringIO):
+            youtube.observe_playback('event'); youtube.observe_playback('event')
+            youtube.start_prepared_event.assert_not_called()
+            youtube.observe_playback('event')
+        youtube.start_prepared_event.assert_called_once_with('event')
+
+    def fixture(self, lifecycle='ready', active=True, channel=CHANNEL, bound='stream', visibility='public'):
+        youtube=YouTube(Mock()); youtube.prepared_id='event'; youtube.stream_id='stream'; youtube.visibility='public'
+        youtube.authorize=Mock()
+        youtube.broadcast_details=Mock(return_value={'id':'event','snippet':{'channelId':channel},
+            'status':{'lifeCycleStatus':lifecycle,'privacyStatus':visibility},'contentDetails':{'boundStreamId':bound}})
+        youtube.request=Mock(side_effect=[{'items':[{'id':'stream','status':{'streamStatus':'active' if active else 'inactive'}}]},
+            {'id':'event','status':{'lifeCycleStatus':'liveStarting'}}])
+        return youtube
+
+    def test_starts_same_event_once_after_identity_and_active_stream_checks(self):
+        youtube=self.fixture(); youtube.start_prepared_event('event'); youtube.start_prepared_event('event')
+        youtube.authorize.assert_called_once()
+        self.assertEqual([c.args[0] for c in youtube.request.call_args_list],['GET','POST'])
+        call=youtube.request.call_args_list[-1]
+        self.assertEqual(call.args[1],'liveBroadcasts/transition')
+        self.assertEqual(call.kwargs['params']['id'],'event')
+        self.assertEqual(call.kwargs['params']['broadcastStatus'],'live')
+
+    def test_auto_start_race_does_not_write(self):
+        youtube=self.fixture(lifecycle='liveStarting'); youtube.start_prepared_event('event')
+        youtube.request.assert_not_called()
+
+    def test_changed_identity_binding_or_visibility_cannot_write(self):
+        for values in [{'channel':'other'},{'bound':'other'},{'visibility':'unlisted'}]:
+            youtube=self.fixture(**values)
+            with self.assertRaisesRegex(YouTubeError,'changed'): youtube.start_prepared_event('event')
+            youtube.request.assert_not_called()
+
+    def test_inactive_stream_cannot_write(self):
+        youtube=self.fixture(active=False)
+        with self.assertRaisesRegex(YouTubeError,'no longer active'): youtube.start_prepared_event('event')
+        self.assertEqual([c.args[0] for c in youtube.request.call_args_list],['GET'])
+
+    def test_wrong_channel_authorization_and_unprepared_event_cannot_write(self):
+        youtube=self.fixture(); youtube.start_prepared_event('other')
+        youtube.authorize.assert_not_called()
+        youtube.authorize.side_effect=YouTubeError('different channel')
+        with self.assertRaisesRegex(YouTubeError,'different channel'): youtube.start_prepared_event('event')
+        youtube.request.assert_not_called()
+
+    def test_repeated_transition_error_is_not_retried(self):
+        youtube=self.fixture(); youtube.request.side_effect=[{'items':[{'id':'stream','status':{'streamStatus':'active'}}]},YouTubeError('HTTP 403')]
+        with self.assertRaises(YouTubeError): youtube.start_prepared_event('event')
+        youtube.start_prepared_event('event')
+        self.assertEqual(youtube.request.call_count,2)
+
 if __name__=='__main__' : unittest.main()
