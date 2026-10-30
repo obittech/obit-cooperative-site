@@ -1,9 +1,11 @@
 import datetime as dt
+import io
 import os
+import subprocess
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import httpx
-from recorded import YouTube, YouTubeError, CHANNEL, session_at
+from recorded import YouTube, YouTubeError, CHANNEL, session_at, wait_for_recording
 
 class DailyEventTests(unittest.TestCase):
     def fixture(self, channel=CHANNEL, broadcasts=None):
@@ -75,5 +77,43 @@ class BroadcastReadTests(unittest.TestCase):
         with httpx.Client(trust_env=False) as client, patch.object(YouTube,'request',return_value={'items':[{'id':'other'}]}):
             with self.assertRaisesRegex(YouTubeError,'unexpected broadcast'):
                 YouTube(client).broadcast_details('event','id,status')
+
+class PlaybackObservationTests(unittest.TestCase):
+    def test_observation_reads_bound_resources_and_redacts_payload_text(self):
+        requests=[]
+        def handle(request):
+            requests.append(request)
+            row=({'id':'event','status':{'lifeCycleStatus':'ready'}} if request.url.path.endswith('liveBroadcasts') else
+                 {'id':'stream','status':{'streamStatus':'active','healthStatus':{'status':'bad',
+                    'configurationIssues':[{'description':'PRIVATE-DETAIL'}]}},'cdn':{'streamName':'SECRET-KEY'}})
+            return httpx.Response(200,json={'items':[row]})
+        with httpx.Client(transport=httpx.MockTransport(handle)) as client, patch('sys.stdout',new_callable=io.StringIO) as output:
+            youtube=YouTube(client); youtube.token='SECRET-TOKEN'; youtube.stream_id='stream'
+            youtube.observe_playback('event')
+        self.assertIn('broadcast=ready ingest=active health=bad configuration_issues=1',output.getvalue())
+        self.assertNotIn('SECRET',output.getvalue()); self.assertNotIn('PRIVATE',output.getvalue())
+        self.assertEqual([r.method for r in requests],['GET','GET'])
+        self.assertEqual([r.url.params['id'] for r in requests],['event','stream'])
+        self.assertTrue(all(r.url.params['part']=='id,status' for r in requests))
+
+    def test_diagnostic_failure_does_not_interrupt_or_log_error_body(self):
+        with httpx.Client(trust_env=False) as client, patch.object(YouTube,'request',side_effect=RuntimeError('SECRET')), patch('sys.stdout',new_callable=io.StringIO) as output:
+            YouTube(client).observe_playback('event')
+        self.assertIn('encoder continues',output.getvalue()); self.assertNotIn('SECRET',output.getvalue())
+
+    def test_poll_during_encoding_then_return_complete_stderr(self):
+        process=Mock(); process.communicate.side_effect=[subprocess.TimeoutExpired('ffmpeg',15),(None,b'complete stderr')]
+        youtube=Mock()
+        self.assertEqual(wait_for_recording(process,360,youtube,'event'),b'complete stderr')
+        youtube.observe_playback.assert_called_once_with('event')
+        process.kill.assert_not_called()
+
+    def test_deadline_stops_hung_encoder_without_replaying(self):
+        process=Mock(); youtube=Mock()
+        with patch('recorded.time.monotonic',side_effect=[0,451]):
+            with self.assertRaisesRegex(RuntimeError,'bounded runtime'):
+                wait_for_recording(process,360,youtube,'event')
+        process.kill.assert_called_once(); process.communicate.assert_called_once_with()
+        youtube.observe_playback.assert_not_called()
 
 if __name__=='__main__' : unittest.main()
