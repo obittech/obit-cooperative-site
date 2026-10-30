@@ -26,4 +26,6 @@ Publish agreed category-specific return periods/exclusions, delivery service are
 
 ## Verification
 
-113 backend tests and six frontend tests passed locally. New integration checks cover paid-order requirements, access/privacy, staff versus buyer receipt, concurrent dispatch, return deduplication, inspection, approval caps, cumulative refund limits, duplicate bank references, stale versions and migration replay. PostgreSQL CI and Render status are checked before reporting publication.
+114 backend tests and six frontend tests passed locally. New integration checks cover paid-order requirements, access/privacy, staff versus buyer receipt, concurrent dispatch, return deduplication, inspection, approval caps, cumulative refund limits, duplicate bank references, stale versions and migration replay. PostgreSQL CI and Render status are checked before reporting publication.
+
+Late or unfulfillable credits: staff may verify the actual bank credit for refund review only. This releases the hold, opens an issue case and never commits stock or permits dispatch. A verified credit can then be refunded through the same approval and debit-record process. Repeating the same credit review does not duplicate its case.

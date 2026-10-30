@@ -15,7 +15,7 @@ async function access(actor,id){
  return o;
 }
 async function lockOrder(actor,id){await access(actor,id);await run('UPDATE market_purchase_orders SET status=status WHERE id=?',[id]);return access(actor,id);}
-async function paid(id){const p=await get("SELECT * FROM market_bank_payments WHERE order_id=? AND status='CONFIRMED'",[id]);if(!p)throw new HttpError(409,'An actual bank credit must be confirmed first');return p;}
+async function paid(id,refundReview=false){const p=await get("SELECT * FROM market_bank_payments WHERE order_id=? AND (status='CONFIRMED' OR (status='REVIEW' AND bank_reference IS NOT NULL AND confirmed_ms IS NOT NULL))",[id]);if(!p||(!refundReview&&p.status!=='CONFIRMED'))throw new HttpError(409,'An actual bank credit must be confirmed first');return p;}
 async function liveCase(id){return get("SELECT id FROM market_return_cases WHERE order_id=? AND status<>'REJECTED'",[id]);}
 async function event(orderId,actor,kind,note){await run('INSERT INTO market_aftercare_events (order_id,kind,note,actor,occurred_ms) VALUES (?,?,?,?,?)',[orderId,kind,note,actor.kind,Date.now()]);await audit(actor.kind==='STAFF'?actor.id:null,'MARKET_'+kind,'market_purchase_orders',orderId);}
 async function checkVersion(row,version){if(Number(row?.version)!==number(version))throw new HttpError(409,'This record changed. Refresh and review it again.');}
@@ -33,7 +33,7 @@ export async function aftercareSummaries(ids,staffView=false){
    events:events.filter(e=>Number(e.order_id)===Number(id)).map(e=>({kind:e.kind,note:e.note,actor:e.actor,occurred_ms:Number(e.occurred_ms)}))}];
  }));
 }
-export async function readAftercare(actor,id){const o=await access(actor,id);const confirmed=!!await get("SELECT id FROM market_bank_payments WHERE order_id=? AND status='CONFIRMED'",[id]);return {order_id:Number(o.id),reference:o.reference,total_kobo:Number(o.total_kobo),payment_confirmed:confirmed,...(actor.kind==='STAFF'?{address:JSON.parse(o.address_json)}:{}),...(await aftercareSummaries([o.id],actor.kind==='STAFF')).get(Number(o.id))};}
+export async function readAftercare(actor,id){const o=await access(actor,id);const credit=await get("SELECT status FROM market_bank_payments WHERE order_id=? AND (status='CONFIRMED' OR (status='REVIEW' AND bank_reference IS NOT NULL AND confirmed_ms IS NOT NULL))",[id]);const confirmed=!!credit;return {order_id:Number(o.id),reference:o.reference,total_kobo:Number(o.total_kobo),payment_confirmed:confirmed,fulfilment_allowed:credit?.status==='CONFIRMED',...(actor.kind==='STAFF'?{address:JSON.parse(o.address_json)}:{}),...(await aftercareSummaries([o.id],actor.kind==='STAFF')).get(Number(o.id))};}
 
 export async function updateManualDelivery(actor,id,body){
  const status=body?.status,note=text(body?.note,3,300);
@@ -66,7 +66,7 @@ export async function updateManualDelivery(actor,id,body){
 export async function requestReturn(buyerId,id,body){
  const reason=text(body?.reason,10,1000),actor={kind:'BUYER',id:buyerId};
  return atomic(async()=>{
-  await lockOrder(actor,id);await paid(id);
+  await lockOrder(actor,id);await paid(id,true);
   const old=await get('SELECT id,reason FROM market_return_cases WHERE order_id=?',[id]);
   if(old){if(old.reason!==reason)throw new HttpError(409,'A case already exists for this order. Contact support with its reference.');return {id:Number(old.id),replayed:true};}
   const r=await run("INSERT INTO market_return_cases (order_id,status,reason,created_ms,updated_ms) VALUES (?,'OPEN',?,?,?)",[id,reason,Date.now(),Date.now()]);
@@ -77,7 +77,7 @@ export async function requestReturn(buyerId,id,body){
 export async function decideReturn(userId,id,body){
  const actor={kind:'STAFF',id:userId},status=body?.status,note=text(body?.note,10,1000);
  return atomic(async()=>{
-  const o=await lockOrder(actor,id);const p=await paid(id);
+  const o=await lockOrder(actor,id);const p=await paid(id,true);
   const c=await get('SELECT * FROM market_return_cases WHERE order_id=?',[id]);if(!c)throw new HttpError(404,'Return case not found');await checkVersion(c,body.version);
   const next={OPEN:['RETURN_AUTHORISED','APPROVED','REJECTED'],RETURN_AUTHORISED:['RECEIVED','REJECTED'],RECEIVED:['APPROVED','REJECTED']};
   if(!next[c.status]?.includes(status))throw new HttpError(409,'This case transition is unavailable');
@@ -94,7 +94,7 @@ export async function recordRefund(userId,id,body){
  return atomic(async()=>{
   // Serialise bank-reference checks across different orders and API replicas.
   await run('UPDATE market_auth_guard SET touched=touched+1 WHERE id=1');
-  await lockOrder(actor,id);const p=await paid(id),c=await get('SELECT * FROM market_return_cases WHERE order_id=?',[id]);
+  await lockOrder(actor,id);const p=await paid(id,true),c=await get('SELECT * FROM market_return_cases WHERE order_id=?',[id]);
   if(!c)throw new HttpError(404,'Return case not found');
   const old=await get('SELECT * FROM market_manual_refunds WHERE bank_reference=?',[ref]);
   if(old){if(Number(old.case_id)!==Number(c.id)||Number(old.amount_kobo)!==amount)throw new HttpError(409,'This bank reference is already recorded for another refund');return {receipt_reference:old.receipt_reference,replayed:true};}

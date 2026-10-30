@@ -556,6 +556,19 @@ test('late transfer notification goes to review and does not revive the reservat
 });
 
 const care=await import('../src/services/market-aftercare.js');
+test('late verified bank credits can be refunded without allocating stock or authorising dispatch',async()=>{
+ enableBank();const f=await paymentFixture(),admin=await staff(),actor={kind:'STAFF',id:admin.id};
+ await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total});await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);await bank.claimBankTransfer(f.b.id,f.o.id);
+ const body={bank_credit_checked:true,bank_reference:'LATE-CREDIT-'+crypto.randomUUID(),amount_kobo:f.q.total};
+ await assert.rejects(bank.verifyCreditForRefund(f.s.uid,f.o.id,body),e=>e.status===403);
+ await bank.verifyCreditForRefund(admin.id,f.o.id,body);await bank.verifyCreditForRefund(admin.id,f.o.id,body);
+ const a=await care.readAftercare(actor,f.o.id);assert.equal(a.payment_confirmed,true);assert.equal(a.fulfilment_allowed,false);assert.equal(a.return_case.status,'OPEN');
+ await assert.rejects(care.updateManualDelivery(actor,f.o.id,{status:'PREPARING',version:0,note:'Cannot dispatch a refund-only order'}),e=>e.status===409);
+ await care.decideReturn(admin.id,f.o.id,{status:'APPROVED',version:1,amount_kobo:f.q.total,note:'Late credit verified and full refund agreed'});
+ await care.recordRefund(admin.id,f.o.id,{version:2,amount_kobo:f.q.total,bank_reference:'LATE-REFUND-'+crypto.randomUUID(),bank_debit_checked:true,recipient_checked:true});
+ assert.equal((await care.readAftercare(actor,f.o.id)).return_case.status,'REFUNDED');assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),3);
+ assert.equal((await db.get('SELECT status FROM market_bank_payments WHERE order_id=?',[f.o.id])).status,'REVIEW');
+});
 async function livePaidFixture(){
  enableBank();const f=await paymentFixture(),admin=await staff();
  await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total});await bank.claimBankTransfer(f.b.id,f.o.id);

@@ -1,5 +1,5 @@
 import {readAftercare,updateManualDelivery,requestReturn,decideReturn,recordRefund} from '../services/market-aftercare.js';
-import {bankTransferConfig,startBankTransfer,claimBankTransfer,bankPaymentOperations,confirmBankTransfer} from '../services/market-bank-transfer.js';
+import {verifyCreditForRefund,bankTransferConfig,startBankTransfer,claimBankTransfer,bankPaymentOperations,confirmBankTransfer} from '../services/market-bank-transfer.js';
 import {submitVideo,videoReviews,reviewVideo} from '../services/market-media.js';
 import {pickupLocations,pickupOperations,savePickup,reviewPickup,deliveryTestAvailable,startShipment,updateShipment,readDelivery} from '../services/market-delivery.js';
 import {checkoutConfig} from '../services/market-payment-state.js';
@@ -90,3 +90,5 @@ marketCommerceRouter.post('/api/market/orders/:id/bank-transfer',privateResponse
 marketCommerceRouter.post('/api/market/orders/:id/bank-transfer/paid',privateResponse,requireBuyer,async(req,res,p)=>res.json(200,await claimBankTransfer(req.buyer.id,p.id)));
 marketCommerceRouter.get('/api/admin/market/bank-transfers',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await bankPaymentOperations()));
 marketCommerceRouter.post('/api/admin/market/orders/:id/bank-transfer/confirm',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await confirmBankTransfer(req.user.id,p.id,req.body)));
+
+marketCommerceRouter.post('/api/admin/market/orders/:id/bank-transfer/refund-review',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await verifyCreditForRefund(req.user.id,p.id,req.body)));
