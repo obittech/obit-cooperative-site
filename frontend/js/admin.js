@@ -105,6 +105,7 @@ async function loadAll() {
     await refreshMarketListings(token);
     await refreshMarketRequests(token);
     await refreshMarketOrders(token);
+    await DeliveryAdmin.refresh(token);
     await refreshMarketPayments(token);
     await refreshMarketStores(token);
     await refreshReconciliation(token);
@@ -274,7 +275,7 @@ async function refreshMarketPromotions(token,listings){
 
 async function refreshMarketOrders(token){
  const target=document.getElementById('marketOrdersBody');
- try{const rows=await OBIT.get('/api/admin/market/orders',{token});target.innerHTML=rows.map(o=>`<tr><td>${escapeMarket(o.reference)}</td><td>₦${(o.total_kobo/100).toLocaleString('en-NG')}</td><td>${escapeMarket(o.destination.city)}, ${escapeMarket(o.destination.state)}</td><td>${escapeMarket(o.status)}</td><td>${escapeMarket(new Date(o.expires_ms).toLocaleString('en-NG',{timeZone:'Africa/Lagos'}))} (Nigeria time)</td></tr>`).join('')||'<tr><td colspan="5">No purchase orders yet.</td></tr>';}catch(e){target.textContent=e.message;}
+ try{const rows=await OBIT.get('/api/admin/market/orders',{token});target.innerHTML=rows.map(o=>`<tr><td>${escapeMarket(o.reference)}<br><button class="text-button" type="button" data-inspect-delivery="${o.id}">Delivery details</button></td><td>₦${(o.total_kobo/100).toLocaleString('en-NG')}</td><td>${escapeMarket(o.destination.city)}, ${escapeMarket(o.destination.state)}</td><td>${escapeMarket(o.status)}</td><td>${escapeMarket(new Date(o.expires_ms).toLocaleString('en-NG',{timeZone:'Africa/Lagos'}))} (Nigeria time)</td></tr>`).join('')||'<tr><td colspan="5">No purchase orders yet.</td></tr>';DeliveryAdmin.bindOrders(rows,token);}catch(e){target.textContent=e.message;}
 }
 document.getElementById('refreshMarketOrders').addEventListener('click',()=>refreshMarketOrders(OBIT.getSession('staff')));
 

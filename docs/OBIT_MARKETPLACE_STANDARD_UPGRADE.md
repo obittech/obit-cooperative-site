@@ -54,3 +54,7 @@ Validation: 82 backend tests plus five cart tests pass locally. Eight new integr
 ## Monnify checkout follow-up
 
 Monnify is the selected marketplace payment provider. The isolated sandbox adapter now supports hosted checkout initialization, independent server verification, protected notification handling, durable attempt references, payment events, stock commitment once, and staff reconciliation. Production collection and dispatch remain disabled. The real merchant sandbox credentials and Contract Code are still required to exercise the provider itself. See [Monnify integration and activation requirements](MONNIFY_MARKET_CHECKOUT.md).
+
+## Delivery and pickup release
+
+Verified pickup location management, buyer quote preferences, immutable pickup snapshots, order delivery details and isolated tracking simulation are now implemented. The simulator runs only after a verified test payment in an explicit test/development runtime. Live booking and dispatch remain disabled. No production pickup locations or courier connections were created. See [delivery/pickup behaviour and activation requirements](MARKET_DELIVERY_PICKUP.md).

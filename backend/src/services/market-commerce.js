@@ -1,3 +1,4 @@
+import {deliveryInput,prepareDelivery,saveRequestDelivery,requestDeliveries} from './market-delivery.js';
 import {heldStockSql,heldQuantity} from './market-stock.js';
 import crypto from 'node:crypto';
 import { all, get, run, atomic } from '../db.js';
@@ -5,7 +6,8 @@ import { HttpError } from '../router.js';
 import { audit } from '../utils/audit.js';
 
 const CATEGORIES=['Solar & Power','Home Appliances','Phones & Computing','Business Equipment','Other'];
-export const STATES=['Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta','Ebonyi','Edo','Ekiti','Enugu','FCT','Gombe','Imo','Jigawa','Kaduna','Kano','Katsina','Kebbi','Kogi','Kwara','Lagos','Nasarawa','Niger','Ogun','Ondo','Osun','Oyo','Plateau','Rivers','Sokoto','Taraba','Yobe','Zamfara'];
+import {STATES} from './market-regions.js';
+export {STATES};
 const PROMO_ACTIVE="p.enabled=1 AND p.starts_ms<=CAST(? AS BIGINT) AND p.ends_ms>CAST(? AS BIGINT) AND p.base_kobo=l.price_kobo AND p.price_kobo<l.price_kobo";
 const BASE=` FROM market_listings l JOIN members m ON m.id=l.seller_member_id
  JOIN communities c ON c.id=l.community_id LEFT JOIN market_inventory i ON i.listing_id=l.id
@@ -119,13 +121,14 @@ export async function saveAddress(buyerId,input) {
   return a;
 }
 export async function createRequest(buyerId, body) {
-  const items=itemsInput(body?.items), address=addressInput(body?.address);
+  const items=itemsInput(body?.items), address=addressInput(body?.address),fulfilment=deliveryInput(body?.fulfilment);
   const requestKey=text(body?.request_key,16,80,'request reference');
-  const payloadHash=crypto.createHash('sha256').update(JSON.stringify({items,address,expected_total_kobo:body.expected_total_kobo})).digest('hex');
+  const legacyHash=crypto.createHash('sha256').update(JSON.stringify({items,address,expected_total_kobo:body.expected_total_kobo})).digest('hex');
+  const payloadHash=crypto.createHash('sha256').update(JSON.stringify({items,address,expected_total_kobo:body.expected_total_kobo,fulfilment})).digest('hex');
   return atomic(async()=>{
     await lockBuyer(buyerId);
     const old=await get('SELECT * FROM market_purchase_requests WHERE buyer_id=? AND request_key=?',[buyerId,requestKey]);
-    if(old){if(old.payload_hash!==payloadHash)throw new HttpError(409,'This request reference was already used for different details');return {id:Number(old.id),reference:old.reference,replayed:true};}
+    if(old){if(old.payload_hash!==payloadHash&&!(fulfilment.method==='DOOR'&&old.payload_hash===legacyHash))throw new HttpError(409,'This request reference was already used for different details');return {id:Number(old.id),reference:old.reference,replayed:true};}
     const count=await get("SELECT COUNT(*) AS n FROM market_purchase_requests WHERE buyer_id=? AND created_at>datetime('now','-1 hour')",[buyerId]);
     if(Number(count.n)>=10)throw new HttpError(429,'Please wait before submitting more requests');
     const basket=await preview(items);
@@ -134,9 +137,11 @@ export async function createRequest(buyerId, body) {
     // The displayed estimate is acknowledged by the buyer; prices are never
     // accepted from the browser as the amount to charge.
     if(body.expected_total_kobo!==basket.total_kobo)throw new HttpError(409,'Prices changed. Refresh your bag and review the updated total.');
+    const delivery=await prepareDelivery(fulfilment,address);
     const reference='OBQ-'+crypto.randomBytes(8).toString('hex').toUpperCase();
-    const insert=await run('INSERT INTO market_purchase_requests (reference,buyer_id,request_key,payload_hash,address_json,subtotal_kobo) VALUES (?,?,?,?,?,?)',[reference,buyerId,requestKey,payloadHash,JSON.stringify(address),basket.total_kobo]);
+    const insert=await run('INSERT INTO market_purchase_requests (reference,buyer_id,request_key,payload_hash,address_json,subtotal_kobo) VALUES (?,?,?,?,?,?)',[reference,buyerId,requestKey,payloadHash,JSON.stringify(delivery.address),basket.total_kobo]);
     const id=Number(insert.lastInsertRowid), shops=new Map();
+    await saveRequestDelivery(id,delivery.preference);
     for(const line of basket.lines){
       const seller=line.product.seller_id;
       if(!shops.has(seller)){
@@ -156,7 +161,8 @@ export async function buyerRequests(buyerId) {
   const shops=await all('SELECT * FROM market_request_shops WHERE request_id IN ('+marks+') ORDER BY id',ids);
   const rows=await all('SELECT i.* FROM market_request_items i JOIN market_request_shops s ON s.id=i.shop_id WHERE s.request_id IN ('+marks+') ORDER BY i.id',ids);
   const orders=await all('SELECT o.id,o.reference,o.shop_id FROM market_purchase_orders o JOIN market_request_shops s ON s.id=o.shop_id WHERE s.request_id IN ('+marks+')',ids);
-  return requests.map(r=>({...r,id:Number(r.id),subtotal_kobo:Number(r.subtotal_kobo),address:JSON.parse(r.address_json),address_json:undefined,
+  const delivery=await requestDeliveries(ids);
+  return requests.map(r=>({...r,id:Number(r.id),subtotal_kobo:Number(r.subtotal_kobo),fulfilment:delivery.get(Number(r.id))||{method:'DOOR',pickup:null},address:JSON.parse(r.address_json),address_json:undefined,
     shops:shops.filter(s=>Number(s.request_id)===Number(r.id)).map(s=>({...s,id:Number(s.id),seller_member_id:Number(s.seller_member_id),order:orders.filter(o=>Number(o.shop_id)===Number(s.id)).map(o=>({id:Number(o.id),reference:o.reference}))[0]||null,delivery_kobo:s.delivery_kobo===null?null:Number(s.delivery_kobo),
       items:rows.filter(i=>Number(i.shop_id)===Number(s.id)).map(i=>({...i,unit_kobo:Number(i.unit_kobo)}))}))}));
 }
@@ -198,9 +204,10 @@ export async function sellerRequests(userId) {
   if(!shops.length)return [];
   const ids=shops.map(s=>Number(s.id));
   const rows=await all('SELECT * FROM market_request_items WHERE shop_id IN ('+ids.map(()=>'?').join(',')+') ORDER BY id',ids);
+  const delivery=await requestDeliveries(shops.map(s=>Number(s.request_id)));
   return shops.map(s=>{const a=JSON.parse(s.address_json);return {...s,id:Number(s.id),address_json:undefined,
     // Exact address/phone are not shared before a paid fulfillment workflow.
-    destination:{city:a.city,state:a.state},delivery_kobo:s.delivery_kobo===null?null:Number(s.delivery_kobo),
+    fulfilment:delivery.get(Number(s.request_id))||{method:'DOOR',pickup:null},destination:{city:a.city,state:a.state},delivery_kobo:s.delivery_kobo===null?null:Number(s.delivery_kobo),
     items:rows.filter(i=>Number(i.shop_id)===Number(s.id)).map(i=>({...i,unit_kobo:Number(i.unit_kobo)}))};});
 }
 export async function respondToRequest(userId,shopId,body) {

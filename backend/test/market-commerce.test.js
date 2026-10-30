@@ -410,3 +410,78 @@ test('an expiry refresh racing a late Monnify receipt leaves stock available and
   const current=(await orders.buyerOrders(f.b.id))[0];assert.equal(current.status,'PAYMENT_REVIEW');assert.equal(current.events.filter(e=>e.kind==='EXPIRED').length,1);assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),3);
  }finally{resetCheckout();}
 });
+
+const delivery=await import('../src/services/market-delivery.js');
+const pickupData={name:'Test collection point',address:'25 Fictional Pickup Road',city:'Ikeja',state:'Lagos',hours:'Monday to Friday, 9am to 5pm',version:0};
+async function activePickup(){const admin=await staff(),p=await delivery.savePickup(admin.id,null,pickupData);await delivery.reviewPickup(admin.id,p.id,{version:1,status:'ACTIVE',confirmed:true,verification_note:'Fictional operations verification reference'});return {admin,id:p.id};}
+async function pickupOrder(pickup){const s=await seller(),b=await buyer(),id=await listing(s,2000000,3),body={...request([{id,qty:1}],2000000),fulfilment:{method:'PICKUP',pickup_id:pickup.id}};const r=await m.createRequest(b.id,body),shop=(await m.buyerRequests(b.id))[0].shops[0];await m.respondToRequest(s.uid,shop.id,{decision:'QUOTED',delivery_kobo:50000,delivery_days:3,note:'Test pickup quote'});const o=await orders.acceptQuote(b.id,shop.id,{expected_total_kobo:2050000});return {s,b,p:id,q:{total:2050000},o,body,r,shop};}
+async function paidDeliveryFixture(){const f=await paymentFixture();testCheckout();process.env.MARKET_DELIVERY_MODE='test';await initialiseFixture(f);const row=await paymentRow(f.o.id);mockMonnify(()=>receiptFor(row));await pay.verifyCheckout(f.b.id,f.o.id);return f;}
+function tracking(version,status,note='Fictional tracking update'){return {version,status,note,command_key:crypto.randomUUID()};}
+test('pickup locations are private drafts until reviewed and edits revoke public availability',async()=>{
+ const admin=await staff(),s=await seller(),p=await delivery.savePickup(admin.id,null,pickupData);
+ assert.ok(!(await delivery.pickupLocations()).some(x=>x.id===p.id));
+ await assert.rejects(delivery.reviewPickup(admin.id,p.id,{version:1,status:'ACTIVE',confirmed:false,verification_note:'Checked address'}),e=>e.status===400);
+ await assert.rejects(delivery.reviewPickup(s.uid,p.id,{version:1,status:'ACTIVE',confirmed:true,verification_note:'Checked address'}),e=>e.status===403);
+ await delivery.reviewPickup(admin.id,p.id,{version:1,status:'ACTIVE',confirmed:true,verification_note:'PRIVATE-verified-operations-note'});
+ const active=(await delivery.pickupLocations('Lagos')).find(x=>x.id===p.id);assert.equal(active.name,pickupData.name);assert.ok(!JSON.stringify(active).includes('PRIVATE'));assert.equal(active.verified_by,undefined);
+ await delivery.savePickup(admin.id,p.id,{...pickupData,name:'Changed collection point',version:2});assert.ok(!(await delivery.pickupLocations()).some(x=>x.id===p.id));
+ await assert.rejects(delivery.reviewPickup(admin.id,p.id,{version:2,status:'ACTIVE',confirmed:true,verification_note:'Stale review'}),e=>e.status===409);
+ await assert.rejects(delivery.pickupLocations('Invalid State'),e=>e.status===400);
+});
+test('pickup quotes snapshot the destination, preserve contact privacy and replay after a location pause',async()=>{
+ const point=await activePickup(),f=await pickupOrder(point),buyer=(await m.buyerRequests(f.b.id))[0],seller=(await m.sellerRequests(f.s.uid))[0];
+ assert.equal(buyer.fulfilment.method,'PICKUP');assert.equal(buyer.address.city,'Ikeja');assert.equal(buyer.address.address,pickupData.address);assert.equal(buyer.address.recipient,address.recipient);
+ assert.deepEqual(seller.destination,{city:'Ikeja',state:'Lagos'});assert.equal(seller.fulfilment.pickup.name,pickupData.name);assert.ok(!JSON.stringify(seller).includes(address.phone));
+ assert.equal((await orders.buyerOrders(f.b.id))[0].fulfilment.pickup.address,pickupData.address);
+ await delivery.reviewPickup(point.admin.id,point.id,{version:2,status:'PAUSED',verification_note:'Temporarily unavailable'});
+ assert.equal((await m.createRequest(f.b.id,f.body)).replayed,true);
+ await assert.rejects(m.createRequest(f.b.id,{...f.body,request_key:crypto.randomUUID()}),e=>e.status===409);
+});
+test('changed pickup details reject stale quote acceptance and checkout',async()=>{
+ const point=await activePickup(),s=await seller(),b=await buyer(),p=await listing(s);
+ await m.createRequest(b.id,{...request([{id:p,qty:1}],2000000),fulfilment:{method:'PICKUP',pickup_id:point.id}});const q=(await m.buyerRequests(b.id))[0].shops[0];await m.respondToRequest(s.uid,q.id,{decision:'QUOTED',delivery_kobo:0,delivery_days:2});
+ await delivery.savePickup(point.admin.id,point.id,{...pickupData,address:'99 Changed Test Avenue',version:2});await assert.rejects(orders.acceptQuote(b.id,q.id,{expected_total_kobo:2000000}),e=>e.status===409);
+ const other=await activePickup(),f=await pickupOrder(other);testCheckout();
+ try{await delivery.reviewPickup(other.admin.id,other.id,{version:2,status:'PAUSED',verification_note:'Location no longer available'});await assert.rejects(initialiseFixture(f),e=>e.status===409);}finally{resetCheckout();}
+});
+test('delivery simulation is blocked in production, for unpaid orders and for unrelated sellers',async()=>{
+ const f=await paymentFixture(),other=await seller();process.env.NODE_ENV='production';process.env.MARKET_DELIVERY_MODE='test';
+ try{await assert.rejects(delivery.startShipment({kind:'SELLER',id:f.s.uid},f.o.id),e=>e.status===503);process.env.NODE_ENV='test';await assert.rejects(delivery.startShipment({kind:'SELLER',id:f.s.uid},f.o.id),e=>e.status===409);await assert.rejects(delivery.startShipment({kind:'SELLER',id:other.uid},f.o.id),e=>e.status===404);await assert.rejects(delivery.startShipment({kind:'BUYER',id:f.b.id},f.o.id),e=>e.status===403);}finally{delete process.env.NODE_ENV;delete process.env.MARKET_DELIVERY_MODE;}
+});
+test('test tracking is versioned, idempotent and receipt belongs to the buyer',async()=>{
+ let f;try{
+  f=await paidDeliveryFixture();const actor={kind:'SELLER',id:f.s.uid};await delivery.startShipment(actor,f.o.id);assert.equal((await delivery.startShipment(actor,f.o.id)).replayed,true);
+  const step=tracking(1,'IN_TRANSIT');await delivery.updateShipment(actor,f.o.id,step);assert.equal((await delivery.updateShipment(actor,f.o.id,step)).replayed,true);
+  await assert.rejects(delivery.updateShipment(actor,f.o.id,{...step,note:'Changed payload'}),e=>e.status===409);
+  await assert.rejects(delivery.updateShipment(actor,f.o.id,tracking(1,'DELIVERY_FAILED')),e=>e.status===409);
+  await assert.rejects(delivery.updateShipment(actor,f.o.id,tracking(2,'DELIVERED')),e=>e.status===409);
+  const other=await buyer();await assert.rejects(delivery.readDelivery({kind:'BUYER',id:other.id},f.o.id),e=>e.status===404);
+  const receipt=tracking(2,'DELIVERED','Test buyer confirms receipt');await delivery.updateShipment({kind:'BUYER',id:f.b.id},f.o.id,receipt);assert.equal((await delivery.updateShipment({kind:'BUYER',id:f.b.id},f.o.id,receipt)).replayed,true);
+  const read=await delivery.readDelivery({kind:'BUYER',id:f.b.id},f.o.id);assert.equal(read.shipment.status,'DELIVERED');assert.equal(read.shipment.events.length,3);assert.equal(read.booking_available,false);assert.equal((await orders.buyerOrders(f.b.id))[0].status,'TEST_PAID');
+ }finally{resetCheckout();delete process.env.MARKET_DELIVERY_MODE;}
+});
+test('pickup tracking cannot use home-delivery transitions or skip pickup readiness',async()=>{
+ const point=await activePickup();testCheckout();process.env.MARKET_DELIVERY_MODE='test';
+ try{
+  const f=await pickupOrder(point);await initialiseFixture(f);const row=await paymentRow(f.o.id);mockMonnify(()=>receiptFor(row));await pay.verifyCheckout(f.b.id,f.o.id);const actor={kind:'SELLER',id:f.s.uid};await delivery.startShipment(actor,f.o.id);
+  await assert.rejects(delivery.updateShipment(actor,f.o.id,tracking(1,'IN_TRANSIT')),e=>e.status===409);await assert.rejects(delivery.updateShipment({kind:'BUYER',id:f.b.id},f.o.id,tracking(1,'DELIVERED')),e=>e.status===409);
+  await delivery.updateShipment(actor,f.o.id,tracking(1,'READY_FOR_PICKUP'));await delivery.updateShipment({kind:'BUYER',id:f.b.id},f.o.id,tracking(2,'DELIVERED','Test pickup received'));
+  assert.equal((await delivery.readDelivery(actor,f.o.id)).shipment.status,'DELIVERED');
+ }finally{resetCheckout();delete process.env.MARKET_DELIVERY_MODE;}
+});
+test('delivery failure can retry but concurrent updates and payment review block unsafe progress',async()=>{
+ try{
+  const f=await paidDeliveryFixture(),actor={kind:'SELLER',id:f.s.uid};await delivery.startShipment(actor,f.o.id);await delivery.updateShipment(actor,f.o.id,tracking(1,'IN_TRANSIT'));
+  const result=await Promise.allSettled([delivery.updateShipment(actor,f.o.id,tracking(2,'DELIVERY_FAILED')),delivery.updateShipment(actor,f.o.id,tracking(2,'DELIVERY_FAILED'))]);assert.equal(result.filter(x=>x.status==='fulfilled').length,1);
+  await delivery.updateShipment(actor,f.o.id,tracking(3,'IN_TRANSIT'));await db.run("UPDATE market_payment_attempts SET status='REVIEW' WHERE order_id=?",[f.o.id]);await assert.rejects(delivery.updateShipment({kind:'BUYER',id:f.b.id},f.o.id,tracking(4,'DELIVERED')),e=>e.status===409);
+ }finally{resetCheckout();delete process.env.MARKET_DELIVERY_MODE;}
+});
+test('delivery endpoints protect roles and public options expose no test shipment or customer data',async()=>{
+ const b=await buyer(),s=await seller(),token=issueToken(await db.get('SELECT * FROM users WHERE id=?',[s.uid]));
+ assert.equal((await endpoint('GET','/api/admin/market/pickup-locations',auth.buyerToken(b))).status,401);assert.equal((await endpoint('GET','/api/admin/market/pickup-locations',token)).status,403);
+ const response=await endpoint('GET','/api/market/delivery/options','');assert.equal(response.status,200);assert.equal(response.data.booking_available,false);assert.ok(!JSON.stringify(response.data).includes('verification_note'));await db.migrate();
+});
+test('a pickup closure after checkout puts a received test payment into review without consuming stock',async()=>{
+ const point=await activePickup(),f=await pickupOrder(point);testCheckout();
+ try{await initialiseFixture(f);const row=await paymentRow(f.o.id);await delivery.reviewPickup(point.admin.id,point.id,{version:2,status:'PAUSED',verification_note:'Collection operation temporarily closed'});assert.equal((await orders.buyerOrders(f.b.id))[0].fulfilment.available,false);await assert.rejects(initialiseFixture(f),e=>e.status===409);mockMonnify(()=>receiptFor(row));const result=await pay.verifyCheckout(f.b.id,f.o.id);assert.equal(result.status,'REVIEW');assert.equal(result.review_reason,'PICKUP_UNAVAILABLE');assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),3);}finally{resetCheckout();}
+});
