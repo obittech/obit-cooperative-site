@@ -31,7 +31,8 @@
 .field-error{color:#b3261e;font-size:13px;font-weight:500}
 
 .checkbox-row{display:flex;align-items:flex-start;gap:10px;font-size:14px;font-weight:500;color:var(--ink);margin-bottom:12px}
-.checkbox-row input{margin-top:3px}
+.checkbox-row input{appearance:auto;-webkit-appearance:checkbox;flex:0 0 20px;width:20px;height:20px;margin:1px 0 0;accent-color:var(--green)}
+.checkbox-row span{min-width:0;line-height:1.5}
 
 .stepper{display:flex;gap:8px;margin-bottom:30px;flex-wrap:wrap}
 .stepper .step{
