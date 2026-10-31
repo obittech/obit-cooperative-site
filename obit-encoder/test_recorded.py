@@ -116,6 +116,21 @@ class PlaybackObservationTests(unittest.TestCase):
         process.kill.assert_called_once(); process.communicate.assert_called_once_with()
         youtube.observe_playback.assert_not_called()
 
+class ProviderErrorTests(unittest.TestCase):
+    def test_documents_machine_reason_without_disclosing_provider_text(self):
+        payload={'error':{'message':'SECRET TOKEN','errors':[{'reason':'insufficientLivePermissions','message':'PRIVATE URL'}, {'reason':'SECRET VALUE'}]}}
+        with httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(403,json=payload))) as client:
+            youtube=YouTube(client); youtube.token='TOKEN'
+            with self.assertRaises(YouTubeError) as caught: youtube.request('POST','liveBroadcasts/transition')
+        message=str(caught.exception)
+        self.assertIn('reason=insufficientLivePermissions',message)
+        self.assertNotIn('SECRET',message); self.assertNotIn('PRIVATE',message); self.assertNotIn('TOKEN',message)
+
+    def test_non_json_response_remains_safe(self):
+        with httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(403,text='PRIVATE'))) as client:
+            youtube=YouTube(client); youtube.token='TOKEN'
+            with self.assertRaisesRegex(YouTubeError,'reason=unclassified'): youtube.request('GET','channels')
+
 class LiveStartTests(unittest.TestCase):
     def test_waits_for_three_consecutive_ready_active_observations(self):
         youtube=YouTube(Mock()); youtube.stream_id='stream'; youtube.start_prepared_event=Mock()

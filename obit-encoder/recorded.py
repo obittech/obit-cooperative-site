@@ -43,7 +43,20 @@ class YouTube:
         response=self.client.request(method,'https://www.googleapis.com/youtube/v3/'+path,
                                      headers={'Authorization':'Bearer '+self.token},**kwargs)
         if not response.is_success:
-            raise YouTubeError('YouTube '+path+' request failed (HTTP '+str(response.status_code)+')')
+            # Log only documented machine codes, never messages, tokens or bodies.
+            allowed={'errorExecutingTransition','errorStreamInactive','invalidTransition','redundantTransition',
+                     'insufficientLivePermissions','livePermissionBlocked','liveStreamingNotEnabled',
+                     'liveBroadcastNotFound','userRequestsExceedRateLimit','concurrentBroadcastsExceedLimit',
+                     'sharedIngestionBroadcastsExceedLimit','idRequired','statusRequired',
+                     'insufficientPermissions','quotaExceeded','dailyLimitExceeded','forbidden'}
+            reasons=[]
+            try:
+                reasons=sorted({entry.get('reason') for entry in response.json().get('error',{}).get('errors',[])
+                                if isinstance(entry,dict) and entry.get('reason') in allowed})
+            except (ValueError,TypeError,AttributeError):
+                pass
+            detail='; reason='+','.join(reasons) if reasons else '; reason=unclassified'
+            raise YouTubeError('YouTube '+path+' request failed (HTTP '+str(response.status_code)+detail+')')
         return response.json()
 
     def authorize(self):
