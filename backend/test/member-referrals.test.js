@@ -71,9 +71,9 @@ test('sponsor codes validate active membership, reject self-referrals, and prese
   }
   await assert.rejects(call(applicationsRouter, 'PATCH', `/api/applications/${a.id}`, { sponsor_code: s.code, phone: `+234${s.phone.slice(1)}` }), e => e.status === 422);
   await assert.rejects(call(applicationsRouter, 'PATCH', `/api/applications/${a.id}`, { sponsor_code: s.code, email: s.email.toUpperCase() }), e => e.status === 422);
-  const before = Number((await get('SELECT COUNT(*) AS n FROM member_applications')).n);
-  await assert.rejects(call(applicationsRouter, 'POST', '/api/applications', { sponsor_code: 'bad' }), e => e.status === 422);
-  assert.equal(Number((await get('SELECT COUNT(*) AS n FROM member_applications')).n), before);
+  const marker = `ROLLBACK-${crypto.randomUUID()}`;
+  await assert.rejects(call(applicationsRouter, 'POST', '/api/applications', { sponsor_code: 'bad', campaign: marker }), e => e.status === 422);
+  assert.equal(Number((await get('SELECT COUNT(*) AS n FROM member_applications WHERE campaign=?', [marker])).n), 0);
   const saved = await call(applicationsRouter, 'PATCH', `/api/applications/${a.id}`, { sponsor_code: ` ${s.code.toLowerCase()} `, referral_source: 'launch-campaign' });
   assert.equal(saved.sponsor_code, s.code);
   assert.equal(saved.referral_source, 'launch-campaign');
@@ -160,4 +160,13 @@ test('verified gateway payments also qualify and a payout reference cannot pay a
   await run("UPDATE member_applications SET status='UNDER_REVIEW' WHERE id=?", [unpaid.id]);
   await approve(unpaid.id);
   assert.equal(await get('SELECT * FROM referral_bonuses WHERE application_id=?', [unpaid.id]), undefined);
+});
+
+test('parallel approvals of different applications allocate distinct membership codes', async () => {
+  const a = await draft(), b = await draft();
+  for (const id of [a.id, b.id]) await run("UPDATE member_applications SET status='UNDER_REVIEW' WHERE id=?", [id]);
+  const results = await Promise.all([approve(a.id), approve(b.id)]);
+  assert.notEqual(results[0].member.member_code, results[1].member.member_code);
+  assert.match(results[0].member.member_code, /^OBT-\d{4}-\d{6,}$/);
+  assert.match(results[1].member.member_code, /^OBT-\d{4}-\d{6,}$/);
 });

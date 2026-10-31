@@ -8,7 +8,7 @@ import { Router, HttpError } from '../router.js';
 import { get, all, run, atomic } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { audit } from '../utils/audit.js';
-import { generateMemberCode } from '../utils/auth.js';
+import { nextMemberCode } from '../services/member-code.js';
 
 import { awardReferralBonus } from '../services/member-referrals.js';
 
@@ -75,8 +75,7 @@ adminRouter.post('/api/admin/applications/:id/decision', requireAuth('staff', 'a
     } else if (decision === 'NEEDS_INFORMATION') {
       await run("UPDATE member_applications SET status = 'NEEDS_INFORMATION', updated_at = datetime('now') WHERE id = ?", [params.id]);
     } else {
-      const countRow = await get(`SELECT COUNT(*) as n FROM members`);
-      const memberCode = generateMemberCode(Number(countRow.n) + 1);
+      const memberCode = await nextMemberCode();
       let user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
       if (!user) {
         await run('INSERT INTO users (email, phone, role) VALUES (?, ?, ?)', [application.email, application.phone, 'member']);

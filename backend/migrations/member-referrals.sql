@@ -1,3 +1,6 @@
+CREATE TABLE IF NOT EXISTS member_code_sequences (
+ code_year TEXT PRIMARY KEY, last_value __INT__ NOT NULL DEFAULT 0 CHECK(last_value >= 0)
+);
 CREATE TABLE IF NOT EXISTS application_sponsors (
  application_id __INT__ PRIMARY KEY REFERENCES member_applications(id),
  sponsor_member_id __INT__ NOT NULL REFERENCES members(id),
