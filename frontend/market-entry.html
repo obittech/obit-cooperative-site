@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Buy or sell | Obit Marketplace</title>
+  <meta name="description" content="Continue as a buyer or sign in with your cooperative membership code to sell on Obit Marketplace.">
+  <link rel="canonical" href="https://marketplace.obitcooperative.com/market-entry.html">
+  <link rel="stylesheet" href="styles.css?v=20261101-navigation">
+  <link rel="stylesheet" href="app.css?v=20261101-readable-consent">
+  <link rel="stylesheet" href="market-entry.css?v=20261101-1">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <header class="site-header"><div class="container nav-wrap">
+    <a class="brand" href="https://marketplace.obitcooperative.com/"><img class="brand-logo" src="assets/obit-logo.png" alt=""><span><strong>OBIT MARKET</strong><small>BUY AND SELL</small></span></a>
+    <a class="cooperative-link" href="https://obitcooperative.com/#membership">Cooperative membership</a>
+  </div></header>
+  <main id="main-content" class="container entry-main">
+    <h1>Welcome to Obit Marketplace</h1>
+    <p class="entry-intro">Would you like to buy or sell?</p>
+    <div class="entry-grid">
+      <section class="card entry-card" aria-labelledby="buyerHeading">
+        <h2 id="buyerHeading">I want to buy</h2>
+        <p>Browse products and shop from member sellers. You do not need a cooperative membership to browse.</p>
+        <a class="btn btn-primary" href="market.html">Continue as a buyer</a>
+      </section>
+      <section class="card entry-card" id="sellerLogin" aria-labelledby="sellerHeading">
+        <h2 id="sellerHeading">I want to sell</h2>
+        <p>Sign in with your active cooperative membership code and password.</p>
+        <form id="sellerEntryForm">
+          <label class="field" for="sellerMemberCode">Membership code<input id="sellerMemberCode" name="membership_code" required maxlength="64" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="e.g. OBT-2026-000123"></label>
+          <label class="field" for="sellerPassword">Password<input id="sellerPassword" name="password" type="password" required autocomplete="current-password"></label>
+          <button class="btn btn-primary" type="submit">Sign in as a seller</button>
+        </form>
+        <p id="sellerEntryStatus" role="status" aria-live="polite"></p>
+        <p><a href="portal.html">Set up or recover my password</a></p>
+        <p><a href="https://obitcooperative.com/apply.html">Not a member? Apply for membership</a></p>
+      </section>
+    </div>
+  </main>
+  <footer><div class="container footer-bottom"><span>Obit Marketplace</span><a href="https://obitcooperative.com/">Visit Obit Cooperative</a></div></footer>
+  <script src="js/config.js"></script><script src="js/api.js"></script><script src="js/market-entry.js?v=20261101-1"></script>
+</body>
+</html>

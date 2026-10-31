@@ -195,11 +195,14 @@ authRouter.post('/api/auth/reset-password', async (req, res) => {
 });
 
 authRouter.post('/api/auth/login', async (req, res, params) => {
-  const { identifier, password } = req.body; // identifier = email or phone
+  const { identifier, password } = req.body || {}; // email, phone or membership code
+  if (typeof identifier !== 'string' || typeof password !== 'string' || !identifier.trim() || !password) throw new HttpError(401, 'Incorrect credentials');
   const key = String(identifier || '').trim().toLowerCase();
   const state = loginAttempts.get(key);
   if (state?.lockedUntil > Date.now()) throw new HttpError(429, 'Too many failed login attempts. Try again later.');
-  const user = await get('SELECT * FROM users WHERE lower(email) = lower(?) OR phone = ?', [identifier, identifier]);
+  const login = identifier.trim();
+  const user = await get(`SELECT u.* FROM users u LEFT JOIN members m ON m.user_id = u.id
+    WHERE lower(u.email) = lower(?) OR u.phone = ? OR (upper(m.member_code) = upper(?) AND m.status = 'ACTIVE')`, [login, login, login]);
   if (!user || !verifyPassword(password, user.password_hash)) {
     const current = loginAttempts.get(key) || { count: 0, lockedUntil: 0 };
     current.count += 1;

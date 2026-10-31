@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <script>if(location.hostname==='marketplace.obitcooperative.com')location.replace('/market.html'+location.search+location.hash)</script>
+  <script>if(location.hostname==='marketplace.obitcooperative.com'){const cooperativeSections=['#membership','#about','#millionaires','#opportunities','#support'];location.replace(cooperativeSections.includes(location.hash)?'https://obitcooperative.com/'+location.hash:'/market-entry.html'+location.search+location.hash)}</script>
   <meta charset="UTF-8">
   <script>document.documentElement.classList.add('js')</script>
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261013-millionaires">
+  <link rel="stylesheet" href="styles.css?v=20261101-navigation">
 </head>
 <body class="scene-home">
 <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -28,9 +28,10 @@
     </a>
     <button class="nav-toggle" aria-label="Open navigation" aria-expanded="false">☰</button>
     <nav class="main-nav" aria-label="Main navigation">
-      <a href="#about">About</a><a href="#membership">Membership</a>
-      <a href="#millionaires">Obit Millionaires</a><a href="#opportunities">Opportunity Hub</a><a href="#support">Support</a>
-    </nav>
+      <a href="https://obitcooperative.com/#about">About</a><a href="https://obitcooperative.com/#membership">Membership</a>
+      <a href="https://obitcooperative.com/#millionaires">Obit Millionaires</a><a href="https://obitcooperative.com/#opportunities">Opportunity Hub</a><a href="https://obitcooperative.com/#support">Support</a>
+    <a href="https://marketplace.obitcooperative.com/">Marketplace</a>
+      </nav>
     <div class="nav-actions"><a class="btn btn-ghost" href="portal.html">Member Login</a><a class="btn btn-primary" href="apply.html">Join Now</a></div>
   </div>
 </header>
@@ -162,5 +163,5 @@
   </div>
   <div class="container footer-bottom"><span>© 2026 Obit Technologies Multipurpose Cooperative Society Limited.</span><span>Member-owned. Technology-enabled.</span></div>
 </footer>
-<script src="js/config.js"></script><script src="js/nav.js?v=20260924-2"></script>
+<script src="js/config.js"></script><script src="js/nav.js?v=20261101-navigation"></script>
 </body></html>
