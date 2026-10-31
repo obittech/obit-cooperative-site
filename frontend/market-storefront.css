@@ -84,9 +84,9 @@
   .market-page #shop>.section-heading h2{font-size:20px}
   .market-page .catalog-layout{display:block;padding-top:10px}
   .market-page .catalog-sidebar{display:none}
-  .market-page .mobile-shop-toolbar{gap:8px}
-  .market-page .mobile-shop-toolbar>label{font-size:12px;gap:5px}
-  .market-page .mobile-shop-toolbar select{max-width:160px;font-size:13px!important;padding:6px;min-height:44px}
+  .market-page .mobile-shop-toolbar{gap:8px;flex-wrap:wrap}
+  .market-page .mobile-shop-toolbar>label{font-size:14px;gap:5px;min-width:0;flex:1}
+  .market-page .mobile-shop-toolbar select{max-width:160px;min-width:0;font-size:16px!important;padding:6px;min-height:44px}
   .market-page #mobileFilterToggle{font-size:14px;padding:8px 12px}
   .market-page #mobileRefresh{display:none}
   .market-page .shop-controls[data-mobile-open="true"]{grid-template-columns:1fr 1fr}
