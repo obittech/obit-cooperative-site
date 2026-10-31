@@ -107,6 +107,13 @@ test('registration through KYC, signed payment, approval and portal login', asyn
     const login = await call(authRouter, 'POST', '/api/auth/login', { identifier: approved.application.email, password: 'Local-test-password-only!' });
     assert.equal(login.role, 'member');
     assert.ok(login.token);
+    const codeLogin = await call(authRouter, 'POST', '/api/auth/login', { identifier: approved.member.member_code.toLowerCase(), password: 'Local-test-password-only!' });
+    assert.equal(codeLogin.role, 'member');
+    assert.ok(codeLogin.token);
+    await assert.rejects(call(authRouter, 'POST', '/api/auth/login', { identifier: approved.member.member_code, password: 'Wrong-password!' }), e => e.status === 401);
+    await run("UPDATE members SET status='SUSPENDED' WHERE id=?", [approved.member.id]);
+    await assert.rejects(call(authRouter, 'POST', '/api/auth/login', { identifier: approved.member.member_code, password: 'Local-test-password-only!' }), e => e.status === 401);
+    await run("UPDATE members SET status='ACTIVE' WHERE id=?", [approved.member.id]);
     const receipts = await all('SELECT * FROM kyc_provider_requests WHERE application_id = ?', [id]);
     assert.equal(JSON.stringify(receipts).includes('11111111111'), false);
   } finally { globalThis.fetch = originalFetch; }

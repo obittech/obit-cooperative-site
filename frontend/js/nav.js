@@ -1,23 +1,45 @@
-
-const toggle = document.querySelector(".nav-toggle");
-const nav = document.querySelector(".main-nav");
-toggle?.addEventListener("click", () => {
-  const open = nav.classList.toggle("open");
-  toggle.setAttribute("aria-expanded", String(open));
-});
-
-function closeNav() {
-  nav?.classList.remove("open");
-  toggle?.setAttribute("aria-expanded", "false");
+const toggle = document.querySelector('.nav-toggle');
+const nav = document.querySelector('.main-nav');
+const backdrop = document.createElement('button');
+backdrop.className = 'nav-backdrop';
+backdrop.type = 'button';
+backdrop.hidden = true;
+backdrop.tabIndex = -1;
+backdrop.setAttribute('aria-label', 'Close navigation');
+if (toggle && nav) {
+  nav.id = nav.id || 'mainNavigation';
+  toggle.setAttribute('aria-controls', nav.id);
+  document.body.append(backdrop);
 }
-document.querySelectorAll(".main-nav a").forEach(link => {
-  link.addEventListener("click", closeNav);
+function closeNav(returnFocus = false) {
+  nav?.classList.remove('open');
+  toggle?.setAttribute('aria-expanded', 'false');
+  toggle?.setAttribute('aria-label', 'Open navigation');
+  if (toggle) toggle.textContent = '☰';
+  backdrop.hidden = true;
+  document.body.classList.remove('nav-open');
+  if (returnFocus) toggle?.focus();
+}
+toggle?.addEventListener('click', () => {
+  if (!nav) return;
+  if (nav.classList.contains('open')) return closeNav();
+  nav.classList.add('open');
+  toggle.setAttribute('aria-expanded', 'true');
+  toggle.setAttribute('aria-label', 'Close navigation');
+  toggle.textContent = '×';
+  backdrop.hidden = false;
+  document.body.classList.add('nav-open');
 });
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    closeNav();
-    toggle?.focus();
-  }
+backdrop.addEventListener('click', () => closeNav(true));
+document.addEventListener('pointerdown', event => {
+  if (nav?.classList.contains('open') && !nav.contains(event.target) && !toggle?.contains(event.target)) closeNav();
+});
+document.querySelectorAll('.main-nav a').forEach(link => link.addEventListener('click', () => closeNav()));
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && nav?.classList.contains('open')) closeNav(true);
+});
+window.matchMedia('(min-width: 1401px)').addEventListener('change', event => {
+  if (event.matches) closeNav();
 });
 
 const observer = new IntersectionObserver((entries) => {

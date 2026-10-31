@@ -1,0 +1,15 @@
+.site-header .nav-wrap{gap:14px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px}
+.entry-main{max-width:1000px;padding:48px 0 64px}
+.entry-main h1{font-size:clamp(30px,5vw,44px);line-height:1.2;color:#123e2b}
+.entry-intro{font-size:21px;margin:16px 0 28px}
+.entry-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+.entry-card{min-width:0}
+.entry-card h2{font-size:26px;margin:0 0 14px}
+.entry-card p{font-size:18px;line-height:1.65;margin:0 0 22px}
+.entry-card .field{font-size:18px;color:#172c22}
+.entry-card input{font-size:18px;min-height:54px;min-width:0}
+.entry-card .btn{width:100%;min-height:56px;font-size:18px;white-space:normal;text-align:center}
+.entry-card a:not(.btn){color:#075b34;text-decoration:underline;text-underline-offset:3px}
+#sellerEntryStatus{margin:16px 0;color:#91231d;overflow-wrap:anywhere}
+.cooperative-link{margin-left:auto;font-weight:700;min-height:48px;display:flex;align-items:center;text-align:right}
+@media(max-width:720px){.entry-main{padding:30px 0 44px}.entry-grid{grid-template-columns:1fr}.entry-card{padding:24px 18px}.cooperative-link{font-size:15px;max-width:140px}.entry-main h1{font-size:32px}}
