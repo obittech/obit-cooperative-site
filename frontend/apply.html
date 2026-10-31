@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20261013-millionaires" />
-  <link rel="stylesheet" href="app.css?v=20261031-registration-consent" />
+  <link rel="stylesheet" href="app.css?v=20261101-readable-consent" />
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -137,15 +137,26 @@
 
         <!-- STEP 2: REVIEW + CONSENT -->
         <section id="panel-review" style="display:none">
-          <h2 style="margin-bottom:18px">Review & consent</h2>
+          <h2 style="margin-bottom:18px">Review your details</h2>
           <dl class="kv" id="reviewSummary"></dl>
-          <div style="margin:22px 0">
-            <label class="checkbox-row"><input type="checkbox" id="consent_terms" /><span>I accept the <a href="terms.html" target="_blank" rel="noopener">Obit Cooperative membership terms</a>.</span></label>
-            <label class="checkbox-row"><input type="checkbox" id="consent_privacy" /><span>I accept the <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
-            <label class="checkbox-row"><input type="checkbox" id="consent_marketing" /><span>I'm OK receiving updates about programmes and opportunities.</span></label>
+          <div class="consent-choices" role="group" aria-labelledby="consentHeading" aria-describedby="consentHelp">
+            <h3 id="consentHeading">Please confirm your choices</h3>
+            <p id="consentHelp">Tap the large box or the words beside it to select a choice. The first two choices are required.</p>
+            <label class="consent-option" for="consent_terms">
+              <input type="checkbox" id="consent_terms" required />
+              <span class="consent-copy"><strong>Membership terms <small>Required</small></strong><span>I accept the <a href="terms.html" target="_blank" rel="noopener">Obit Cooperative membership terms</a>.</span></span>
+            </label>
+            <label class="consent-option" for="consent_privacy">
+              <input type="checkbox" id="consent_privacy" required />
+              <span class="consent-copy"><strong>Privacy Policy <small>Required</small></strong><span>I accept the <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></span>
+            </label>
+            <label class="consent-option" for="consent_marketing">
+              <input type="checkbox" id="consent_marketing" />
+              <span class="consent-copy"><strong>Updates from Obit <small>Optional</small></strong><span>I would like to receive updates about programmes and opportunities. I can leave this box unticked.</span></span>
+            </label>
           </div>
-          <div class="btn-row">
-            <button class="btn btn-secondary" id="btnBackToProfile">Back</button>
+          <div class="btn-row review-actions">
+            <button class="btn btn-secondary" id="btnBackToProfile">Back to my details</button>
             <button class="btn btn-primary btn-block" id="btnSubmitApplication">Submit Application</button>
           </div>
         </section>
