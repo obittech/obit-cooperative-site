@@ -3,6 +3,7 @@ import {HttpError} from '../router.js';
 import {heldQuantity} from './market-stock.js';
 import {validateRequestPickup} from './market-delivery.js';
 import {audit} from '../utils/audit.js';
+import {allocateBankCredit} from './bank-credit.js';
 export function bankTransferConfig(){
  const bank_name=String(process.env.MARKET_TRANSFER_BANK_NAME||'').trim(),account_name=String(process.env.MARKET_TRANSFER_ACCOUNT_NAME||'').trim(),account_number=String(process.env.MARKET_TRANSFER_ACCOUNT_NUMBER||'').trim();
  return {available:process.env.MARKET_TRANSFER_ENABLED==='true'&&bank_name.length>1&&account_name.length>2&&/^\d{10}$/.test(account_number),bank_name,account_name,account_number,whatsapp:'2348030567787'};
@@ -57,6 +58,7 @@ export async function verifyCreditForRefund(userId,id,body){
   if(body.amount_kobo!==Number(p.amount_kobo))throw new HttpError(409,'The actual credit must match this order amount');
   if(p.bank_reference){if(p.bank_reference!==ref)throw new HttpError(409,'This credit has another recorded reference');return {ok:true,replayed:true};}
   if(await get('SELECT id FROM market_bank_payments WHERE bank_reference=? AND id<>?',[ref,p.id]))throw new HttpError(409,'This bank credit is already assigned to another order');
+  await allocateBankCredit(ref,'MARKET',p.id);
   const now=Date.now();
   await run("UPDATE market_bank_payments SET status='REVIEW',bank_reference=?,confirmed_ms=?,confirmed_by=? WHERE id=?",[ref,now,userId,p.id]);
   // No stock commitment or fulfilment permission. Release any remaining hold.
@@ -77,6 +79,7 @@ export async function confirmBankTransfer(userId,id,body){
   if(p.status==='CONFIRMED'){if(p.bank_reference!==ref)throw new HttpError(409,'This order was confirmed with another bank reference.');return {status:'CONFIRMED',replayed:true};}
   if(!['CLAIMED','REVIEW'].includes(p.status))throw new HttpError(409,'The buyer has not reported payment.');
   if(await get('SELECT id FROM market_bank_payments WHERE bank_reference=? AND id<>?',[ref,p.id]))throw new HttpError(409,'This bank credit already belongs to another order.');
+  await allocateBankCredit(ref,'MARKET',p.id);
   if(o.status!=='AWAITING_PAYMENT'||Number(o.expires_ms)<=Date.now())throw new HttpError(409,'Reservation expired. Resolve stock and refund or fulfilment with the buyer before proceeding.');
   await validateRequestPickup((await get('SELECT request_id FROM market_request_shops WHERE id=?',[o.shop_id])).request_id);
   const items=await all('SELECT listing_id,quantity FROM market_purchase_order_items WHERE order_id=? ORDER BY listing_id',[id]);

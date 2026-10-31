@@ -9,7 +9,7 @@
 // endpoint on purpose.
 
 import { Router, HttpError } from '../router.js';
-import { get, run } from '../db.js';
+import { get, run, atomic } from '../db.js';
 import { audit } from '../utils/audit.js';
 import { requireAuth } from '../middleware/auth.js';
 import crypto from 'node:crypto';
@@ -18,7 +18,7 @@ import { parseNgnToKobo, koboToNgn } from '../utils/money.js';
 
 export const paymentsRouter = new Router();
 
-const MEMBERSHIP_FEE_NGN = Number(process.env.MEMBERSHIP_FEE_NGN || 2000);
+const MEMBERSHIP_FEE_NGN = Number(process.env.MEMBERSHIP_FEE_NGN || 3000);
 
 function assertPaystackModeSafe() {
   const key = String(process.env.PAYSTACK_SECRET_KEY || '');
@@ -129,13 +129,19 @@ paymentsRouter.post('/api/payments/membership/initialize', async (req, res) => {
   }
 
   const reference = `OBIT-${application_id}-${crypto.randomBytes(6).toString('hex')}`;
-  await run(
+  await atomic(async () => {
+    await run('UPDATE member_applications SET status = status WHERE id = ?', [application_id]);
+    if (await get('SELECT id FROM membership_bank_payments WHERE application_id = ?', [application_id])) throw new HttpError(409, 'Use the existing bank-transfer form. Contact support before paying again.');
+    const current = await get('SELECT status FROM member_applications WHERE id = ?', [application_id]);
+    if (!['KYC_VERIFIED', 'PAYMENT_PENDING', 'PAYMENT_FAILED'].includes(current.status)) throw new HttpError(409, 'Application is not awaiting payment.');
+    await run(
     `INSERT INTO membership_payments (application_id, provider, reference, amount, currency, status)
      VALUES (?, ?, ?, ?, 'NGN', 'PAYMENT_PENDING')`,
     [application_id, provider, reference, MEMBERSHIP_FEE_NGN]
   );
   await run("UPDATE member_applications SET status = 'PAYMENT_PENDING', updated_at = datetime('now') WHERE id = ?", [application_id]);
   await audit(null, 'PAYMENT_INITIALIZED', 'member_applications', application_id, { reference, provider });
+  });
 
   // Paystack: real integration, live once PAYSTACK_SECRET_KEY is set.
   if (provider === 'paystack' && process.env.PAYSTACK_SECRET_KEY) {

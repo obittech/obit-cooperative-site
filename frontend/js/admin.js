@@ -145,6 +145,7 @@ async function refreshMarketListings(token) {
 }
 
 async function refreshQueue(token) {
+  await refreshMembershipTransfers(token);
   const apps = await OBIT.get('/api/admin/applications', { token });
   document.getElementById('queueBody').innerHTML = apps.map((a) => `
     <tr>
@@ -177,6 +178,24 @@ async function refreshQueue(token) {
       } catch (err) { alert(err.message); }
     });
   });
+}
+
+async function refreshMembershipTransfers(token) {
+  const rows = await OBIT.get('/api/admin/membership-transfers', { token });
+  const root = document.getElementById('membershipTransfers');
+  root.innerHTML = rows.map(p => `<article style="border-top:1px solid #ddd;padding:16px 0"><h3>Application ${Number(p.application_id)} · ${escapeMarket(p.full_legal_name || '')}</h3><p>${escapeMarket(p.reference)} · ₦${(Number(p.amount_kobo) / 100).toLocaleString('en-NG')} · ${escapeMarket(p.status)}</p><p>${escapeMarket(p.bank_name)} · ${escapeMarket(p.account_name)} · ${escapeMarket(p.account_number)}</p>${p.status === 'CLAIMED' ? `<form data-membership-transfer="${escapeMarket(p.reference)}"><label class="field">Actual credit amount (₦)<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="field">Bank transaction reference<input name="bank_reference" minlength="6" maxlength="120" required></label><label class="checkbox-row"><input name="checked" type="checkbox" required><span>I checked this credit in the receiving bank account.</span></label><button class="btn btn-primary" type="submit">Confirm membership payment</button><p role="status"></p></form>` : p.status === 'CONFIRMED' ? '<p>Bank credit confirmed. The application requires membership review before activation.</p>' : '<p>Waiting for the applicant to report payment.</p>'}</article>`).join('') || '<p class="muted-note">No membership bank transfers yet.</p>';
+  root.querySelectorAll('[data-membership-transfer]').forEach(form => form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = form.querySelector('button');
+    button.disabled = true;
+    try {
+      await OBIT.post(`/api/admin/membership-transfers/${encodeURIComponent(form.dataset.membershipTransfer)}/confirm`, {
+        amount_kobo: Math.round(Number(form.elements.amount.value) * 100),
+        bank_reference: form.elements.bank_reference.value.trim(), bank_credit_checked: form.elements.checked.checked,
+      }, { token });
+      await refreshQueue(token);
+    } catch (err) { form.querySelector('[role="status"]').textContent = err.message; button.disabled = false; }
+  }));
 }
 
 async function refreshWithdrawals(token) {

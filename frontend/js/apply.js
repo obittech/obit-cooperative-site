@@ -75,6 +75,7 @@ function goToStep(stepName) {
     el.classList.toggle('done', i < idx);
   });
   if (stepName === 'done' && state.application) renderSavingsStep();
+  if (stepName === 'payment' && state.applicationId) initPayment();
 }
 
 function savingsDraftKey() { return `obit_savings_draft_${state.applicationId}`; }
@@ -297,22 +298,43 @@ async function simulateKycVerified() {
 
 async function initPayment() {
   clearAlert();
-  const provider = document.getElementById('providerSelect').value;
+  const button = document.getElementById('btnInitPayment');
+  if (button.disabled) return;
+  button.disabled = true;
   try {
-    const payment = await OBIT.post('/api/payments/membership/initialize', {
-      application_id: state.applicationId, provider,
+    const payment = await OBIT.post('/api/payments/membership/bank-transfer', {
+      application_id: state.applicationId,
     });
     localStorage.setItem('obit_payment_reference', payment.reference);
-    document.getElementById('paymentStatusBox').innerHTML = `
-      <p><span class="status-badge pending">PAYMENT_PENDING</span></p>
-      <p class="muted-note">Reference: <span class="member-code">${payment.reference}</span> — ₦${payment.amount}</p>
-      ${payment.sandbox_note ? `<div class="sandbox-banner">${payment.sandbox_note}<br><br>To test the full flow locally, run on the backend:<br><code>node scripts/simulate-webhook.js ${payment.reference} ${payment.amount} success</code></div>` : `<p><a class="btn btn-primary" href="${payment.checkout_url}" target="_blank" rel="noopener">Continue to secure checkout</a></p>`}
-      <button class="btn btn-secondary" id="btnCheckPayment" style="margin-top:12px">I've paid — check status</button>
-    `;
-    document.getElementById('btnCheckPayment').addEventListener('click', pollApplicationStatus);
+    renderMembershipPayment(payment);
+    button.style.display = 'none';
   } catch (err) {
     showAlert(err.message);
+  } finally {
+    button.disabled = false;
   }
+}
+
+function paymentText(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function renderMembershipPayment(payment) {
+  const confirmed = payment.status === 'CONFIRMED';
+  document.getElementById('paymentStatusBox').innerHTML = `
+    <p><span class="status-badge ${confirmed ? 'ok' : 'pending'}">${confirmed ? 'Payment confirmed' : payment.status === 'CLAIMED' ? 'Payment reported' : 'Awaiting bank transfer'}</span></p>
+    <dl class="kv"><dt>Bank</dt><dd>${paymentText(payment.bank_name)}</dd><dt>Account name</dt><dd>${paymentText(payment.account_name)}</dd><dt>Account number</dt><dd><strong>${paymentText(payment.account_number)}</strong></dd><dt>Membership fee</dt><dd><strong>₦${Number(payment.amount).toLocaleString('en-NG')}</strong></dd><dt>Application</dt><dd>${paymentText(payment.application_id)}</dd><dt>Payment reference</dt><dd style="overflow-wrap:anywhere">${paymentText(payment.reference)}</dd></dl>
+    ${confirmed ? `<p>Receipt: ${paymentText(payment.receipt_reference)}</p><p>Your payment is confirmed. Membership approval is the next step.</p>` : `<p>Use the payment reference in your transfer narration. Do not pay again if you have already transferred the fee.</p><button class="btn btn-primary btn-block" id="btnMembershipPaid">I Have Paid — Continue on WhatsApp</button><p class="muted-note">WhatsApp opens with your application number, payment reference and amount. Tap Send to contact our team. No receipt upload is required here.</p>`}
+    <button class="btn btn-secondary" id="btnCheckPayment" style="margin:12px 0">Check payment status</button>`;
+  document.getElementById('btnCheckPayment').addEventListener('click', pollApplicationStatus);
+  document.getElementById('btnMembershipPaid')?.addEventListener('click', async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const result = await OBIT.post(`/api/payments/membership/bank-transfer/${encodeURIComponent(payment.reference)}/paid`, {});
+      renderMembershipPayment(result);
+      window.location.assign(result.whatsapp_url);
+    } catch (err) { showAlert(err.message); button.disabled = false; }
+  });
 }
 
 async function pollApplicationStatus() {
@@ -326,7 +348,8 @@ async function pollApplicationStatus() {
     } else if (app.status === 'PAYMENT_FAILED') {
       showAlert('Payment was not verified. Please try again.');
     } else {
-      showAlert('Payment not verified yet. This updates automatically once the provider webhook fires.', 'success');
+      await initPayment();
+      showAlert('Our team has not confirmed the bank credit yet. Continue on WhatsApp if you need help. Please do not pay again.', 'success');
     }
   } catch (err) {
     showAlert(err.message);
