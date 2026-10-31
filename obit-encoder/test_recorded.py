@@ -147,7 +147,7 @@ class LiveStartTests(unittest.TestCase):
         youtube=YouTube(Mock()); youtube.prepared_id='event'; youtube.stream_id='stream'; youtube.visibility='public'
         youtube.authorize=Mock()
         youtube.broadcast_details=Mock(return_value={'id':'event','snippet':{'channelId':channel},
-            'status':{'lifeCycleStatus':lifecycle,'privacyStatus':visibility},'contentDetails':{'boundStreamId':bound}})
+            'status':{'lifeCycleStatus':lifecycle,'privacyStatus':visibility},'contentDetails':{'boundStreamId':bound,'monitorStream':{'enableMonitorStream':False}}})
         youtube.request=Mock(side_effect=[{'items':[{'id':'stream','status':{'streamStatus':'active' if active else 'inactive'}}]},
             {'id':'event','status':{'lifeCycleStatus':'liveStarting'}}])
         return youtube
@@ -163,6 +163,40 @@ class LiveStartTests(unittest.TestCase):
 
     def test_auto_start_race_does_not_write(self):
         youtube=self.fixture(lifecycle='liveStarting'); youtube.start_prepared_event('event')
+        youtube.request.assert_not_called()
+
+    def test_enabled_monitor_tests_then_starts_same_event(self):
+        youtube=self.fixture()
+        details=youtube.broadcast_details.return_value
+        details['contentDetails']['monitorStream']['enableMonitorStream']=True
+        youtube.request.side_effect=[{'items':[{'id':'stream','status':{'streamStatus':'active'}}]},
+            {'id':'event','status':{'lifeCycleStatus':'testStarting'}}]
+        youtube.start_prepared_event('event')
+        self.assertEqual(youtube.request.call_args.kwargs['params']['broadcastStatus'],'testing')
+        youtube.start_prepared_event('event')
+        self.assertEqual(youtube.request.call_count,2)
+        details['status']['lifeCycleStatus']='testing'
+        youtube.request.side_effect=[{'items':[{'id':'stream','status':{'streamStatus':'active'}}]},
+            {'id':'event','status':{'lifeCycleStatus':'liveStarting'}}]
+        youtube.start_prepared_event('event')
+        self.assertEqual(youtube.request.call_args.kwargs['params']['broadcastStatus'],'live')
+        self.assertTrue(youtube.live_transition_attempted)
+
+    def test_unknown_monitor_setting_cannot_transition(self):
+        youtube=self.fixture(); del youtube.broadcast_details.return_value['contentDetails']['monitorStream']
+        with self.assertRaisesRegex(YouTubeError,'setting unavailable'): youtube.start_prepared_event('event')
+        youtube.request.assert_not_called()
+
+    def test_testing_only_is_not_successful_public_playback(self):
+        youtube=self.fixture(lifecycle='testing')
+        with self.assertRaisesRegex(YouTubeError,'never entered live'): youtube.finish('event')
+        youtube.request.assert_not_called()
+
+    def test_completed_event_requires_actual_start_evidence(self):
+        youtube=self.fixture(lifecycle='complete')
+        with self.assertRaisesRegex(YouTubeError,'no actual live start'): youtube.finish('event')
+        youtube.broadcast_details.return_value['snippet']['actualStartTime']='2026-10-31T13:00:00Z'
+        youtube.finish('event')
         youtube.request.assert_not_called()
 
     def test_changed_identity_binding_or_visibility_cannot_write(self):
