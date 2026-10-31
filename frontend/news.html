@@ -3,15 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Member Opportunity Hub | Obit Cooperative Society</title>
-<meta name="description" content="Explore verified and explained opportunities for Obit Cooperative members, including programmes, grants, tenders, finance, technology and business support.">
+  <title>News &amp; Opportunities | Obit Cooperative</title>
+
+<meta name="description" content="Read Obit Cooperative news, practical member guides and business opportunities with links to official sources.">
 <link rel="canonical" href="https://obitcooperative.com/news.html">
-  <meta name="description" content="Verified Nigerian business, funding and development opportunities curated by Obit Cooperative Society, with detailed application guidance for activated members." />
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261101-navigation" />
+  <link rel="stylesheet" href="styles.css?v=20261101-menu" />
   <link rel="stylesheet" href="app.css?v=20261013-millionaires" />
+  <link rel="stylesheet" href="news.css?v=20261101-1">
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -22,14 +24,13 @@
         <span><strong>OBIT</strong><small>COOPERATIVE SOCIETY</small></span>
       </a>
       <button class="nav-toggle" aria-label="Open navigation" aria-expanded="false">☰</button>
-      <nav class="main-nav">
-        <a href="https://obitcooperative.com/">Home</a>
-        <a href="https://obitcooperative.com/#about">About</a>
+      <nav class="main-nav" aria-label="Main navigation">
         <a href="https://obitcooperative.com/#membership">Membership</a>
-        <a href="https://obitcooperative.com/#millionaires">Obit Millionaires</a>
-        <a href="news.html">News</a>
+        <a href="https://finance.obitcooperative.com/">Finance</a>
+        <a href="https://marketplace.obitcooperative.com/">Marketplace</a>
+        <a href="https://obitcooperative.com/#millionaires">Millionaires Prayer</a>
+        <a href="https://obitcooperative.com/news.html">News</a>
         <a href="https://obitcooperative.com/#contact">Contact</a>
-      <a href="https://marketplace.obitcooperative.com/">Marketplace</a>
       </nav>
       <div class="nav-actions">
         <a class="btn btn-ghost" href="portal.html">Login</a>
@@ -40,12 +41,9 @@
 
   <main class="app-main" id="main-content">
     <div class="container" style="max-width:980px">
-      <div class="app-header">
-        <div class="eyebrow green">OBIT MEMBER OPPORTUNITY HUB</div>
-        <h1>Useful opportunities, verified and explained</h1>
-        <p>We screen Nigerian grants, programmes, finance, tenders, technology and business opportunities. Everyone can see the verified headline and official source. Activated members receive the full eligibility check, application steps, document list, risks and recommended action.</p>
-      </div>
-
+      <div class="app-header news-header"><div class="eyebrow green">OBIT JOURNAL</div><h1>News &amp; opportunities</h1><p>Cooperative updates, useful member guides and opportunities to explore.</p><nav class="news-sections" aria-label="News sections"><a href="#articles">Latest articles</a><a href="#opportunities">Opportunities</a></nav></div>
+      <section id="articles" aria-labelledby="articlesTitle"><h2 id="articlesTitle">Latest articles</h2><div class="blog-grid"><article class="blog-card"><span class="eyebrow green">Membership</span><h3><a href="news-membership.html">Your Obit membership journey, step by step</a></h3><p>Know what to prepare, how identity verification works and what happens after you pay.</p><div class="blog-meta">Obit editorial team · <time datetime="2026-11-01">1 Nov 2026</time></div><a class="blog-read" href="news-membership.html">Read article →</a></article><article class="blog-card"><span class="eyebrow green">Marketplace</span><h3><a href="news-selling.html">Prepare your first product listing on Obit Market</a></h3><p>A practical checklist for cooperative members who want to sell online.</p><div class="blog-meta">Obit editorial team · <time datetime="2026-11-01">1 Nov 2026</time></div><a class="blog-read" href="news-selling.html">Read article →</a></article><article class="blog-card"><span class="eyebrow green">Opportunities</span><h3><a href="news-opportunity-checklist.html">Before you apply for a grant, training or tender</a></h3><p>Check the source, deadline and requirements before sharing documents or paying a fee.</p><div class="blog-meta">Obit editorial team · <time datetime="2026-11-01">1 Nov 2026</time></div><a class="blog-read" href="news-opportunity-checklist.html">Read article →</a></article></div></section>
+      <section id="opportunities" class="news-opportunities" aria-labelledby="opportunitiesTitle"><div class="eyebrow green">OPPORTUNITY HUB</div><h2 id="opportunitiesTitle">Explore opportunities</h2><p>Browse published opportunities and check the linked official sources. Activated members can unlock detailed application briefings.</p></section>
       <section class="card opportunity-access" id="memberAccessPanel" aria-labelledby="memberAccessTitle">
         <div>
           <div class="eyebrow green">MEMBER BENEFIT</div>
@@ -77,6 +75,7 @@
   </main>
 
   <footer id="contact">
+    <div class="container news-footer-links"><a href="https://obitcooperative.com/#about">About Obit</a><a href="https://obitcooperative.com/#support">Contact the team</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></div>
     <div class="container footer-bottom">
       <span>© 2026 Obit Cooperative Multipurpose Society Limited.</span>
       <span>Proudly Nigerian. Built for shared prosperity.</span>
@@ -84,8 +83,9 @@
   </footer>
 
   <script src="js/config.js"></script>
-  <script src="js/nav.js?v=20261101-navigation"></script>
+  <script src="js/nav.js?v=20261101-menu"></script>
   <script src="js/api.js"></script>
   <script src="js/news.js"></script>
+  <script src="js/news-ads.js?v=20261101-1"></script>
 </body>
 </html>

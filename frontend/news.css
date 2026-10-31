@@ -1,0 +1,23 @@
+.news-header{margin-bottom:36px}
+.news-header h1{font-size:clamp(32px,5vw,48px);line-height:1.2}
+.news-sections{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
+.news-sections a{display:inline-flex;align-items:center;min-height:48px;padding:10px 18px;border:1px solid #b8cbbf;border-radius:8px;font-weight:700;color:#075b34;background:#fff}
+.blog-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.blog-card{display:flex;flex-direction:column;min-width:0;border:1px solid #cbd8d0;background:#fff;border-radius:16px;padding:24px;color:#172c22}
+.blog-card h3{font-size:22px;line-height:1.4;margin:12px 0}
+.blog-card h3 a{color:#172c22}
+.blog-card p{font-size:17px;line-height:1.65;color:#354c42}
+.blog-meta{font-size:14px;line-height:1.6;color:#4b6055;margin:16px 0}
+.blog-read{display:inline-flex;align-items:center;min-height:48px;font-size:17px;font-weight:700;color:#075b34;text-decoration:underline;text-underline-offset:4px}
+.blog-card .blog-read{margin-top:auto}
+.news-opportunities{margin-top:56px;scroll-margin-top:100px}
+#articles{scroll-margin-top:100px}
+.news-opportunities p{font-size:18px;line-height:1.7;color:#354c42}
+.blog-article{max-width:800px;font-size:19px;line-height:1.8;color:#172c22;overflow-wrap:break-word}
+.blog-article header{margin:24px 0 36px}
+.blog-article h1{font-size:clamp(32px,5vw,48px);line-height:1.25;margin:16px 0}
+.blog-article h2{font-size:26px;line-height:1.4;margin:32px 0 14px}
+.blog-article .article-intro{font-size:21px;color:#354c42}
+.news-footer-links{display:flex;flex-wrap:wrap;gap:10px 28px}
+.news-footer-links a{min-height:48px;display:flex;align-items:center}
+@media(max-width:800px){.blog-grid{grid-template-columns:1fr}.blog-card{padding:22px}.blog-article{font-size:18px}.news-footer-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 20px}}

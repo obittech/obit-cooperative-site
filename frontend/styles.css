@@ -247,3 +247,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   .main-nav{display:none}.nav-actions{margin-left:auto}.nav-toggle{display:block;order:3}
   .main-nav.open{display:flex;position:absolute;top:100%;left:0;right:0;background:#fff;padding:20px 24px;max-height:calc(100dvh - 78px);overflow-y:auto;flex-direction:column;align-items:flex-start;border-bottom:1px solid var(--line)}
 }
+
+/* Six clear destinations, with enough room for every label on phones. */
+.main-nav a{white-space:nowrap}
+@media(max-width:1400px){
+  .main-nav.open{gap:4px;padding:12px 20px 20px;max-height:calc(100dvh - 88px)}
+  .main-nav.open a{padding:12px 14px;min-height:56px;font-size:18px;line-height:1.5;border-bottom:1px solid #e3ebe6;white-space:normal}
+  .main-nav.open a:last-child{border-bottom:0}
+  .main-nav.open a:hover,.main-nav.open a:focus-visible{background:#edf5ef;border-radius:8px}
+}
