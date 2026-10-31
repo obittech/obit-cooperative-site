@@ -132,3 +132,47 @@ table.app-table tr:hover td{background:#fafcfb}
 .interest-choice input{appearance:auto;-webkit-appearance:checkbox;flex:0 0 22px;width:22px;height:22px;margin:0;accent-color:var(--green)}
 .interest-choice:has(input:checked){border-color:var(--green);background:#eaf7ee}
 .interest-choice:focus-within{outline:2px solid var(--green);outline-offset:2px}
+
+/* Readable consent cards. Keep the checkbox and all copy in two explicit
+   columns so links cannot become separate, widely spaced flex items. */
+#panel-review .kv{font-size:18px;line-height:1.6}
+#panel-review .kv dt{color:#354c42}
+#panel-review .kv dd{color:#172c22;min-width:0;overflow-wrap:anywhere}
+.consent-choices{margin:30px 0 24px}
+.consent-choices h3{font-size:22px;line-height:1.4;color:#172c22;margin:0 0 12px}
+.consent-choices>p{font-size:18px;line-height:1.6;color:#354c42;margin:0 0 20px}
+#panel-review .consent-option{
+  display:grid;grid-template-columns:36px minmax(0,1fr);align-items:start;
+  gap:16px;width:100%;padding:20px 18px;margin:0 0 16px;
+  border:2px solid #698376;border-radius:14px;background:#fff;
+  color:#172c22;font-size:18px;font-weight:500;line-height:1.65;
+  cursor:pointer;touch-action:manipulation;text-align:left;
+}
+#panel-review .consent-option input[type="checkbox"]{
+  appearance:none;-webkit-appearance:none;display:block;position:static;
+  box-sizing:border-box;width:36px;min-width:36px;max-width:36px;
+  height:36px;min-height:36px;margin:3px 0 0;padding:0;
+  border:3px solid #254d3b;border-radius:7px;background:#fff;
+  background-position:center;background-size:28px 28px;background-repeat:no-repeat;
+  cursor:pointer;box-shadow:none;
+}
+#panel-review .consent-option input[type="checkbox"]:checked{
+  background-color:#075b34;border-color:#075b34;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='m7 16 6 6L25 9' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+#panel-review .consent-option input[type="checkbox"]:focus-visible{outline:4px solid #a65d00;outline-offset:4px}
+#panel-review .consent-copy{display:block;min-width:0;white-space:normal;overflow-wrap:break-word}
+#panel-review .consent-copy strong{display:block;font-size:20px;line-height:1.5;margin-bottom:8px}
+#panel-review .consent-copy small{display:block;font-size:16px;font-weight:700;color:#354c42}
+#panel-review .consent-copy>span{display:block}
+#panel-review .consent-copy a{display:inline;color:#075b34;text-decoration:underline;text-underline-offset:3px;font-weight:700}
+#panel-review .review-actions{gap:16px}
+#panel-review .review-actions .btn{min-height:56px;font-size:18px;padding:14px 20px;white-space:normal;text-align:center}
+@media(max-width:720px){
+  #panel-review .consent-option{gap:14px;padding:18px 14px}
+  #panel-review .review-actions{flex-direction:column}
+  #panel-review .review-actions .btn{flex:0 0 auto;width:100%}
+}
+@media(forced-colors:active){
+  #panel-review .consent-option input[type="checkbox"]{appearance:auto;-webkit-appearance:checkbox;background-image:none}
+}
