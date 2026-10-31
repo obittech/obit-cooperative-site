@@ -8,6 +8,8 @@ import { get, run, atomic } from '../db.js';
 import { audit } from '../utils/audit.js';
 import { validateApplicationProfile } from '../utils/application-profile.js';
 
+import { applicationWithSponsor, saveSponsor, validateSavedSponsor, sponsorLocked } from '../services/member-referrals.js';
+
 export const applicationsRouter = new Router();
 
 const EDITABLE_FIELDS = [
@@ -21,17 +23,21 @@ applicationsRouter.post('/api/applications', async (req, res) => {
   const b = req.body || {};
   const interests = Array.isArray(b.interests) ? JSON.stringify(b.interests) : null;
 
-  const result = await run(
-    `INSERT INTO member_applications (status, referral_source, campaign, interests_json)
-     VALUES ('APPLICATION_STARTED', ?, ?, ?)`,
-    [b.referral_source ?? null, b.campaign ?? null, interests]
-  );
-  const application = await get('SELECT * FROM member_applications WHERE id = ?', [result.lastInsertRowid]);
-  if (b.referral_source) {
-    await run('INSERT INTO referrals (application_id, referral_code, referred_by) VALUES (?, ?, ?)',
-      [application.id, b.referral_source, b.referred_by ?? null]);
-  }
-  await audit(null, 'APPLICATION_STARTED', 'member_applications', application.id);
+  const application = await atomic(async () => {
+    const result = await run(
+      `INSERT INTO member_applications (status, referral_source, campaign, interests_json)
+       VALUES ('APPLICATION_STARTED', ?, ?, ?)`,
+      [b.referral_source ?? null, b.campaign ?? null, interests]
+    );
+    const application = await get('SELECT * FROM member_applications WHERE id = ?', [result.lastInsertRowid]);
+    if (b.referral_source) {
+      await run('INSERT INTO referrals (application_id, referral_code, referred_by) VALUES (?, ?, ?)',
+        [application.id, b.referral_source, b.referred_by ?? null]);
+    }
+    if ('sponsor_code' in b) await saveSponsor(application, b.sponsor_code);
+    await audit(null, 'APPLICATION_STARTED', 'member_applications', application.id);
+    return applicationWithSponsor(application);
+  });
   res.json(201, application);
 });
 
@@ -53,20 +59,32 @@ applicationsRouter.patch('/api/applications/:id', async (req, res, params) => {
     }
   }
   if (Array.isArray(b.interests)) { updates.push('interests_json = ?'); values.push(JSON.stringify(b.interests)); }
-  if (updates.length === 0) throw new HttpError(400, 'No editable fields supplied');
+  if (updates.length === 0 && !('sponsor_code' in b)) throw new HttpError(400, 'No editable fields supplied');
 
-  updates.push("updated_at = datetime('now')");
-  values.push(params.id);
-  await run(`UPDATE member_applications SET ${updates.join(', ')} WHERE id = ?`, values);
+  const updated = await atomic(async () => {
+    await run('UPDATE member_applications SET status = status WHERE id = ?', [params.id]);
+    const current = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
+    if (!['LEAD', 'APPLICATION_STARTED', 'NEEDS_INFORMATION'].includes(current.status)) throw new HttpError(409, 'Application has already progressed. Refresh its status.');
+    const locked = await sponsorLocked(params.id);
+    if (locked && 'sponsor_code' in b && String(b.sponsor_code).trim().toUpperCase() !== (await applicationWithSponsor(current)).sponsor_code) throw new HttpError(409, 'The sponsor is fixed once payment instructions have been created. Contact support for corrections.');
+    updates.push("updated_at = datetime('now')");
+    values.push(params.id);
+    await run(`UPDATE member_applications SET ${updates.join(', ')} WHERE id = ?`, values);
 
-  const updated = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
+    const saved = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
+    if (!locked) {
+      if ('sponsor_code' in b) await saveSponsor(saved, b.sponsor_code);
+      else await validateSavedSponsor(saved);
+    }
+    return applicationWithSponsor(saved);
+  });
   res.json(200, updated);
 });
 
 applicationsRouter.post('/api/applications/:id/submit', async (req, res, params) => {
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
   if (!application) throw new HttpError(404, 'Application not found');
-  if (application.status === 'APPLICATION_SUBMITTED') return res.json(200, application);
+  if (application.status === 'APPLICATION_SUBMITTED') return res.json(200, await applicationWithSponsor(application));
   if (!['LEAD', 'APPLICATION_STARTED', 'NEEDS_INFORMATION'].includes(application.status)) {
     throw new HttpError(409, `Application is ${application.status} and cannot be submitted again`);
   }
@@ -78,6 +96,10 @@ applicationsRouter.post('/api/applications/:id/submit', async (req, res, params)
     throw new HttpError(422, 'Terms and Privacy consent are both required to submit');
   }
   await atomic(async () => {
+    await run('UPDATE member_applications SET status = status WHERE id = ?', [params.id]);
+    const fresh = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
+    validateApplicationProfile(fresh);
+    if (!await sponsorLocked(params.id)) await validateSavedSponsor(fresh);
     const changed = await run("UPDATE member_applications SET status = 'APPLICATION_SUBMITTED', updated_at = datetime('now') WHERE id = ? AND status IN ('LEAD', 'APPLICATION_STARTED', 'NEEDS_INFORMATION')", [params.id]);
     if (changed.changes !== 1) throw new HttpError(409, 'Application has already progressed. Refresh its status.');
     for (const type of ['terms', 'privacy', 'marketing']) {
@@ -90,11 +112,11 @@ applicationsRouter.post('/api/applications/:id/submit', async (req, res, params)
   });
 
   const updated = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
-  res.json(200, updated);
+  res.json(200, await applicationWithSponsor(updated));
 });
 
 applicationsRouter.get('/api/applications/:id', async (req, res, params) => {
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
   if (!application) throw new HttpError(404, 'Application not found');
-  res.json(200, application);
+  res.json(200, await applicationWithSponsor(application));
 });

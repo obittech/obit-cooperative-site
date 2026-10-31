@@ -7,6 +7,8 @@ import { parseNgnToKobo } from '../utils/money.js';
 import { bankTransferConfig } from '../services/market-bank-transfer.js';
 import { allocateBankCredit } from '../services/bank-credit.js';
 
+import { sponsorForApplication } from '../services/member-referrals.js';
+
 export const membershipTransfersRouter = new Router();
 
 function config() {
@@ -18,10 +20,12 @@ function membershipFee() {
   try { return parseNgnToKobo(process.env.MEMBERSHIP_FEE_NGN || '3000'); }
   catch { throw new HttpError(503, 'Membership fee is not configured correctly.'); }
 }
-function details(payment) {
+async function details(payment) {
+  const sponsor = await sponsorForApplication(payment.application_id);
   const amount = Number(payment.amount_kobo) / 100;
-  const text = `Hello Obit, I have paid ₦${amount.toLocaleString('en-NG')} for my cooperative membership. Application: ${payment.application_id}. Payment reference: ${payment.reference}. Please check the bank credit and confirm my payment.`;
-  return { provider: 'bank_transfer', application_id: Number(payment.application_id), reference: payment.reference,
+  let text = `Hello Obit, I have paid ₦${amount.toLocaleString('en-NG')} for my cooperative membership. Application: ${payment.application_id}. Payment reference: ${payment.reference}. Please check the bank credit and confirm my payment.`;
+  text += sponsor ? ` Sponsor membership code: ${sponsor.member_code}. Sponsor name: ${sponsor.full_legal_name}. Sponsor phone: ${sponsor.phone}. Referral bonus: ₦500 after payment confirmation and membership approval.` : ' Sponsor: no member referral.';
+  return { sponsor: sponsor || null, referral_bonus_amount_kobo: sponsor ? 50000 : 0, provider: 'bank_transfer', application_id: Number(payment.application_id), reference: payment.reference,
     amount, amount_kobo: Number(payment.amount_kobo), currency: 'NGN', status: payment.status,
     bank_name: payment.bank_name, account_name: payment.account_name, account_number: payment.account_number,
     whatsapp_url: `https://wa.me/${payment.whatsapp}?text=${encodeURIComponent(text)}`,
@@ -56,13 +60,13 @@ membershipTransfersRouter.post('/api/payments/membership/bank-transfer', async (
     await audit(null, 'MEMBERSHIP_TRANSFER_STARTED', 'member_applications', id, { reference, amount_kobo: amount });
     return get('SELECT * FROM membership_bank_payments WHERE application_id = ?', [id]);
   });
-  res.json(200, details(payment));
+  res.json(200, await details(payment));
 });
 
 membershipTransfersRouter.get('/api/payments/membership/bank-transfer/:applicationId', async (req, res, params) => {
   const payment = await get('SELECT * FROM membership_bank_payments WHERE application_id = ?', [params.applicationId]);
   if (!payment) throw new HttpError(404, 'Membership transfer not found');
-  res.json(200, details(payment));
+  res.json(200, await details(payment));
 });
 
 membershipTransfersRouter.post('/api/payments/membership/bank-transfer/:reference/paid', async (req, res, params) => {
@@ -76,12 +80,12 @@ membershipTransfersRouter.post('/api/payments/membership/bank-transfer/:referenc
     }
     return get('SELECT * FROM membership_bank_payments WHERE id = ?', [row.id]);
   });
-  res.json(200, details(payment));
+  res.json(200, await details(payment));
 });
 
 membershipTransfersRouter.get('/api/admin/membership-transfers', requireAuth('staff', 'admin'), async (req, res) => {
-  res.json(200, await all(`SELECT b.*, a.full_legal_name, a.status AS application_status
-    FROM membership_bank_payments b JOIN member_applications a ON a.id = b.application_id ORDER BY b.created_ms DESC LIMIT 200`));
+  res.json(200, await all(`SELECT b.*, a.full_legal_name, a.status AS application_status, s.member_code AS sponsor_code, s.full_legal_name AS sponsor_name, s.phone AS sponsor_phone
+    FROM membership_bank_payments b JOIN member_applications a ON a.id = b.application_id LEFT JOIN application_sponsors s ON s.application_id = a.id ORDER BY b.created_ms DESC LIMIT 200`));
 });
 
 membershipTransfersRouter.post('/api/admin/membership-transfers/:reference/confirm', requireAuth('staff', 'admin'), async (req, res, params) => {
@@ -107,5 +111,5 @@ membershipTransfersRouter.post('/api/admin/membership-transfers/:reference/confi
     await audit(req.user.id, 'MEMBERSHIP_TRANSFER_CONFIRMED', 'member_applications', row.application_id, { reference: row.reference });
     return get('SELECT * FROM membership_bank_payments WHERE id = ?', [row.id]);
   });
-  res.json(200, details(payment));
+  res.json(200, await details(payment));
 });

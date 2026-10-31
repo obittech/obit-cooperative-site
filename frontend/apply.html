@@ -85,6 +85,10 @@
             <label class="field">Email
               <input id="email" type="email" required placeholder="you@example.com" />
             </label>
+            <label class="field">Sponsor membership code (optional)
+              <input id="sponsor_code" maxlength="40" placeholder="e.g. OBT-2026-000123" autocapitalize="characters" spellcheck="false" aria-describedby="sponsorHelp" />
+              <small id="sponsorHelp">Referred by a member? Enter their membership code. Their registered name and phone number will be included in your payment message to Obit for verification. They earn ₦500 after your payment is confirmed and membership is approved.</small>
+            </label>
             <label class="field">Occupation category
               <select id="occupation_category">
                 <option value="">Select</option>
@@ -209,6 +213,6 @@
   <script src="js/nav.js?v=20260924-2"></script>
   <script src="js/api.js"></script>
   <script src="js/nigeria-locations.js?v=20261030-locations"></script>
-  <script src="js/apply.js?v=20261031-membership-transfer"></script>
+  <script src="js/apply.js?v=20261031-member-referrals"></script>
 </body>
 </html>

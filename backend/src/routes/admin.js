@@ -10,7 +10,38 @@ import { requireAuth } from '../middleware/auth.js';
 import { audit } from '../utils/audit.js';
 import { generateMemberCode } from '../utils/auth.js';
 
+import { awardReferralBonus } from '../services/member-referrals.js';
+
 export const adminRouter = new Router();
+
+adminRouter.get('/api/admin/referral-bonuses', requireAuth('staff', 'admin'), async (req, res) => {
+  const rows = await all(`SELECT b.*, s.member_code AS sponsor_code, s.full_legal_name AS sponsor_name,
+    s.phone AS sponsor_phone, a.full_legal_name AS new_member_name
+    FROM referral_bonuses b JOIN application_sponsors s ON s.application_id = b.application_id
+    JOIN member_applications a ON a.id = b.application_id ORDER BY b.earned_ms DESC LIMIT 200`);
+  res.json(200, rows);
+});
+
+adminRouter.post('/api/admin/referral-bonuses/:id/paid', requireAuth('staff', 'admin'), async (req, res, params) => {
+  const ref = String(req.body?.payout_reference || '').trim();
+  if (req.body?.payout_completed !== true || req.body?.amount_kobo !== 50000 || ref.length < 6 || ref.length > 120) {
+    throw new HttpError(422, 'Confirm the completed ₦500 payout and enter its bank transaction reference.');
+  }
+  const bonus = await atomic(async () => {
+    await run('UPDATE referral_bonuses SET status = status WHERE id = ?', [params.id]);
+    const row = await get('SELECT * FROM referral_bonuses WHERE id = ?', [params.id]);
+    if (!row) throw new HttpError(404, 'Referral bonus not found');
+    if (row.status === 'PAID') {
+      if (row.payout_reference !== ref) throw new HttpError(409, 'This bonus was already paid with another reference.');
+      return row;
+    }
+    if (await get('SELECT id FROM referral_bonuses WHERE payout_reference = ?', [ref])) throw new HttpError(409, 'This payout reference has already been used.');
+    await run("UPDATE referral_bonuses SET status = 'PAID', paid_ms = ?, paid_by = ?, payout_reference = ? WHERE id = ?", [Date.now(), req.user.id, ref, row.id]);
+    await audit(req.user.id, 'REFERRAL_BONUS_PAID', 'referral_bonuses', row.id, { amount_kobo: 50000 });
+    return get('SELECT * FROM referral_bonuses WHERE id = ?', [row.id]);
+  });
+  res.json(200, bonus);
+});
 
 adminRouter.get('/api/admin/dashboard', requireAuth('staff', 'admin'), async (req, res) => {
   const counts = {};
@@ -26,41 +57,47 @@ adminRouter.get('/api/admin/applications', requireAuth('staff', 'admin'), async 
 });
 
 adminRouter.post('/api/admin/applications/:id/decision', requireAuth('staff', 'admin'), async (req, res, params) => {
-  const application = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
-  if (!application) throw new HttpError(404, 'Application not found');
-  if (application.status !== 'UNDER_REVIEW') {
-    throw new HttpError(409, `Application must be UNDER_REVIEW to decide (currently ${application.status})`);
-  }
-
-  const { decision, note } = req.body || {}; // 'APPROVE' | 'REJECT' | 'NEEDS_INFORMATION'
-  if (!['APPROVE', 'REJECT', 'NEEDS_INFORMATION'].includes(decision)) {
-    throw new HttpError(400, "decision must be 'APPROVE', 'REJECT' or 'NEEDS_INFORMATION'");
-  }
-
-  if (decision === 'REJECT') {
-    await run("UPDATE member_applications SET status = 'REJECTED', updated_at = datetime('now') WHERE id = ?", [params.id]);
-  } else if (decision === 'NEEDS_INFORMATION') {
-    await run("UPDATE member_applications SET status = 'NEEDS_INFORMATION', updated_at = datetime('now') WHERE id = ?", [params.id]);
-  } else {
-    const countRow = await get(`SELECT COUNT(*) as n FROM members`);
-    const memberCode = generateMemberCode(countRow.n + 1);
-    let user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
-    if (!user) {
-      await run('INSERT INTO users (email, phone, role) VALUES (?, ?, ?)', [application.email, application.phone, 'member']);
-      user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
+  const result = await atomic(async () => {
+    await run('UPDATE member_applications SET status = status WHERE id = ?', [params.id]);
+    const application = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
+    if (!application) throw new HttpError(404, 'Application not found');
+    if (application.status !== 'UNDER_REVIEW') {
+      throw new HttpError(409, `Application must be UNDER_REVIEW to decide (currently ${application.status})`);
     }
-    await run('INSERT INTO members (application_id, user_id, member_code, status) VALUES (?, ?, ?, ?)',
-      [params.id, user.id, memberCode, 'ACTIVE']);
-    const member = await get('SELECT * FROM members WHERE application_id = ?', [params.id]);
-    await run('INSERT INTO community_onboarding (member_id) VALUES (?)', [member.id]);
-    await run("INSERT INTO ledger_accounts (member_id) VALUES (?)", [member.id]);
-    await run("UPDATE member_applications SET status = 'ACTIVE', updated_at = datetime('now') WHERE id = ?", [params.id]);
-  }
 
-  await audit(req.user.id, `APPLICATION_DECISION_${decision}`, 'member_applications', params.id, { note: note ?? null });
-  const updated = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
-  const member = await get('SELECT * FROM members WHERE application_id = ?', [params.id]);
-  res.json(200, { application: updated, member: member ?? null });
+    const { decision, note } = req.body || {}; // 'APPROVE' | 'REJECT' | 'NEEDS_INFORMATION'
+    if (!['APPROVE', 'REJECT', 'NEEDS_INFORMATION'].includes(decision)) {
+      throw new HttpError(400, "decision must be 'APPROVE', 'REJECT' or 'NEEDS_INFORMATION'");
+    }
+
+    if (decision === 'REJECT') {
+      await run("UPDATE member_applications SET status = 'REJECTED', updated_at = datetime('now') WHERE id = ?", [params.id]);
+    } else if (decision === 'NEEDS_INFORMATION') {
+      await run("UPDATE member_applications SET status = 'NEEDS_INFORMATION', updated_at = datetime('now') WHERE id = ?", [params.id]);
+    } else {
+      const countRow = await get(`SELECT COUNT(*) as n FROM members`);
+      const memberCode = generateMemberCode(Number(countRow.n) + 1);
+      let user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
+      if (!user) {
+        await run('INSERT INTO users (email, phone, role) VALUES (?, ?, ?)', [application.email, application.phone, 'member']);
+        user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
+      }
+      if (await get('SELECT id FROM members WHERE user_id = ?', [user.id])) throw new HttpError(409, 'This account already has a membership. Do not approve a duplicate application.');
+      await run('INSERT INTO members (application_id, user_id, member_code, status) VALUES (?, ?, ?, ?)',
+        [params.id, user.id, memberCode, 'ACTIVE']);
+      const member = await get('SELECT * FROM members WHERE application_id = ?', [params.id]);
+      await run('INSERT INTO community_onboarding (member_id) VALUES (?)', [member.id]);
+      await run("INSERT INTO ledger_accounts (member_id) VALUES (?)", [member.id]);
+      await run("UPDATE member_applications SET status = 'ACTIVE', updated_at = datetime('now') WHERE id = ?", [params.id]);
+    }
+
+    await audit(req.user.id, `APPLICATION_DECISION_${decision}`, 'member_applications', params.id, { note: note ?? null });
+    const updated = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
+    const member = await get('SELECT * FROM members WHERE application_id = ?', [params.id]);
+    if (decision === 'APPROVE') await awardReferralBonus(params.id, req.user.id);
+    return { application: updated, member: member ?? null };
+  });
+  res.json(200, result);
 });
 
 adminRouter.get('/api/admin/finance/summary', requireAuth('staff', 'admin'), async (req, res) => {
