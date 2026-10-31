@@ -22,6 +22,19 @@ meRouter.get('/api/me', requireAuth(), async (req, res) => {
   res.json(200, { id: req.user.id, role: req.user.role });
 });
 
+meRouter.get('/api/me/referrals', requireAuth('member'), async (req, res) => {
+  const member = await memberForUser(req.user.id);
+  const bonuses = await all('SELECT application_id, amount_kobo, status, earned_ms, paid_ms FROM referral_bonuses WHERE sponsor_member_id = ? ORDER BY earned_ms DESC', [member.id]);
+  const referred = await get('SELECT COUNT(*) AS n FROM application_sponsors WHERE sponsor_member_id = ?', [member.id]);
+  res.json(200, {
+    referral_code: member.member_code, active: member.status === 'ACTIVE', bonus_per_member_kobo: 50000,
+    referred_count: Number(referred.n), bonuses,
+    earned_kobo: bonuses.reduce((sum, row) => sum + Number(row.amount_kobo), 0),
+    payable_kobo: bonuses.filter(row => row.status === 'EARNED').reduce((sum, row) => sum + Number(row.amount_kobo), 0),
+    paid_kobo: bonuses.filter(row => row.status === 'PAID').reduce((sum, row) => sum + Number(row.amount_kobo), 0),
+  });
+});
+
 meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
   const member = await memberForUser(req.user.id);
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [member.application_id]);

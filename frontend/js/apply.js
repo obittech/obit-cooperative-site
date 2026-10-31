@@ -121,7 +121,7 @@ function fieldIds() {
   return [
     'full_legal_name', 'date_of_birth', 'gender', 'membership_type', 'phone', 'whatsapp',
     'email', 'occupation_category', 'state', 'lga', 'address', 'next_of_kin_name',
-    'next_of_kin_phone',
+    'next_of_kin_phone', 'sponsor_code',
   ];
 }
 
@@ -152,7 +152,7 @@ function fillReviewSummary(app) {
   const rows = [
     ['Name', app.full_legal_name], ['Phone', app.phone], ['Email', app.email],
     ['Membership type', app.membership_type], ['State', app.state], ['LGA', app.lga],
-    ['Address', app.address], ['Occupation', app.occupation_category],
+    ['Address', app.address], ['Occupation', app.occupation_category], ['Sponsor membership code', app.sponsor_code],
   ];
   dl.innerHTML = rows
     .filter(([, v]) => v)
@@ -323,6 +323,7 @@ function renderMembershipPayment(payment) {
   document.getElementById('paymentStatusBox').innerHTML = `
     <p><span class="status-badge ${confirmed ? 'ok' : 'pending'}">${confirmed ? 'Payment confirmed' : payment.status === 'CLAIMED' ? 'Payment reported' : 'Awaiting bank transfer'}</span></p>
     <dl class="kv"><dt>Bank</dt><dd>${paymentText(payment.bank_name)}</dd><dt>Account name</dt><dd>${paymentText(payment.account_name)}</dd><dt>Account number</dt><dd><strong>${paymentText(payment.account_number)}</strong></dd><dt>Membership fee</dt><dd><strong>₦${Number(payment.amount).toLocaleString('en-NG')}</strong></dd><dt>Application</dt><dd>${paymentText(payment.application_id)}</dd><dt>Payment reference</dt><dd style="overflow-wrap:anywhere">${paymentText(payment.reference)}</dd></dl>
+    ${payment.sponsor ? `<p><strong>Sponsor membership code:</strong> ${paymentText(payment.sponsor.member_code)}<br><strong>Sponsor:</strong> ${paymentText(payment.sponsor.full_legal_name)}<br><strong>Sponsor phone:</strong> ${paymentText(payment.sponsor.phone)}</p><p>Your WhatsApp payment message includes these sponsor details for verification. The ₦500 referral bonus is earned after payment confirmation and membership approval.</p>` : ''}
     ${confirmed ? `<p>Receipt: ${paymentText(payment.receipt_reference)}</p><p>Your payment is confirmed. Membership approval is the next step.</p>` : `<p>Use the payment reference in your transfer narration. Do not pay again if you have already transferred the fee.</p><button class="btn btn-primary btn-block" id="btnMembershipPaid">I Have Paid — Continue on WhatsApp</button><p class="muted-note">WhatsApp opens with your application number, payment reference and amount. Tap Send to contact our team. No receipt upload is required here.</p>`}
     <button class="btn btn-secondary" id="btnCheckPayment" style="margin:12px 0">Check payment status</button>`;
   document.getElementById('btnCheckPayment').addEventListener('click', pollApplicationStatus);
@@ -409,6 +410,7 @@ async function initializeApplicationPage() {
   const lgaSelect = document.getElementById('lga');
   stateSelect.addEventListener('change', () => window.ObitLocations.fillLgas(stateSelect, lgaSelect));
   window.ObitLocations.fillLgas(stateSelect, lgaSelect);
+  if (!state.applicationId) document.getElementById('sponsor_code').value = launchParams.get('sponsor') || '';
   applyMembershipPathPreset();
   await restoreExistingApplication();
 

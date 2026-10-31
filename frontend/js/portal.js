@@ -82,6 +82,12 @@ async function loadDashboard() {
   try {
     const membership = await OBIT.get('/api/me/membership', { token });
     restoreSavingsDraft(membership.application_id);
+    const referrals = await OBIT.get('/api/me/referrals', { token });
+    document.getElementById('memberReferralCode').value = referrals.referral_code;
+    const referralLink = new URL('apply.html', window.location.href);
+    referralLink.searchParams.set('sponsor', referrals.referral_code);
+    document.getElementById('memberReferralLink').value = referrals.active ? referralLink.href : 'Referrals require active membership.';
+    document.getElementById('referralTotals').textContent = `${referrals.referred_count} referred applications · ₦${(referrals.earned_kobo / 100).toLocaleString('en-NG')} earned · ₦${(referrals.payable_kobo / 100).toLocaleString('en-NG')} awaiting payout · ₦${(referrals.paid_kobo / 100).toLocaleString('en-NG')} paid`;
     document.getElementById('digitalMemberName').textContent = membership.full_legal_name || 'Member';
     document.getElementById('digitalMemberId').textContent = membership.digital_membership_id || membership.member_code;
     document.getElementById('digitalMemberStatus').innerHTML = badge(membership.status);

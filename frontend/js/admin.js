@@ -146,6 +146,7 @@ async function refreshMarketListings(token) {
 
 async function refreshQueue(token) {
   await refreshMembershipTransfers(token);
+  await refreshReferralBonuses(token);
   const apps = await OBIT.get('/api/admin/applications', { token });
   document.getElementById('queueBody').innerHTML = apps.map((a) => `
     <tr>
@@ -183,7 +184,7 @@ async function refreshQueue(token) {
 async function refreshMembershipTransfers(token) {
   const rows = await OBIT.get('/api/admin/membership-transfers', { token });
   const root = document.getElementById('membershipTransfers');
-  root.innerHTML = rows.map(p => `<article style="border-top:1px solid #ddd;padding:16px 0"><h3>Application ${Number(p.application_id)} · ${escapeMarket(p.full_legal_name || '')}</h3><p>${escapeMarket(p.reference)} · ₦${(Number(p.amount_kobo) / 100).toLocaleString('en-NG')} · ${escapeMarket(p.status)}</p><p>${escapeMarket(p.bank_name)} · ${escapeMarket(p.account_name)} · ${escapeMarket(p.account_number)}</p>${p.status === 'CLAIMED' ? `<form data-membership-transfer="${escapeMarket(p.reference)}"><label class="field">Actual credit amount (₦)<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="field">Bank transaction reference<input name="bank_reference" minlength="6" maxlength="120" required></label><label class="checkbox-row"><input name="checked" type="checkbox" required><span>I checked this credit in the receiving bank account.</span></label><button class="btn btn-primary" type="submit">Confirm membership payment</button><p role="status"></p></form>` : p.status === 'CONFIRMED' ? '<p>Bank credit confirmed. The application requires membership review before activation.</p>' : '<p>Waiting for the applicant to report payment.</p>'}</article>`).join('') || '<p class="muted-note">No membership bank transfers yet.</p>';
+  root.innerHTML = rows.map(p => `<article style="border-top:1px solid #ddd;padding:16px 0"><h3>Application ${Number(p.application_id)} · ${escapeMarket(p.full_legal_name || '')}</h3><p>${escapeMarket(p.reference)} · ₦${(Number(p.amount_kobo) / 100).toLocaleString('en-NG')} · ${escapeMarket(p.status)}</p><p>${escapeMarket(p.bank_name)} · ${escapeMarket(p.account_name)} · ${escapeMarket(p.account_number)}</p>${p.sponsor_code ? `<p><strong>Sponsor:</strong> ${escapeMarket(p.sponsor_code)} · ${escapeMarket(p.sponsor_name)} · ${escapeMarket(p.sponsor_phone)}<br>Referral bonus: ₦500 after membership approval.</p>` : `<p>No member sponsor recorded.</p>`}${p.status === 'CLAIMED' ? `<form data-membership-transfer="${escapeMarket(p.reference)}"><label class="field">Actual credit amount (₦)<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="field">Bank transaction reference<input name="bank_reference" minlength="6" maxlength="120" required></label><label class="checkbox-row"><input name="checked" type="checkbox" required><span>I checked this credit in the receiving bank account.</span></label><button class="btn btn-primary" type="submit">Confirm membership payment</button><p role="status"></p></form>` : p.status === 'CONFIRMED' ? '<p>Bank credit confirmed. The application requires membership review before activation.</p>' : '<p>Waiting for the applicant to report payment.</p>'}</article>`).join('') || '<p class="muted-note">No membership bank transfers yet.</p>';
   root.querySelectorAll('[data-membership-transfer]').forEach(form => form.addEventListener('submit', async event => {
     event.preventDefault();
     const button = form.querySelector('button');
@@ -194,6 +195,23 @@ async function refreshMembershipTransfers(token) {
         bank_reference: form.elements.bank_reference.value.trim(), bank_credit_checked: form.elements.checked.checked,
       }, { token });
       await refreshQueue(token);
+    } catch (err) { form.querySelector('[role="status"]').textContent = err.message; button.disabled = false; }
+  }));
+}
+
+async function refreshReferralBonuses(token) {
+  const rows = await OBIT.get('/api/admin/referral-bonuses', { token });
+  const root = document.getElementById('referralBonuses');
+  root.innerHTML = rows.map(row => `<article style="border-top:1px solid #ddd;padding:16px 0"><h3>₦500 · ${escapeMarket(row.status)}</h3><p><strong>Sponsor:</strong> ${escapeMarket(row.sponsor_code)} · ${escapeMarket(row.sponsor_name)} · ${escapeMarket(row.sponsor_phone)}</p><p>New member: ${escapeMarket(row.new_member_name)} · Application ${Number(row.application_id)}</p>${row.status === 'EARNED' ? `<form data-referral-bonus="${Number(row.id)}"><label class="field">Completed payout bank reference<input name="reference" minlength="6" maxlength="120" required></label><label class="checkbox-row"><input name="checked" type="checkbox" required><span>I verified that the ₦500 referral bonus has been paid to this sponsor.</span></label><button class="btn btn-primary" type="submit">Record completed payout</button><p role="status"></p></form>` : `<p>Payout reference: ${escapeMarket(row.payout_reference)}</p>`}</article>`).join('') || '<p class="muted-note">No referral bonuses earned yet.</p>';
+  root.querySelectorAll('[data-referral-bonus]').forEach(form => form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = form.querySelector('button');
+    button.disabled = true;
+    try {
+      await OBIT.post(`/api/admin/referral-bonuses/${form.dataset.referralBonus}/paid`, {
+        payout_reference: form.elements.reference.value.trim(), amount_kobo: 50000, payout_completed: form.elements.checked.checked,
+      }, { token });
+      await refreshReferralBonuses(token);
     } catch (err) { form.querySelector('[role="status"]').textContent = err.message; button.disabled = false; }
   }));
 }
