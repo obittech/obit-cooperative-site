@@ -164,8 +164,8 @@
         <!-- STEP 3: KYC -->
         <section id="panel-kyc" style="display:none">
           <h2 style="margin-bottom:10px">Verify your identity</h2>
-          <div class="sandbox-banner" id="modeBanner"><strong>Verification notice.</strong> Youverify provides identity verification. Use Youverify synthetic test data while verification is in sandbox mode.</div>
-          <p class="muted-note" style="margin-bottom:18px">Identity verification is provided by Youverify. While the platform is in sandbox mode, use Youverify synthetic test data only. Your NIN/BVN is sent to the provider for verification and is not stored in the Obit database.</p>
+          <div class="sandbox-banner" id="modeBanner" hidden></div>
+          <p id="kycInstructions" style="margin-bottom:18px">Select Start Verification to continue.</p>
           <div id="kycStatusBox"></div>
           <div id="kycIdentityFields" style="display:none;margin-top:16px">
             <div class="grid-2">
@@ -173,10 +173,10 @@
                 <select id="kycIdType"><option value="nin">NIN</option><option value="bvn">BVN</option></select>
               </label>
               <label class="field">NIN / BVN
-                <input id="kycIdNumber" inputmode="numeric" autocomplete="off" maxlength="11" placeholder="Sandbox test number only" />
+                <input id="kycIdNumber" inputmode="numeric" autocomplete="off" maxlength="11" placeholder="11-digit identity number" />
               </label>
             </div>
-            <p class="muted-note">Do not enter a real NIN or BVN while the sandbox notice is displayed.</p>
+            <p class="muted-note" id="kycSandboxHelp" hidden>Use Youverify synthetic test data only.</p>
           </div>
           <div class="btn-row">
             <button class="btn btn-primary" id="btnStartKyc">Start Verification</button>
@@ -224,6 +224,6 @@
   <script src="js/nav.js?v=20260924-2"></script>
   <script src="js/api.js"></script>
   <script src="js/nigeria-locations.js?v=20261030-locations"></script>
-  <script src="js/apply.js?v=20261031-member-referrals"></script>
+  <script src="js/apply.js?v=20261101-live-kyc"></script>
 </body>
 </html>

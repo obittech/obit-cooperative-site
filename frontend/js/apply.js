@@ -227,10 +227,15 @@ function showKycProvider(session) {
     if (!session.available_products.includes(select.value)) select.value = session.available_products[0] || '';
     document.getElementById('btnVerifyYouverify').disabled = !session.available_products.length;
   }
-  const name = 'Youverify';
-  document.getElementById('modeBanner').textContent = session.environment === 'live'
-    ? `Identity verification is provided by ${name}.`
-    : `${name} sandbox verification. Use synthetic test data only.`;
+  const sandbox = session.environment === 'sandbox';
+  const banner = document.getElementById('modeBanner');
+  banner.hidden = !sandbox;
+  banner.textContent = sandbox ? 'Sandbox mode: use Youverify synthetic test data only.' : '';
+  document.getElementById('kycSandboxHelp').hidden = !sandbox;
+  document.getElementById('kycInstructions').textContent = sandbox
+    ? 'Enter a Youverify synthetic test number.'
+    : 'Enter your 11-digit identity number.';
+  document.getElementById('kycIdNumber').placeholder = sandbox ? 'Synthetic test number' : '11-digit identity number';
 }
 
 function renderKycStatus(status, note) {
@@ -249,7 +254,7 @@ async function verifyYouverifyKyc() {
   const idNumber = input.value.trim();
 
   if (!/^[0-9]{11}$/.test(idNumber)) {
-    return showAlert('Enter a valid 11-digit NIN or BVN. In sandbox mode, use Youverify synthetic test data.');
+    return showAlert('Enter a valid 11-digit identity number.');
   }
 
   const button = document.getElementById('btnVerifyYouverify');
