@@ -140,8 +140,7 @@ function collectProfileFields() {
   const data = {};
   fieldIds().forEach((id) => {
     const el = document.getElementById(id);
-    if (!el.value) return;
-    data[id] = el.type === 'number' ? Number(el.value) : el.value;
+    data[id] = el.type === 'number' ? Number(el.value) : el.value.trim();
   });
   data.interests = Array.from(document.querySelectorAll('#interests input[type="checkbox"]:checked')).map(input => input.value);
   return data;
@@ -156,15 +155,16 @@ function fillReviewSummary(app) {
   ];
   dl.innerHTML = rows
     .filter(([, v]) => v)
-    .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
+    .map(([k, v]) => `<dt>${k}</dt><dd>${String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}</dd>`)
     .join('');
 }
 
 async function saveProfileAndContinue() {
   clearAlert();
-  const required = ['full_legal_name', 'phone', 'email', 'address', 'state', 'lga', 'membership_type'];
+  const required = ['full_legal_name', 'date_of_birth', 'phone', 'email', 'address', 'state', 'lga', 'membership_type'];
   const missing = required.filter((id) => !document.getElementById(id).value);
   if (missing.length) return showAlert('Please fill in all required fields before continuing.');
+  if (fieldIds().some(id => !document.getElementById(id).reportValidity())) return;
 
   try {
     if (!state.applicationId) {
@@ -220,6 +220,12 @@ async function startKyc() {
 }
 
 function showKycProvider(session) {
+  if (Array.isArray(session.available_products)) {
+    const select = document.getElementById('kycIdType');
+    Array.from(select.options).forEach(option => { option.disabled = !session.available_products.includes(option.value); });
+    if (!session.available_products.includes(select.value)) select.value = session.available_products[0] || '';
+    document.getElementById('btnVerifyYouverify').disabled = !session.available_products.length;
+  }
   const name = 'Youverify';
   document.getElementById('modeBanner').textContent = session.environment === 'live'
     ? `Identity verification is provided by ${name}.`
@@ -375,6 +381,7 @@ document.getElementById('btnInitPayment').addEventListener('click', initPayment)
 document.getElementById('btnSaveSavingsDraft').addEventListener('click', saveSavingsDraft);
 
 async function initializeApplicationPage() {
+  document.getElementById('date_of_birth').max = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const stateSelect = document.getElementById('state');
   const lgaSelect = document.getElementById('lga');
   stateSelect.addEventListener('change', () => window.ObitLocations.fillLgas(stateSelect, lgaSelect));
