@@ -38,6 +38,7 @@ class YouTube:
         self.visibility=None
         self.ready_observations=0
         self.live_transition_attempted=False
+        self.testing_transition_attempted=False
 
     def request(self, method, path, **kwargs):
         response=self.client.request(method,'https://www.googleapis.com/youtube/v3/'+path,
@@ -158,7 +159,7 @@ class YouTube:
             print('YouTube playback observation: broadcast='+lifecycle+' ingest='+ingest+
                   ' health='+quality+' configuration_issues='+str(count),flush=True)
             self.ready_observations=self.ready_observations+1 if lifecycle=='ready' and ingest=='active' else 0
-            if self.ready_observations>=3:
+            if self.ready_observations>=3 or (lifecycle=='testing' and ingest=='active'):
                 self.start_prepared_event(broadcast_id)
         except YouTubeError as error:
             print('YouTube playback check failed: '+str(error),flush=True)
@@ -167,36 +168,49 @@ class YouTube:
             print('YouTube playback observation unavailable; encoder continues.',flush=True)
 
     def start_prepared_event(self, broadcast_id):
-        # One attempt for this run's existing event; never create a replacement.
+        # At most one attempt per required stage on the same prepared event.
         if self.live_transition_attempted or broadcast_id!=self.prepared_id:
             return
-        self.live_transition_attempted=True
         self.authorize()  # Confirm the owned channel again immediately before a write.
         details=self.broadcast_details(broadcast_id,'id,snippet,status,contentDetails')
         status=details.get('status',{})
         content=details.get('contentDetails',{})
         if status.get('lifeCycleStatus') in ('live','liveStarting'):
             return  # Automatic start won the race; do not repeat its transition.
-        if (status.get('lifeCycleStatus')!='ready' or
+        if (status.get('lifeCycleStatus') not in ('ready','testing') or
             status.get('privacyStatus')!=self.visibility or
             details.get('snippet',{}).get('channelId')!=CHANNEL or
             content.get('boundStreamId')!=self.stream_id):
             raise YouTubeError('Prepared event identity, binding or visibility changed; live transition skipped')
+        monitor=content.get('monitorStream',{}).get('enableMonitorStream')
+        if not isinstance(monitor,bool):
+            raise YouTubeError('Monitor stream setting unavailable; transition skipped')
+        target='testing' if status['lifeCycleStatus']=='ready' and monitor else 'live'
+        if target=='testing' and self.testing_transition_attempted:
+            return
+        print('YouTube start sequence: monitor='+('enabled' if monitor else 'disabled')+' target='+target,flush=True)
         streams=self.request('GET','liveStreams',params={'part':'id,status','id':self.stream_id}).get('items',[])
         if not any(s.get('id')==self.stream_id and s.get('status',{}).get('streamStatus')=='active' for s in streams):
             raise YouTubeError('Bound stream is no longer active; live transition skipped')
+        if target=='testing':
+            self.testing_transition_attempted=True
+        else:
+            self.live_transition_attempted=True
         result=self.request('POST','liveBroadcasts/transition',params={
-            'part':'id,status','id':broadcast_id,'broadcastStatus':'live'})
-        if result.get('id')!=broadcast_id or result.get('status',{}).get('lifeCycleStatus') not in ('live','liveStarting'):
+            'part':'id,status','id':broadcast_id,'broadcastStatus':target})
+        accepted=('testing','testStarting') if target=='testing' else ('live','liveStarting')
+        if result.get('id')!=broadcast_id or result.get('status',{}).get('lifeCycleStatus') not in accepted:
             raise YouTubeError('Live transition response did not confirm the prepared event')
-        print('Prepared YouTube event live transition accepted: '+broadcast_id,flush=True)
+        print('Prepared YouTube event '+target+' transition accepted: '+broadcast_id,flush=True)
 
     def finish(self, broadcast_id):
-        details=self.broadcast_details(broadcast_id,'id,status')
+        details=self.broadcast_details(broadcast_id,'id,status,snippet')
         status=details['status']['lifeCycleStatus']
         if status=='complete':
-            return
-        if status in ('live','testing'):
+            if details.get('snippet',{}).get('actualStartTime'):
+                return
+            raise YouTubeError('Completed event has no actual live start time; public playback not confirmed')
+        if status=='live':
             self.request('POST','liveBroadcasts/transition',params={'part':'status','id':broadcast_id,'broadcastStatus':'complete'})
         else:
             raise YouTubeError('YouTube never entered live playback; event remains pending')
