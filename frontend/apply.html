@@ -172,13 +172,10 @@
         <!-- STEP 4: PAYMENT -->
         <section id="panel-payment" style="display:none">
           <h2 style="margin-bottom:10px">Membership fee</h2>
-          <p class="muted-note" style="margin-bottom:18px">Payment status is only ever confirmed by a signed webhook from the provider — never by this page. Refreshing or closing this tab will not fake a successful payment.</p>
+          <p class="muted-note" style="margin-bottom:18px">Transfer your membership fee to the account below. After payment, click <strong>I Have Paid</strong> to continue on WhatsApp. Our team confirms the payment after checking the bank credit.</p>
           <div id="paymentStatusBox"></div>
           <div class="btn-row">
-            <select id="providerSelect" style="max-width:200px" class="field" aria-label="Payment provider">
-              <option value="paystack">Paystack</option>
-            </select>
-            <button class="btn btn-primary" id="btnInitPayment">Pay Membership Fee</button>
+            <button class="btn btn-primary" id="btnInitPayment">Show bank transfer details</button>
           </div>
         </section>
 
@@ -212,6 +209,6 @@
   <script src="js/nav.js?v=20260924-2"></script>
   <script src="js/api.js"></script>
   <script src="js/nigeria-locations.js?v=20261030-locations"></script>
-  <script src="js/apply.js?v=20261031-registration"></script>
+  <script src="js/apply.js?v=20261031-membership-transfer"></script>
 </body>
 </html>

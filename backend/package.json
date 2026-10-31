@@ -14,7 +14,7 @@
     "test:kyc": "node --experimental-sqlite --test --test-concurrency=1 test/kyc-cost-controls.test.js test/youverify.test.js",
     "test": "node --experimental-sqlite --test test/*.test.js",
     "test:payments": "node --experimental-sqlite --test test/payment-safety.test.js",
-    "test:registration": "node --experimental-sqlite --test test/registration.test.js"
+    "test:registration": "node --experimental-sqlite --test test/registration.test.js test/membership-transfers.test.js"
   },
   "dependencies": {
     "pg": "^8.16.3"
