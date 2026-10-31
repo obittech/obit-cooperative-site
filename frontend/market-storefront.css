@@ -107,3 +107,8 @@
 .market-page .empty-catalog{grid-column:1/-1;padding:32px 20px;background:#fff;border:1px solid #e0e5e1;border-radius:7px;text-align:center}
 .market-page .empty-catalog h3{font-size:20px;min-height:0}
 .market-page .empty-catalog p,.market-page .empty-catalog a{font-size:16px}
+.market-page .market-topline span{color:#354c42}
+.market-page .market-topline a{color:#075b34;font-weight:700}
+.market-page .category-filters button{color:#263c30}
+.market-page .empty-catalog p{color:#354c42}
+.market-page .listing .seller-marker,.market-page .listing .stock-label{font-size:12px;color:#354c42}
