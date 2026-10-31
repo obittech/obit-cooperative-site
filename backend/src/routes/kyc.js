@@ -16,6 +16,9 @@ export const kycRouter = new Router();
 const PROVIDER = 'YOUVERIFY';
 const KYC_ENV = (process.env.YOUVERIFY_ENV || 'sandbox').toLowerCase();
 const providerConfigured = () => Boolean(process.env.YOUVERIFY_SECRET_KEY);
+const availableProducts = () => KYC_ENV === 'sandbox' ? ['nin', 'bvn']
+  : process.env.YOUVERIFY_PRODUCTION_AUTHORIZED === 'true'
+    ? String(process.env.YOUVERIFY_APPROVED_PRODUCTS || '').split(',').map(x => x.trim()).filter(x => ['nin', 'bvn'].includes(x)) : [];
 
 function validIdNumber(value) {
   return typeof value === 'string' && /^\d{11}$/.test(value.trim());
@@ -32,6 +35,11 @@ kycRouter.post('/api/kyc/session', async (req, res) => {
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [application_id]);
   if (!application) throw new HttpError(404, 'Application not found');
   const latest = await get('SELECT * FROM kyc_checks WHERE application_id = ? ORDER BY id DESC LIMIT 1', [application_id]);
+  if (application.status === 'KYC_PENDING' && latest?.provider === PROVIDER
+      && latest.session_ref.startsWith(`youverify_${KYC_ENV}_`)) {
+    return res.json(200, { session_ref: latest.session_ref, provider: PROVIDER, environment: KYC_ENV,
+      configured: providerConfigured(), available_products: availableProducts(), message: 'Existing identity verification session restored.' });
+  }
   const replacingRetired = application.status === 'KYC_PENDING' && latest && latest.provider !== PROVIDER;
   if (!['APPLICATION_SUBMITTED', 'KYC_FAILED'].includes(application.status) && !replacingRetired) {
     throw new HttpError(409, `Application must be submitted to start KYC (currently ${application.status})`);
@@ -58,6 +66,7 @@ kycRouter.post('/api/kyc/session', async (req, res) => {
     provider: PROVIDER,
     environment: KYC_ENV,
     configured: providerConfigured(),
+    available_products: availableProducts(),
     message: KYC_ENV === 'sandbox'
       ? `${PROVIDER} sandbox session created. Use synthetic test data only.`
       : `${PROVIDER} live KYC session created.`,
@@ -140,6 +149,7 @@ kycRouter.get('/api/kyc/:id/status', async (req, res, params) => {
     environment: String(check.session_ref || '').split('_')[1] === 'live' ? 'live' : 'sandbox',
     restart_required: check.status !== 'KYC_VERIFIED' && (check.provider !== PROVIDER || !check.session_ref.startsWith(`youverify_${KYC_ENV}_`)),
     verified_at: check.verified_at,
+    available_products: availableProducts(),
     ...(sandboxRequest ? { sandbox_request: sandboxRequest } : {}),
   });
 });

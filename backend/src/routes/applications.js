@@ -4,8 +4,9 @@
 // approved KYC provider's own secure flow, never ordinary form POST bodies.
 
 import { Router, HttpError } from '../router.js';
-import { get, run, all } from '../db.js';
+import { get, run, atomic } from '../db.js';
 import { audit } from '../utils/audit.js';
+import { validateApplicationProfile } from '../utils/application-profile.js';
 
 export const applicationsRouter = new Router();
 
@@ -45,7 +46,11 @@ applicationsRouter.patch('/api/applications/:id', async (req, res, params) => {
   const updates = [];
   const values = [];
   for (const field of EDITABLE_FIELDS) {
-    if (field in b) { updates.push(`${field} = ?`); values.push(b[field]); }
+    if (field in b) {
+      if (b[field] !== null && !['string', 'number'].includes(typeof b[field])) throw new HttpError(422, `Invalid value for ${field}`);
+      updates.push(`${field} = ?`);
+      values.push(typeof b[field] === 'string' ? b[field].trim() : b[field]);
+    }
   }
   if (Array.isArray(b.interests)) { updates.push('interests_json = ?'); values.push(JSON.stringify(b.interests)); }
   if (updates.length === 0) throw new HttpError(400, 'No editable fields supplied');
@@ -61,25 +66,28 @@ applicationsRouter.patch('/api/applications/:id', async (req, res, params) => {
 applicationsRouter.post('/api/applications/:id/submit', async (req, res, params) => {
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
   if (!application) throw new HttpError(404, 'Application not found');
-
-  const required = ['full_legal_name', 'phone', 'email', 'address', 'state', 'membership_type'];
-  const missing = required.filter((f) => !application[f]);
-  if (missing.length > 0) throw new HttpError(422, `Missing required fields: ${missing.join(', ')}`);
+  if (application.status === 'APPLICATION_SUBMITTED') return res.json(200, application);
+  if (!['LEAD', 'APPLICATION_STARTED', 'NEEDS_INFORMATION'].includes(application.status)) {
+    throw new HttpError(409, `Application is ${application.status} and cannot be submitted again`);
+  }
+  validateApplicationProfile(application);
 
   const b = req.body || {};
   const consents = b.consents || {}; // { terms: true, privacy: true, marketing: false }
-  if (!consents.terms || !consents.privacy) {
+  if (consents.terms !== true || consents.privacy !== true) {
     throw new HttpError(422, 'Terms and Privacy consent are both required to submit');
   }
-  for (const [type, accepted] of Object.entries(consents)) {
-    await run(
+  await atomic(async () => {
+    const changed = await run("UPDATE member_applications SET status = 'APPLICATION_SUBMITTED', updated_at = datetime('now') WHERE id = ? AND status IN ('LEAD', 'APPLICATION_STARTED', 'NEEDS_INFORMATION')", [params.id]);
+    if (changed.changes !== 1) throw new HttpError(409, 'Application has already progressed. Refresh its status.');
+    for (const type of ['terms', 'privacy', 'marketing']) {
+      await run(
       `INSERT INTO consents (application_id, type, accepted, accepted_at, ip_address) VALUES (?, ?, ?, datetime('now'), ?)`,
-      [params.id, type, accepted ? 1 : 0, req.socket.remoteAddress || null]
+      [params.id, type, consents[type] === true ? 1 : 0, req.socket?.remoteAddress || null]
     );
-  }
-
-  await run("UPDATE member_applications SET status = 'APPLICATION_SUBMITTED', updated_at = datetime('now') WHERE id = ?", [params.id]);
-  await audit(null, 'APPLICATION_SUBMITTED', 'member_applications', params.id);
+    }
+    await audit(null, 'APPLICATION_SUBMITTED', 'member_applications', params.id);
+  });
 
   const updated = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
   res.json(200, updated);
