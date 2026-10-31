@@ -15,6 +15,7 @@ export const meRouter = new Router();
 async function memberForUser(userId) {
   const member = await get('SELECT * FROM members WHERE user_id = ?', [userId]);
   if (!member) throw new HttpError(404, 'No activated membership found for this account yet');
+  if (member.status !== 'ACTIVE') throw new HttpError(403, 'Membership is not active');
   return member;
 }
 
