@@ -64,11 +64,11 @@ test('Membership always targets the cooperative and Marketplace has a separate s
     assert.match(nav, /href="https:\/\/marketplace.obitcooperative.com\/">Marketplace</);
   }
 });
-test('marketplace root opens the role entry page and legacy membership links return to the cooperative', () => {
+test('marketplace root opens the product catalogue and legacy membership links return to the cooperative', () => {
   const html = fs.readFileSync(path.join(root, 'frontend/index.html'), 'utf8');
   const routing = html.match(/<script>(if\(location.hostname[\s\S]*?)<\/script>/)[1];
   for (const [host, hash, expected] of [
-    ['marketplace.obitcooperative.com', '', '/market-entry.html'],
+    ['marketplace.obitcooperative.com', '', '/market.html'],
     ['marketplace.obitcooperative.com', '#membership', 'https://obitcooperative.com/#membership'],
     ['obitcooperative.com', '#membership', null],
   ]) {
@@ -77,7 +77,68 @@ test('marketplace root opens the role entry page and legacy membership links ret
     assert.equal(destination, expected);
   }
   const entry = fs.readFileSync(path.join(root, 'frontend/market-entry.html'), 'utf8');
-  assert.match(entry, /href="market.html">Continue as a buyer/);
+  assert.match(entry, /id="sellerPasswordStep" hidden disabled/);
+  assert.match(entry, /id="sellerContinue" type="submit">Next/);
   assert.match(entry, /name="membership_code"/);
   assert.match(entry, /name="password" type="password"/);
+});
+
+function sellerSignIn() {
+  const nodes = Object.fromEntries(['sellerEntryForm','sellerPasswordStep','sellerContinue','sellerChangeCode','sellerStepLabel','sellerEntryStatus'].map(id => [id, element()]));
+  const code = element(), password = element();
+  code.value = ''; password.value = '';
+  const form = nodes.sellerEntryForm;
+  form.elements = { membership_code: code, password };
+  nodes.sellerPasswordStep.hidden = true;
+  nodes.sellerPasswordStep.disabled = true;
+  const requests = [];
+  let destination, session;
+  vm.runInNewContext(fs.readFileSync(path.join(root,'frontend/js/market-entry.js'),'utf8'), {
+    document: { getElementById: id => nodes[id] },
+    OBIT: {
+      async post(url, body) { requests.push({url, body}); return {role:'member',token:'isolated-test-session'}; },
+      async get() { return {status:'ACTIVE'}; },
+      saveSession(role, token) { session={role,token}; },
+    },
+    window: { location: { assign(url) { destination=url; } } },
+  });
+  return { nodes, code, password, requests, submit: () => form.handlers.submit({preventDefault(){},currentTarget:form}), destination: () => destination, session: () => session };
+}
+test('seller enters membership code first, then password, and only then authenticates', async () => {
+  const s = sellerSignIn();
+  s.code.value = 'obt-2026-000123';
+  await s.submit();
+  assert.equal(s.nodes.sellerPasswordStep.hidden,false);
+  assert.equal(s.nodes.sellerPasswordStep.disabled,false);
+  assert.equal(s.code.readOnly,true);
+  assert.equal(s.code.value,'OBT-2026-000123');
+  assert.equal(s.requests.length,0);
+  s.password.value='isolated-test-password';
+  await s.submit();
+  assert.equal(s.requests.length,1);
+  assert.equal(s.requests[0].body.identifier,'OBT-2026-000123');
+  assert.equal(s.session().role,'member');
+  assert.equal(s.destination(),'market.html#sellerPanel');
+});
+test('invalid seller codes stay on step one and changing a code clears the password', async () => {
+  const s = sellerSignIn();
+  s.code.value='bad-code';
+  await s.submit();
+  assert.equal(s.nodes.sellerPasswordStep.hidden,true);
+  assert.equal(s.requests.length,0);
+  s.code.value='OBT-2026-000123';
+  await s.submit();
+  s.password.value='not-retained';
+  s.nodes.sellerChangeCode.handlers.click();
+  assert.equal(s.password.value,'');
+  assert.equal(s.nodes.sellerPasswordStep.hidden,true);
+  assert.equal(s.nodes.sellerPasswordStep.disabled,true);
+  assert.equal(s.code.readOnly,false);
+});
+test('shopping page prioritises the catalogue before store explanations and the planner', () => {
+  const html=fs.readFileSync(path.join(root,'frontend/market.html'),'utf8');
+  assert.ok(html.indexOf('id="listingGrid"')<html.indexOf('id="stores"'));
+  assert.ok(html.indexOf('id="listingGrid"')<html.indexOf('id="plan"'));
+  assert.ok(!html.includes('ecommerce-hero'));
+  assert.match(html,/class="seller-header-link" href="market-entry.html#sellerLogin">Sell on Obit/);
 });
