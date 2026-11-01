@@ -196,12 +196,35 @@ class YouTube:
             self.testing_transition_attempted=True
         else:
             self.live_transition_attempted=True
-        result=self.request('POST','liveBroadcasts/transition',params={
-            'part':'id,status','id':broadcast_id,'broadcastStatus':target})
+        try:
+            result=self.request('POST','liveBroadcasts/transition',params={
+                'part':'id,status','id':broadcast_id,'broadcastStatus':target})
+        except YouTubeError:
+            self.observe_rejected_transition(broadcast_id)
+            raise
         accepted=('testing','testStarting') if target=='testing' else ('live','liveStarting')
         if result.get('id')!=broadcast_id or result.get('status',{}).get('lifeCycleStatus') not in accepted:
             raise YouTubeError('Live transition response did not confirm the prepared event')
         print('Prepared YouTube event '+target+' transition accepted: '+broadcast_id,flush=True)
+
+
+    def observe_rejected_transition(self, broadcast_id):
+        # One read after rejection, never another transition or replacement event.
+        def flag(value):
+            return 'enabled' if value is True else ('disabled' if value is False else 'unknown')
+        try:
+            details=self.broadcast_details(broadcast_id,'id,status,contentDetails')
+            content=details.get('contentDetails',{})
+            lifecycle=details.get('status',{}).get('lifeCycleStatus')
+            if lifecycle not in ('created','ready','testing','live','complete','revoked','testStarting','liveStarting'):
+                lifecycle='unknown'
+            print('YouTube rejected transition state: broadcast='+lifecycle+
+                  ' monitor='+flag(content.get('monitorStream',{}).get('enableMonitorStream'))+
+                  ' auto_start='+flag(content.get('enableAutoStart'))+
+                  ' auto_stop='+flag(content.get('enableAutoStop'))+
+                  ' binding='+('same' if content.get('boundStreamId')==self.stream_id else 'changed'),flush=True)
+        except Exception:
+            print('YouTube rejected transition state unavailable; no transition retried.',flush=True)
 
     def finish(self, broadcast_id):
         details=self.broadcast_details(broadcast_id,'id,status,snippet')
