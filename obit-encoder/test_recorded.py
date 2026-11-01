@@ -223,4 +223,50 @@ class LiveStartTests(unittest.TestCase):
         youtube.start_prepared_event('event')
         self.assertEqual(youtube.request.call_count,2)
 
+
+class RejectedTransitionTests(unittest.TestCase):
+    fixture=LiveStartTests.fixture
+    def test_rejection_reads_state_once_and_never_retries_live(self):
+        youtube=self.fixture()
+        youtube.request.side_effect=[{'items':[{'id':'stream','status':{'streamStatus':'active'}}]},YouTubeError('HTTP 403')]
+        youtube.broadcast_details.return_value['contentDetails'].update(enableAutoStart=True,enableAutoStop=True)
+        with patch('sys.stdout',new_callable=io.StringIO) as output:
+            with self.assertRaisesRegex(YouTubeError,'HTTP 403'):
+                youtube.start_prepared_event('event')
+            youtube.start_prepared_event('event')
+        self.assertEqual(youtube.broadcast_details.call_count,2)
+        self.assertEqual([c.args[0] for c in youtube.request.call_args_list],['GET','POST'])
+        self.assertIn('broadcast=ready monitor=disabled auto_start=enabled auto_stop=enabled binding=same',output.getvalue())
+
+    def test_rejected_testing_stage_never_repeats_post(self):
+        youtube=self.fixture()
+        youtube.broadcast_details.return_value['contentDetails']['monitorStream']['enableMonitorStream']=True
+        youtube.request.side_effect=[{'items':[{'id':'stream','status':{'streamStatus':'active'}}]},YouTubeError('HTTP 403')]
+        with self.assertRaises(YouTubeError): youtube.start_prepared_event('event')
+        youtube.start_prepared_event('event')
+        self.assertEqual(youtube.request.call_count,2)
+        self.assertEqual(youtube.request.call_args.kwargs['params']['broadcastStatus'],'testing')
+
+    def test_unavailable_diagnostics_preserve_original_error(self):
+        youtube=self.fixture()
+        details=youtube.broadcast_details.return_value
+        youtube.broadcast_details.side_effect=[details,YouTubeError('PRIVATE')]
+        youtube.request.side_effect=[{'items':[{'id':'stream','status':{'streamStatus':'active'}}]},YouTubeError('HTTP 403')]
+        with patch('sys.stdout',new_callable=io.StringIO) as output:
+            with self.assertRaisesRegex(YouTubeError,'HTTP 403'): youtube.start_prepared_event('event')
+        self.assertNotIn('PRIVATE',output.getvalue())
+        self.assertIn('unavailable',output.getvalue())
+
+    def test_diagnostics_redact_unknown_values_and_payload_fields(self):
+        youtube=self.fixture()
+        youtube.broadcast_details.return_value={'status':{'lifeCycleStatus':'SECRET'},'contentDetails':{
+            'enableAutoStart':'SECRET','enableAutoStop':'SECRET','boundStreamId':'SECRET',
+            'monitorStream':{'enableMonitorStream':'SECRET','embedHtml':'SECRET'}}}
+        with patch('sys.stdout',new_callable=io.StringIO) as output:
+            youtube.observe_rejected_transition('event')
+        self.assertNotIn('SECRET',output.getvalue())
+        self.assertIn('broadcast=unknown monitor=unknown auto_start=unknown auto_stop=unknown binding=changed',output.getvalue())
+        youtube.request.assert_not_called()
+
 if __name__=='__main__' : unittest.main()
+
