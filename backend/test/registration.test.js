@@ -32,9 +32,15 @@ async function call(router, method, path, body = {}, token = '') {
   return res.body;
 }
 async function draft() {
+  // PostgreSQL CI deliberately reruns this suite against the same database.
+  // Fresh emails alone do not isolate accounts, which also match by phone.
+  let phone;
+  do { phone = `080${crypto.randomInt(10000000, 99999999)}`; }
+  while (await get('SELECT id FROM member_applications WHERE phone = ?', [phone])
+    || await get('SELECT id FROM users WHERE phone = ?', [phone]));
   const app = await call(applicationsRouter, 'POST', '/api/applications', { campaign: 'LOCAL_REGISTRATION_TEST' });
   await call(applicationsRouter, 'PATCH', `/api/applications/${app.id}`, {
-    full_legal_name: 'Test Person', date_of_birth: '1990-01-01', phone: '08000000000',
+    full_legal_name: 'Test Person', date_of_birth: '1990-01-01', phone,
     email: `registration-${++n}-${crypto.randomUUID()}@example.invalid`, address: 'Synthetic local test',
     state: 'FCT', lga: 'Abuja Municipal', membership_type: 'Individual',
   });

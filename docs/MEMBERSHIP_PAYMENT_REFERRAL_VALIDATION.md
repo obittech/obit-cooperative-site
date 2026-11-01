@@ -17,3 +17,12 @@ The read-only live /api/payments/membership/options endpoint returned Moniepoint
 Run the added Node 22 SQLite and PostgreSQL membership/referral CI checks. Local PostgreSQL was unavailable. Review, merge and deploy the approval guard through the normal workflow, then confirm the deployed revision. Test staff screens and mobile registration in staging with synthetic records. Production bank reconciliation remains a manual staff control: a checked checkbox and supplied reference are staff attestations, not an automated bank verification. Use the bank's canonical unique transaction reference consistently. Different text references for the same actual credit cannot be detected without authoritative bank integration. Bonus PAID records likewise attest to an independently completed payout and never initiate one.
 
 No real production membership payment or end-to-end bank settlement was tested. Reliable operations require designated reconciliation staff, independent bank access, handling of wrong/short/duplicate transfers, and a documented payout/reconciliation process. Do not treat a WhatsApp notification, receipt screenshot or earned bonus as settled funds.
+
+
+## PR #58 PostgreSQL registration failure investigation
+
+Run 41289332794 passed the first PostgreSQL registration suite, then ran that suite again against the same `obit_ci` database. The registration fixture generated a new email but always used phone `08000000000`. The first journey created a membership for that phone. The second journey correctly matched that existing user by phone and rejected duplicate membership. SQLite did not reproduce this because each process used a fresh in-memory database. This was reused fixture identity across repeated PostgreSQL runs, not a failure of the confirmed-payment requirement.
+
+The registration fixture now chooses a fresh synthetic phone after checking both application and user records. The repeated PostgreSQL workflow steps remain in place to verify reuse of a populated database. A new regression separately reuses an existing member's email and phone on a paid application and verifies rejection, no new membership or referral bonus, unchanged review status, and preservation of the confirmed payment for reconciliation. No production service or duplicate-account guard was weakened.
+
+Local Node 24 validation after correction: 132 backend tests and 14 frontend checks passed. PostgreSQL and Node 22 validation remain subject to the updated PR's GitHub Actions results.

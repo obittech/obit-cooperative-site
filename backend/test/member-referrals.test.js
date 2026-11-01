@@ -176,3 +176,23 @@ test('parallel approvals of different applications allocate distinct membership 
   assert.match(results[0].member.member_code, /^OBT-\d{4}-\d{6,}$/);
   assert.match(results[1].member.member_code, /^OBT-\d{4}-\d{6,}$/);
 });
+
+
+test('confirmed payment cannot approve a second membership matching an existing account', async () => {
+  const existing = await member(), sponsor = await member();
+  for (const field of ['email', 'phone']) {
+    const application = await draft(sponsor);
+    const payment = await checkout(application);
+    await paid(payment);
+    await confirm(payment);
+    // Simulate a legacy duplicate that reaches review with a real payment record.
+    // Use a fresh value for the other identifier to exercise each match separately.
+    await run(`UPDATE member_applications SET ${field}=? WHERE id=?`, [existing[field], application.id]);
+    await assert.rejects(approve(application.id), e => e.status === 409 && /already has a membership/.test(e.message));
+    assert.equal((await get('SELECT status FROM member_applications WHERE id=?', [application.id])).status, 'UNDER_REVIEW');
+    assert.equal(await get('SELECT id FROM members WHERE application_id=?', [application.id]), undefined);
+    assert.equal(await get('SELECT id FROM referral_bonuses WHERE application_id=?', [application.id]), undefined);
+    assert.equal((await get('SELECT status FROM membership_bank_payments WHERE application_id=?', [application.id])).status, 'CONFIRMED');
+    assert.equal(Number((await get('SELECT COUNT(*) AS n FROM members WHERE id=? AND status=?', [existing.id, 'ACTIVE'])).n), 1);
+  }
+});
