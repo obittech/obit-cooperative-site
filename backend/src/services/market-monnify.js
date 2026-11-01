@@ -19,6 +19,11 @@ async function accessToken(cfg){
  })();
  inflight={fingerprint,promise};try{return await promise;}finally{if(inflight?.promise===promise)inflight=null;}
 }
+// Authenticates only. Does not initialize a transaction or expose the token.
+export async function checkMonnifyAuthentication(cfg){
+ if(!cfg.available||cfg.mode!=='test')throw new HttpError(503,'Sandbox configuration is unavailable');
+ await accessToken(cfg);return true;
+}
 export function monnifyCheckoutUrl(value){try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='sandbox.sdk.monnify.com'&&!u.port&&!u.username&&!u.password&&!u.search&&!u.hash&&u.pathname.startsWith('/checkout/')&&u.pathname.length>15?u.href:null;}catch{return null;}}
 export async function initializeMonnify(cfg,{email,amount,reference,orderId}){
  const token=await accessToken(cfg);
