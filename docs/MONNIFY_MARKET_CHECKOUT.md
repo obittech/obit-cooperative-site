@@ -74,3 +74,11 @@ The existing BRM dashboard does not establish Monnify merchant activation or API
 For direct incoming-credit monitoring of account 4006326446, ask Moniepoint for account-scoped credit notifications and a transaction-query API, including unique bank/session reference, credited account, amount, currency, confirmed status and reversal handling. This is a separate request from Monnify collections. An outgoing POS transfer event or a settlement notification is not sufficient evidence of a buyer's incoming credit.
 
 No live keys, merchant account access, provider sandbox payment, or continuous bank-feed access were available during this preparation. Production manual transfers remain the current route.
+
+## Controlled hosted acceptance fixture
+
+`MARKET_MONNIFY_ACCEPTANCE=true` enables one labelled sandbox order only on the designated disposable Render sandbox service. It refuses production, PostgreSQL, another service ID, another database path, live keys, or either manual-transfer option. It never runs unless explicitly enabled. The fixture creates one test buyer, test member seller, two units of test inventory and a single NGN 1,000 test order. These are acceptance records, not verified real sellers, real goods or a public demonstration.
+
+The normal checkout adapter initializes the actual Monnify sandbox checkout. The fixture prints only the sandbox checkout URL, test references and periodic order/stock status. It does not print authentication tokens or provider keys. Repeated startup on the same database reuses the order and payment attempt. The free sandbox filesystem is disposable, so a later rebuild may start a new fixture. Do not send real money.
+
+Use Monnify's sandbox bank simulator to pay the generated sandbox account, then inspect event delivery and the fixture's order status. Successful acceptance requires a provider-triggered webhook, authoritative verification, SUCCEEDED status, stock remaining one, and one PAYMENT_VERIFIED event. Resend the same notification and confirm those quantities remain unchanged. Configuration or authentication success alone is not payment acceptance. Disable the fixture after the exercise.

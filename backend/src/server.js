@@ -49,6 +49,10 @@ const { handleSafePayWebhook } = await import('./routes/safepay-webhook.js');
 
 await migrate();
 console.log(`Database runtime: ${DB_ENGINE}`);
+if (process.env.MARKET_MONNIFY_ACCEPTANCE === 'true') {
+  const {startMonnifyAcceptance} = await import('./services/market-monnify-acceptance.js');
+  await startMonnifyAcceptance();
+}
 
 const routers = [systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, membershipTransfersRouter, opportunitiesRouter, marketCommerceRouter, safePayRouter, meRouter, adminRouter];
 if (process.env.ENABLE_DEV_ROUTES === 'true') routers.push(devRouter);
