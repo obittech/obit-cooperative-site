@@ -32,6 +32,8 @@ jobs:
       - run: npm install
       - name: Payment safety regression tests
         run: npm run test:payments
+      - name: Membership and referral regression tests
+        run: npm run test:registration
       - name: Marketplace commerce and cart regression tests
         run: |
           node --experimental-sqlite --test test/market-commerce.test.js test/monnify-readiness.test.js test/monnify-acceptance.test.js
@@ -52,6 +54,13 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
           PGSSL: disable
         run: npm run test:payments
+
+      - name: PostgreSQL membership and referral regression tests
+        env:
+          DB_ENGINE: postgres
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
+          PGSSL: disable
+        run: node --experimental-sqlite --test --test-concurrency=1 test/registration.test.js test/membership-transfers.test.js test/member-referrals.test.js
 
       - name: PostgreSQL adapter smoke
         env:
