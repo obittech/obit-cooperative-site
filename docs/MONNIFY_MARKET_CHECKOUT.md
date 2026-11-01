@@ -82,3 +82,7 @@ No live keys, merchant account access, provider sandbox payment, or continuous b
 The normal checkout adapter initializes the actual Monnify sandbox checkout. The fixture prints only the sandbox checkout URL, test references and periodic order/stock status. It does not print authentication tokens or provider keys. Repeated startup on the same database reuses the order and payment attempt. The free sandbox filesystem is disposable, so a later rebuild may start a new fixture. Do not send real money.
 
 Use Monnify's sandbox bank simulator to pay the generated sandbox account, then inspect event delivery and the fixture's order status. Successful acceptance requires a provider-triggered webhook, authoritative verification, SUCCEEDED status, stock remaining one, and one PAYMENT_VERIFIED event. Resend the same notification and confirm those quantities remain unchanged. Configuration or authentication success alone is not payment acceptance. Disable the fixture after the exercise.
+
+### Observed sandbox currency field
+
+The 1 November 2026 provider exercise found that the actual transaction-query response uses `currency: "NGN"`, while the initial adapter expected only `currencyCode`. Both response field names are now accepted. If both fields are supplied, both must be NGN. Missing, null, foreign or conflicting currencies remain rejected. This correction does not relax exact amount, reference, status or signature checks.

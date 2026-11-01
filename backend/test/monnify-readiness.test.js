@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {monnifyReadiness} from '../src/services/market-monnify-readiness.js';
-import {checkMonnifyAuthentication} from '../src/services/market-monnify.js';
+import {monnifyReceipt,checkMonnifyAuthentication} from '../src/services/market-monnify.js';
 
 const env = {NODE_ENV:'test', MARKET_CHECKOUT_MODE:'test', MARKET_MONNIFY_API_KEY:'MK_TEST_diagnostic_only',
  MARKET_MONNIFY_SECRET_KEY:'diagnostic-only-secret', MARKET_MONNIFY_CONTRACT_CODE:'1234567890',
@@ -55,5 +55,15 @@ test('offline command succeeds with sandbox settings and rejects live configurat
   assert.equal(result.status,status,result.stderr);
   for (const key of ['MARKET_MONNIFY_API_KEY','MARKET_MONNIFY_SECRET_KEY','MARKET_MONNIFY_CONTRACT_CODE']) assert.ok(!result.stdout.includes(env[key]));
   assert.equal(JSON.parse(result.stdout.slice(0,result.stdout.lastIndexOf('}')+1)).provider_credentials_verified,false);
+ }
+});
+
+test('actual sandbox query currency field is accepted and conflicting aliases are rejected', () => {
+ const receipt={paymentReference:'OBMP-'+'A'.repeat(32),transactionReference:'MNFY|95|20261101095827|000013',paymentStatus:'PAID',amountPaid:'1000.00',totalPayable:'1000.00',currency:'NGN'};
+ assert.equal(monnifyReceipt(receipt).amount,100000);
+ assert.equal(monnifyReceipt(receipt,true).currency,'NGN');
+ assert.equal(monnifyReceipt({...receipt,currency:undefined,currencyCode:'NGN'}).currency,'NGN');
+ for (const change of [{currency:'USD'},{currency:undefined},{currencyCode:'USD'},{currencyCode:null}]) {
+  for(const notification of [false,true])assert.throws(()=>monnifyReceipt({...receipt,...change},notification),e=>e.status===422);
  }
 });
