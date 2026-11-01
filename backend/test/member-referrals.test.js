@@ -158,13 +158,19 @@ test('verified gateway payments also qualify and a payout reference cannot pay a
   assert.equal((await get('SELECT status FROM referral_bonuses WHERE id=?', [b.id])).status, 'EARNED');
   const unpaid = await draft(s);
   await run("UPDATE member_applications SET status='UNDER_REVIEW' WHERE id=?", [unpaid.id]);
-  await approve(unpaid.id);
+  await assert.rejects(approve(unpaid.id), e => e.status === 409);
+  assert.equal((await get('SELECT status FROM member_applications WHERE id=?', [unpaid.id])).status, 'UNDER_REVIEW');
+  assert.equal(await get('SELECT id FROM members WHERE application_id=?', [unpaid.id]), undefined);
   assert.equal(await get('SELECT * FROM referral_bonuses WHERE application_id=?', [unpaid.id]), undefined);
 });
 
 test('parallel approvals of different applications allocate distinct membership codes', async () => {
   const a = await draft(), b = await draft();
-  for (const id of [a.id, b.id]) await run("UPDATE member_applications SET status='UNDER_REVIEW' WHERE id=?", [id]);
+  for (const application of [a, b]) {
+    const payment = await checkout(application);
+    await paid(payment);
+    await confirm(payment);
+  }
   const results = await Promise.all([approve(a.id), approve(b.id)]);
   assert.notEqual(results[0].member.member_code, results[1].member.member_code);
   assert.match(results[0].member.member_code, /^OBT-\d{4}-\d{6,}$/);
