@@ -75,6 +75,9 @@ adminRouter.post('/api/admin/applications/:id/decision', requireAuth('staff', 'a
     } else if (decision === 'NEEDS_INFORMATION') {
       await run("UPDATE member_applications SET status = 'NEEDS_INFORMATION', updated_at = datetime('now') WHERE id = ?", [params.id]);
     } else {
+      const confirmedPayment = await get("SELECT id FROM membership_bank_payments WHERE application_id = ? AND status = 'CONFIRMED'", [params.id])
+        || await get("SELECT id FROM membership_payments WHERE application_id = ? AND status = 'PAYMENT_VERIFIED'", [params.id]);
+      if (!confirmedPayment) throw new HttpError(409, 'Confirm the membership payment before approving this application.');
       const memberCode = await nextMemberCode();
       let user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
       if (!user) {
