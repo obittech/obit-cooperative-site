@@ -47,10 +47,13 @@ const { safePayRouter } = await import('./routes/safepay.js');
 const {handleMarketPaymentWebhook}=await import('./services/market-payments.js');
 const { handleSafePayWebhook } = await import('./routes/safepay-webhook.js');
 
+const {whatsappRouter,handleWhatsappWebhook}=await import('./routes/whatsapp.js');
+const {processWhatsappQueue}=await import('./services/whatsapp.js');
+
 await migrate();
 console.log(`Database runtime: ${DB_ENGINE}`);
 
-const routers = [systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, membershipTransfersRouter, opportunitiesRouter, marketCommerceRouter, safePayRouter, meRouter, adminRouter];
+const routers = [whatsappRouter,systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, membershipTransfersRouter, opportunitiesRouter, marketCommerceRouter, safePayRouter, meRouter, adminRouter];
 if (process.env.ENABLE_DEV_ROUTES === 'true') routers.push(devRouter);
 
 const allowedOrigins = new Set(
@@ -97,6 +100,7 @@ const server = http.createServer(async (req, res) => {
     // Webhooks read the raw body themselves (signature verification needs
     // the exact bytes), so route them before generic JSON body parsing.
     if(pathname==='/api/webhooks/market/monnify'&&req.method==='POST'){await handleMarketPaymentWebhook(req,res);return;}
+    if(pathname==='/api/webhooks/whatsapp'){await handleWhatsappWebhook(req,res);return;}
     const webhookMatch = WEBHOOK_PATTERN.exec(pathname);
     if (webhookMatch && req.method === 'POST') {
       await handlePaymentWebhook(req, res, { provider: webhookMatch[1] });
@@ -128,6 +132,10 @@ const server = http.createServer(async (req, res) => {
     if (!res.writableEnded) res.json(status, { error: err.message || 'Internal error' });
   }
 });
+
+const whatsappTimer=setInterval(()=>{processWhatsappQueue().catch(()=>console.error('WhatsApp queue requires staff review'));},3000);
+whatsappTimer.unref();
+server.on('close',()=>clearInterval(whatsappTimer));
 
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {

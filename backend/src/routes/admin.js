@@ -8,7 +8,7 @@ import { Router, HttpError } from '../router.js';
 import { get, all, run, atomic } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { audit } from '../utils/audit.js';
-import { nextMemberCode } from '../services/member-code.js';
+import { activateReviewedApplication } from '../services/membership-activation.js';
 
 import { awardReferralBonus } from '../services/member-referrals.js';
 
@@ -75,19 +75,7 @@ adminRouter.post('/api/admin/applications/:id/decision', requireAuth('staff', 'a
     } else if (decision === 'NEEDS_INFORMATION') {
       await run("UPDATE member_applications SET status = 'NEEDS_INFORMATION', updated_at = datetime('now') WHERE id = ?", [params.id]);
     } else {
-      const memberCode = await nextMemberCode();
-      let user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
-      if (!user) {
-        await run('INSERT INTO users (email, phone, role) VALUES (?, ?, ?)', [application.email, application.phone, 'member']);
-        user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
-      }
-      if (await get('SELECT id FROM members WHERE user_id = ?', [user.id])) throw new HttpError(409, 'This account already has a membership. Do not approve a duplicate application.');
-      await run('INSERT INTO members (application_id, user_id, member_code, status) VALUES (?, ?, ?, ?)',
-        [params.id, user.id, memberCode, 'ACTIVE']);
-      const member = await get('SELECT * FROM members WHERE application_id = ?', [params.id]);
-      await run('INSERT INTO community_onboarding (member_id) VALUES (?)', [member.id]);
-      await run("INSERT INTO ledger_accounts (member_id) VALUES (?)", [member.id]);
-      await run("UPDATE member_applications SET status = 'ACTIVE', updated_at = datetime('now') WHERE id = ?", [params.id]);
+      await activateReviewedApplication(application);
     }
 
     await audit(req.user.id, `APPLICATION_DECISION_${decision}`, 'member_applications', params.id, { note: note ?? null });
