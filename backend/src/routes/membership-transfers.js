@@ -22,8 +22,11 @@ function membershipFee() {
 }
 async function details(payment) {
   const sponsor = await sponsorForApplication(payment.application_id);
+  const applicant = await get('SELECT full_legal_name, phone, whatsapp, email, address, state, lga FROM member_applications WHERE id = ?', [payment.application_id]);
+  if (!applicant) throw new HttpError(404, 'Application not found');
   const amount = Number(payment.amount_kobo) / 100;
   let text = `Hello Obit, I have paid ₦${amount.toLocaleString('en-NG')} for my cooperative membership. Application: ${payment.application_id}. Payment reference: ${payment.reference}. Please check the bank credit and confirm my payment.`;
+  text += `\nMember name: ${applicant.full_legal_name || 'Not provided'}.\nPhone: ${applicant.phone || 'Not provided'}.\nWhatsApp: ${applicant.whatsapp || applicant.phone || 'Not provided'}.\nAddress: ${[applicant.address, applicant.lga, applicant.state].filter(Boolean).join(', ') || 'Not provided'}.\nEmail: ${applicant.email || 'Not provided'}.`;
   text += sponsor ? ` Sponsor membership code: ${sponsor.member_code}. Sponsor name: ${sponsor.full_legal_name}. Sponsor phone: ${sponsor.phone}. Referral bonus: ₦500 after payment confirmation and membership approval.` : ' Sponsor: no member referral.';
   return { sponsor: sponsor || null, referral_bonus_amount_kobo: sponsor ? 50000 : 0, provider: 'bank_transfer', application_id: Number(payment.application_id), reference: payment.reference,
     amount, amount_kobo: Number(payment.amount_kobo), currency: 'NGN', status: payment.status,
