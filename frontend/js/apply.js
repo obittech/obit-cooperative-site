@@ -81,6 +81,11 @@ function goToStep(stepName) {
 function savingsDraftKey() { return `obit_savings_draft_${state.applicationId}`; }
 function renderSavingsStep() {
   const active = state.application.status === 'ACTIVE';
+  document.getElementById('membershipOutcomeHeading').textContent = active ? 'Membership Approved' : 'Plan your savings';
+  const memberId = document.getElementById('approvedMemberId');
+  memberId.style.display = active && state.application.member_code ? '' : 'none';
+  memberId.hidden = !active || !state.application.member_code;
+  memberId.textContent = active && state.application.member_code ? `Member ID: ${state.application.member_code}` : '';
   document.getElementById('savingsReviewNote').textContent = active
     ? 'Membership approved! Your membership is active. Log in to your Member Portal to access your account and manage your savings.'
     : state.application.membership_review_required

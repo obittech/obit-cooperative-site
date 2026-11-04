@@ -22,6 +22,8 @@ function membershipFee() {
   catch { throw new HttpError(503, 'Membership fee is not configured correctly.'); }
 }
 async function details(payment) {
+  const linkedPayment = await get(`SELECT b.* FROM membership_application_links l JOIN membership_bank_payments b ON b.id = l.payment_id WHERE l.application_id = ?`, [payment.application_id]);
+  const verifiedPayment = linkedPayment || payment;
   const sponsor = await sponsorForApplication(payment.application_id);
   const applicant = await get('SELECT full_legal_name, phone, whatsapp, email, address, state, lga FROM member_applications WHERE id = ?', [payment.application_id]);
   if (!applicant) throw new HttpError(404, 'Application not found');
@@ -30,11 +32,11 @@ async function details(payment) {
   text += `\nMember name: ${applicant.full_legal_name || 'Not provided'}.\nPhone: ${applicant.phone || 'Not provided'}.\nWhatsApp: ${applicant.whatsapp || applicant.phone || 'Not provided'}.\nAddress: ${[applicant.address, applicant.lga, applicant.state].filter(Boolean).join(', ') || 'Not provided'}.\nEmail: ${applicant.email || 'Not provided'}.`;
   text += sponsor ? ` Sponsor membership code: ${sponsor.member_code}. Sponsor name: ${sponsor.full_legal_name}. Sponsor phone: ${sponsor.phone}. Referral bonus: ₦500 after payment confirmation and membership approval.` : ' Sponsor: no member referral.';
   return { sponsor: sponsor || null, referral_bonus_amount_kobo: sponsor ? 50000 : 0, provider: 'bank_transfer', application_id: Number(payment.application_id), reference: payment.reference,
-    amount, amount_kobo: Number(payment.amount_kobo), currency: 'NGN', status: payment.status,
+    amount, amount_kobo: Number(payment.amount_kobo), currency: 'NGN', status: verifiedPayment.status,
     bank_name: payment.bank_name, account_name: payment.account_name, account_number: payment.account_number,
     whatsapp_url: `https://wa.me/${payment.whatsapp}?text=${encodeURIComponent(text)}`,
-    receipt_reference: payment.status === 'CONFIRMED' ? `OBIT-MEMBER-${payment.reference}` : null,
-    confirmed_at: payment.confirmed_ms ? new Date(Number(payment.confirmed_ms)).toISOString() : null };
+    receipt_reference: verifiedPayment.status === 'CONFIRMED' ? `OBIT-MEMBER-${verifiedPayment.reference}` : null,
+    confirmed_at: verifiedPayment.confirmed_ms ? new Date(Number(verifiedPayment.confirmed_ms)).toISOString() : null };
 }
 
 membershipTransfersRouter.get('/api/payments/membership/options', async (req, res) => {
@@ -51,6 +53,7 @@ membershipTransfersRouter.post('/api/payments/membership/bank-transfer', async (
     if (!app) throw new HttpError(404, 'Application not found');
     const old = await get('SELECT * FROM membership_bank_payments WHERE application_id = ?', [id]);
     if (old) {
+      if (await get('SELECT application_id FROM membership_application_links WHERE application_id = ?', [id])) return old;
       if (old.status !== 'CONFIRMED' && app.status !== 'PAYMENT_PENDING') throw new HttpError(409, 'Contact support before making any further payment for this application.');
       return old;
     }
@@ -88,13 +91,54 @@ membershipTransfersRouter.post('/api/payments/membership/bank-transfer/:referenc
 });
 
 membershipTransfersRouter.get('/api/admin/membership-transfers', requireAuth('staff', 'admin'), async (req, res) => {
-  res.json(200, await all(`SELECT b.*, a.full_legal_name, a.status AS application_status, s.member_code AS sponsor_code, s.full_legal_name AS sponsor_name, s.phone AS sponsor_phone,
+  res.json(200, await all(`SELECT b.*, COALESCE(cp.status, b.status) AS status, COALESCE(cp.bank_reference, b.bank_reference) AS bank_reference,
+    l.member_id AS linked_member_id, a.full_legal_name, a.status AS application_status, s.member_code AS sponsor_code, s.full_legal_name AS sponsor_name, s.phone AS sponsor_phone,
     m.member_code AS existing_member_code, m.status AS existing_member_status, m.application_id AS existing_member_application_id
     FROM membership_bank_payments b JOIN member_applications a ON a.id = b.application_id LEFT JOIN application_sponsors s ON s.application_id = a.id
+    LEFT JOIN membership_application_links l ON l.application_id = a.id LEFT JOIN membership_bank_payments cp ON cp.id = l.payment_id
     LEFT JOIN members m ON m.id = (SELECT existing.id FROM members existing JOIN users u ON u.id = existing.user_id
       WHERE existing.application_id = a.id OR lower(u.email) = lower(a.email) OR u.phone = a.phone
       ORDER BY existing.id LIMIT 1)
     ORDER BY b.created_ms DESC LIMIT 200`));
+});
+
+// Explicitly reviewed duplicate: retain the original member, receipt and ledger.
+membershipTransfersRouter.post('/api/admin/membership-transfers/:reference/approve-existing', requireAuth('staff', 'admin'), async (req, res, params) => {
+  const ref = String(req.body?.bank_reference || '').trim();
+  if (req.body?.bank_credit_checked !== true || req.body?.same_member_checked !== true || ref.length < 6 || ref.length > 120) throw new HttpError(400, 'Confirm the bank credit and that both applications belong to the same member.');
+  const result = await atomic(async () => {
+    const initial = await get('SELECT * FROM membership_bank_payments WHERE reference = ?', [params.reference]);
+    if (!initial) throw new HttpError(404, 'Membership transfer not found');
+    const member = await get('SELECT * FROM members WHERE member_code = ?', [String(req.body.member_code || '').trim()]);
+    if (!member || member.status !== 'ACTIVE' || Number(member.application_id) === Number(initial.application_id)) throw new HttpError(409, 'Select the existing active membership for this duplicate application.');
+    for (const id of [Number(initial.application_id), Number(member.application_id)].sort((a, b) => a - b)) await run('UPDATE member_applications SET status = status WHERE id = ?', [id]);
+    const app = await get('SELECT * FROM member_applications WHERE id = ?', [initial.application_id]);
+    const original = await get('SELECT * FROM member_applications WHERE id = ?', [member.application_id]);
+    const user = await get('SELECT * FROM users WHERE id = ?', [member.user_id]);
+    if (!['PAYMENT_PENDING', 'UNDER_REVIEW', 'ACTIVE'].includes(app.status)) throw new HttpError(409, 'Complete KYC before membership approval.');
+    const emailMatch = app.email && user.email && app.email.trim().toLowerCase() === user.email.trim().toLowerCase();
+    const phoneMatch = app.phone && user.phone && app.phone === user.phone;
+    if (!emailMatch && !phoneMatch) throw new HttpError(409, 'Application does not match the selected membership account.');
+    const canonical = await get("SELECT * FROM membership_bank_payments WHERE application_id = ? AND status = 'CONFIRMED'", [member.application_id]);
+    if (!canonical || original.status !== 'ACTIVE') throw new HttpError(409, 'The existing membership must already have a confirmed payment and approval.');
+    if (req.body.amount_kobo !== Number(initial.amount_kobo) || Number(canonical.amount_kobo) !== Number(initial.amount_kobo)) throw new HttpError(409, 'Bank credit must match the membership fee exactly.');
+    if (canonical.bank_reference !== initial.reference && canonical.bank_reference !== initial.reference + '.' && canonical.bank_reference !== ref) throw new HttpError(409, 'The existing payment is not linked to this transfer. Reconcile separately paid fees first.');
+    if (initial.status === 'CONFIRMED') throw new HttpError(409, 'This application has a separate confirmed payment. Reconcile both payments before linking.');
+    const oldLink = await get('SELECT * FROM membership_application_links WHERE application_id = ?', [app.id]);
+    if (oldLink && (Number(oldLink.member_id) !== Number(member.id) || Number(oldLink.payment_id) !== Number(canonical.id))) throw new HttpError(409, 'This application was linked to another membership.');
+    await allocateBankCredit(ref, 'MEMBERSHIP', canonical.id);
+    if (canonical.bank_reference !== ref) {
+      await run('UPDATE membership_bank_payments SET bank_reference = ? WHERE id = ?', [ref, canonical.id]);
+      await audit(req.user.id, 'MEMBERSHIP_BANK_REFERENCE_CORRECTED', 'member_applications', member.application_id, { previous_reference: canonical.bank_reference, bank_reference: ref });
+    }
+    if (!oldLink) {
+      await run('INSERT INTO membership_application_links (application_id, member_id, payment_id, reviewed_by, reviewed_ms) VALUES (?,?,?,?,?) RETURNING application_id', [app.id, member.id, canonical.id, req.user.id, Date.now()]);
+      await audit(req.user.id, 'APPLICATION_APPROVED_EXISTING_MEMBERSHIP', 'member_applications', app.id, { member_code: member.member_code, canonical_application_id: member.application_id });
+    }
+    await run("UPDATE member_applications SET status = 'ACTIVE', updated_at = datetime('now') WHERE id = ?", [app.id]);
+    return { application: await get('SELECT * FROM member_applications WHERE id = ?', [app.id]), member, linked_existing_membership: true };
+  });
+  res.json(200, result);
 });
 
 membershipTransfersRouter.post('/api/admin/membership-transfers/:reference/confirm', requireAuth('staff', 'admin'), async (req, res, params) => {
