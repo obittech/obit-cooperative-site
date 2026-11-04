@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const path = require('node:path');
 
 function setup(post) {
   const nodes = new Map();
@@ -19,7 +20,7 @@ function setup(post) {
     OBIT: {post, getSession: () => null, saveSession: (...args) => sessions.push(args)},
     prompt() { throw new Error('Login must never open a browser prompt'); }
   });
-  vm.runInContext(fs.readFileSync('frontend/js/admin.js', 'utf8'), ctx);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../frontend/js/admin.js'), 'utf8'), ctx);
   vm.runInContext('loadAll = async function () {};', ctx);
   node('loginIdentifier').value = 'admin@example.test';
   node('loginPassword').value = 'test-only-password';
