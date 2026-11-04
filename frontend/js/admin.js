@@ -31,35 +31,109 @@ document.getElementById('btnAdminActivate').addEventListener('click', async () =
   } catch (err) { showAlert(err.message); }
 });
 
-document.getElementById('btnLogin').addEventListener('click', async () => {
+const adminLoginForm = document.getElementById('adminLoginForm');
+const adminMfaForm = document.getElementById('adminMfaForm');
+const adminMfaCode = document.getElementById('adminMfaCode');
+let pendingAdminUserId = null;
+let adminAuthBusy = false;
+
+function setAdminAuthBusy(busy) {
+  adminAuthBusy = busy;
+  ['btnLogin', 'btnVerifyAdminCode', 'btnResendAdminCode', 'btnChangeAdminLogin'].forEach(id => {
+    document.getElementById(id).disabled = busy;
+  });
+}
+
+function resetAdminLogin() {
+  pendingAdminUserId = null;
+  adminMfaCode.value = '';
+  document.getElementById('loginPassword').value = '';
+  adminMfaForm.hidden = true;
+  adminLoginForm.hidden = false;
+  document.getElementById('btnShowAdminSetup').style.display = '';
+}
+
+async function requestAdminLoginCode() {
+  if (adminAuthBusy) return;
+  setAdminAuthBusy(true);
   const btn = document.getElementById('btnLogin');
-  if (btn.disabled) return;
-  btn.disabled = true;
-  btn.textContent = 'Signing in…';
-  const identifier = document.getElementById('loginIdentifier').value;
-  const password = document.getElementById('loginPassword').value;
+  const resend = document.getElementById('btnResendAdminCode');
+  btn.textContent = 'Signing in...';
+  resend.textContent = 'Sending...';
+  // A new login replaces the previous challenge. Never submit an old code after a resend.
+  pendingAdminUserId = null;
+  adminMfaCode.value = '';
   try {
+    const identifier = document.getElementById('loginIdentifier').value.trim();
+    const password = document.getElementById('loginPassword').value;
     const res = await OBIT.post('/api/auth/login', { identifier, password });
     if (!['staff', 'admin'].includes(res.role)) throw new Error('This login is for staff/admin accounts only.');
     if (res.mfa_required) {
-      const code = prompt('Use the newest 6-digit code from the email titled "Your Obit Admin login code". It expires in 10 minutes. Enter it here:');
-      if (code === null) {
-        showAlert('Login code was not entered. Click Log In to request a new code.');
-        return;
-      }
-      const verified = await OBIT.post('/api/auth/admin-mfa', { user_id: res.user_id, code: code.trim() });
-      OBIT.saveSession('staff', verified.token);
-    } else {
-      OBIT.saveSession('staff', res.token);
+      pendingAdminUserId = res.user_id;
+      adminLoginForm.hidden = true;
+      adminMfaForm.hidden = false;
+      document.getElementById('adminSetup').style.display = 'none';
+      document.getElementById('btnShowAdminSetup').style.display = 'none';
+      showAlert('Login code sent. Enter the newest emailed code in the box below.', 'success');
+      adminMfaCode.focus();
+      return;
     }
+    OBIT.saveSession('staff', res.token);
+    resetAdminLogin();
+    await loadAll();
+  } catch (err) {
+    resetAdminLogin();
+    showAlert(err.message);
+  } finally {
+    setAdminAuthBusy(false);
+    btn.textContent = 'Log In';
+    resend.textContent = 'Send New Code';
+  }
+}
+
+adminLoginForm.addEventListener('submit', event => {
+  event.preventDefault();
+  if (adminLoginForm.reportValidity()) return requestAdminLoginCode();
+});
+document.getElementById('btnResendAdminCode').addEventListener('click', requestAdminLoginCode);
+document.getElementById('btnChangeAdminLogin').addEventListener('click', () => {
+  if (adminAuthBusy) return;
+  resetAdminLogin();
+  document.getElementById('alertBox').textContent = '';
+  document.getElementById('loginPassword').focus();
+});
+
+adminMfaForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (adminAuthBusy) return;
+  const code = adminMfaCode.value.trim();
+  if (!/^[0-9]{6}$/.test(code)) {
+    showAlert('Enter the 6-digit code from your newest admin login email.');
+    adminMfaCode.focus();
+    return;
+  }
+  if (pendingAdminUserId === null) {
+    showAlert('Select Send New Code to request a fresh login code.');
+    return;
+  }
+  setAdminAuthBusy(true);
+  const btn = document.getElementById('btnVerifyAdminCode');
+  btn.textContent = 'Verifying...';
+  try {
+    const verified = await OBIT.post('/api/auth/admin-mfa', { user_id: pendingAdminUserId, code });
+    OBIT.saveSession('staff', verified.token);
+    resetAdminLogin();
+    document.getElementById('alertBox').textContent = '';
     await loadAll();
   } catch (err) {
     showAlert(err.message === 'Invalid or expired admin login code'
-      ? 'That code was not accepted. Click Log In again, then enter the code from the newest admin login email within 10 minutes.'
+      ? 'That code was not accepted. Enter the newest emailed code, or select Send New Code if it has expired.'
       : err.message);
+    adminMfaCode.value = '';
+    adminMfaCode.focus();
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Log In';
+    setAdminAuthBusy(false);
+    btn.textContent = 'Verify Code';
   }
 });
 

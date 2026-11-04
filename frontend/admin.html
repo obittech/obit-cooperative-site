@@ -35,10 +35,20 @@
           <p>Authenticated staff and admin roles only. Not linked from the public site navigation.</p>
         </div>
         <div class="card auth-shell">
-          <div id="alertBox"></div>
-          <label class="field">Email<input id="loginIdentifier" /></label>
-          <label class="field">Password<input id="loginPassword" type="password" /></label>
-          <button class="btn btn-primary btn-block" id="btnLogin">Log In</button>
+          <div id="alertBox" role="status" aria-live="polite"></div>
+          <form id="adminLoginForm">
+            <label class="field">Email<input id="loginIdentifier" type="email" autocomplete="username" required /></label>
+            <label class="field">Password<input id="loginPassword" type="password" autocomplete="current-password" required /></label>
+            <button class="btn btn-primary btn-block" id="btnLogin" type="submit">Log In</button>
+          </form>
+          <form id="adminMfaForm" hidden>
+            <h2>Enter your login code</h2>
+            <p id="adminMfaHelp">Use the newest 6-digit code from the email titled “Your Obit Admin login code”. It expires in 10 minutes. You can leave this page open while checking your email.</p>
+            <label class="field">6-digit login code<input id="adminMfaCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" aria-describedby="adminMfaHelp" required /></label>
+            <button class="btn btn-primary btn-block" id="btnVerifyAdminCode" type="submit">Verify Code</button>
+            <button class="btn btn-secondary btn-block" id="btnResendAdminCode" type="button" style="margin-top:10px">Send New Code</button>
+            <button class="btn btn-ghost btn-block" id="btnChangeAdminLogin" type="button" style="margin-top:10px">Back to Log In</button>
+          </form>
           <button class="btn btn-ghost btn-block" id="btnShowAdminSetup" style="margin-top:10px">First Super Admin? Activate Account</button>
           <div id="adminSetup" style="display:none;margin-top:18px">
             <label class="field">Authorized admin email<input id="adminSetupEmail" type="email" autocomplete="email" /></label>
@@ -119,6 +129,6 @@
 
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
-  <script src="js/market-aftercare.js?v=20261030-aftercare1"></script><script src="js/market-delivery.js?v=20261030-1"></script><script src="js/market-delivery-admin.js?v=20261030-1"></script><script src="js/market-video.js?v=20261030-1"></script><script src="js/market-video-admin.js?v=20261030-1"></script><script src="js/admin.js?v=20261031-member-referrals"></script>
+  <script src="js/market-aftercare.js?v=20261030-aftercare1"></script><script src="js/market-delivery.js?v=20261030-1"></script><script src="js/market-delivery-admin.js?v=20261030-1"></script><script src="js/market-video.js?v=20261030-1"></script><script src="js/market-video-admin.js?v=20261030-1"></script><script src="js/admin.js?v=20261104-inline-login-code"></script>
 </body>
 </html>
