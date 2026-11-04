@@ -1,6 +1,6 @@
 // apply.js — walks a visitor through:
 // LEAD/APPLICATION_STARTED -> APPLICATION_SUBMITTED -> KYC_PENDING/VERIFIED
-// -> PAYMENT_PENDING/VERIFIED -> savings draft while membership is under review
+// -> PAYMENT_PENDING/VERIFIED -> membership approval -> Finance login
 // exactly mirroring the backend's member_applications.status column, so this
 // page is always just reflecting server state, never inventing its own.
 
@@ -74,54 +74,27 @@ function goToStep(stepName) {
     el.classList.toggle('active', i === idx);
     el.classList.toggle('done', i < idx);
   });
-  if (stepName === 'done' && state.application) renderSavingsStep();
+  if (stepName === 'done' && state.application) renderMembershipOutcome();
   if (stepName === 'payment' && state.applicationId) initPayment();
 }
 
-function savingsDraftKey() { return `obit_savings_draft_${state.applicationId}`; }
-function renderSavingsStep() {
+function renderMembershipOutcome() {
   const active = state.application.status === 'ACTIVE';
-  document.getElementById('membershipOutcomeHeading').textContent = active ? 'Membership Approved' : 'Plan your savings';
+  const unavailable = ['SUSPENDED', 'CLOSED'].includes(state.application.status);
+  document.getElementById('membershipOutcomeHeading').textContent = active
+    ? 'Membership Approved' : unavailable ? 'Membership unavailable' : 'Membership under review';
+  document.getElementById('membershipOutcomeNote').textContent = active
+    ? 'Your membership is active. Log in to Finance to start transactions.'
+    : unavailable ? 'Your membership is not active. Please contact Obit support.'
+      : state.application.membership_review_required
+        ? 'Your membership fee has been confirmed. An existing membership record needs staff review before this application can be completed. Please do not pay again.'
+        : 'Your membership fee has been confirmed. We will update this page once your membership is approved.';
   const memberId = document.getElementById('approvedMemberId');
   memberId.style.display = active && state.application.member_code ? '' : 'none';
   memberId.hidden = !active || !state.application.member_code;
   memberId.textContent = active && state.application.member_code ? `Member ID: ${state.application.member_code}` : '';
-  document.getElementById('savingsReviewNote').textContent = active
-    ? 'Membership approved! Your membership is active. Log in to your Member Portal to access your account and manage your savings.'
-    : state.application.membership_review_required
-      ? 'Your membership fee has been confirmed. An existing membership record needs staff review before this application can be completed. Please do not pay again.'
-      : 'Your membership fee has been confirmed. Your membership is under review. You can prepare a savings goal now and submit it after your membership is approved.';
-  try {
-    const draft = JSON.parse(localStorage.getItem(savingsDraftKey()) || 'null');
-    if (!draft) return;
-    document.getElementById('draftPlanAmount').value = draft.amount;
-    document.getElementById('draftPlanFrequency').value = draft.frequency;
-    document.getElementById('draftPlanPurpose').value = draft.purpose;
-    document.getElementById('draftPlanTarget').value = draft.target_amount || '';
-    document.getElementById('savingsDraftStatus').textContent = 'Your plan draft is saved on this device.';
-  } catch { /* Ignore an invalid local draft. */ }
-}
-function saveSavingsDraft() {
-  const status = document.getElementById('savingsDraftStatus');
-  if (!state.application || !['PAYMENT_VERIFIED', 'UNDER_REVIEW', 'ACTIVE'].includes(state.application.status)) {
-    status.textContent = 'Wait for your membership fee to be confirmed before planning savings.';
-    return;
-  }
-  const amount = Number(document.getElementById('draftPlanAmount').value);
-  const targetValue = document.getElementById('draftPlanTarget').value;
-  const target_amount = targetValue ? Number(targetValue) : null;
-  if (!Number.isFinite(amount) || amount <= 0 || (targetValue && (!Number.isFinite(target_amount) || target_amount <= 0))) {
-    status.textContent = 'Enter a valid contribution amount and target amount.';
-    return;
-  }
-  const draft = {
-    amount,
-    frequency: document.getElementById('draftPlanFrequency').value,
-    purpose: document.getElementById('draftPlanPurpose').value,
-    target_amount,
-  };
-  localStorage.setItem(savingsDraftKey(), JSON.stringify(draft));
-  status.textContent = 'Draft saved on this device. After approval, log in to your portal to review and save it. No money was collected.';
+  document.getElementById('btnMemberFinanceLogin').style.display = active ? '' : 'none';
+  document.getElementById('memberFinanceLoginHelp').style.display = active ? '' : 'none';
 }
 
 function fieldIds() {
@@ -414,7 +387,6 @@ document.getElementById('btnSubmitApplication').addEventListener('click', submit
 document.getElementById('btnStartKyc').addEventListener('click', startKyc);
 document.getElementById('btnVerifyYouverify').addEventListener('click', verifyYouverifyKyc);
 document.getElementById('btnInitPayment').addEventListener('click', initPayment);
-document.getElementById('btnSaveSavingsDraft').addEventListener('click', saveSavingsDraft);
 
 async function initializeApplicationPage() {
   document.getElementById('date_of_birth').max = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -449,7 +421,7 @@ async function refreshMembershipStatus() {
     if (['PAYMENT_VERIFIED', 'UNDER_REVIEW', 'ACTIVE'].includes(app.status)) clearAlert();
     if (app.status === 'ACTIVE' && previous !== 'ACTIVE') goToStep('done');
     else if (['PAYMENT_VERIFIED', 'UNDER_REVIEW'].includes(app.status) && previous !== app.status) goToStep('done');
-    else if (['UNDER_REVIEW', 'ACTIVE'].includes(app.status)) renderSavingsStep();
+    else if (['UNDER_REVIEW', 'ACTIVE'].includes(app.status)) renderMembershipOutcome();
   } catch { /* Keep existing screen and retry later. */ }
   finally { statusRefreshInFlight = false; }
 }
