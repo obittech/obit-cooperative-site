@@ -82,7 +82,7 @@ function savingsDraftKey() { return `obit_savings_draft_${state.applicationId}`;
 function renderSavingsStep() {
   const active = state.application.status === 'ACTIVE';
   document.getElementById('savingsReviewNote').textContent = active
-    ? 'Your membership is active. Prepare a savings goal here, then log in to your Member Portal to review and save it.'
+    ? 'Membership approved! Your membership is active. Log in to your Member Portal to access your account and manage your savings.'
     : 'Your membership fee has been confirmed. Your membership is under review. You can prepare a savings goal now and submit it after your membership is approved.';
   try {
     const draft = JSON.parse(localStorage.getItem(savingsDraftKey()) || 'null');
@@ -428,5 +428,24 @@ async function initializeApplicationPage() {
     window.history.replaceState({}, document.title, cleanUrl);
   }
 }
+
+// Refresh status when staff verify payment or approve membership.
+let statusRefreshInFlight = false;
+async function refreshMembershipStatus() {
+  if (!state.applicationId || statusRefreshInFlight || document.hidden) return;
+  if (!['PAYMENT_PENDING', 'PAYMENT_VERIFIED', 'UNDER_REVIEW', 'ACTIVE'].includes(state.application?.status)) return;
+  statusRefreshInFlight = true;
+  try {
+    const app = await OBIT.get(`/api/applications/${state.applicationId}`);
+    const previous = state.application.status;
+    state.application = app;
+    if (app.status === 'ACTIVE' && previous !== 'ACTIVE') goToStep('done');
+    else if (['PAYMENT_VERIFIED', 'UNDER_REVIEW'].includes(app.status) && previous !== app.status) goToStep('done');
+  } catch { /* Keep existing screen and retry later. */ }
+  finally { statusRefreshInFlight = false; }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshMembershipStatus(); });
+window.addEventListener('focus', refreshMembershipStatus);
+setInterval(refreshMembershipStatus, 15000);
 
 initializeApplicationPage();
