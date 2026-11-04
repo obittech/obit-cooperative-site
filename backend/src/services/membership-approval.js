@@ -25,10 +25,12 @@ export async function activateApprovedMember(application, staffId) {
         || await get("SELECT id FROM membership_payments WHERE application_id = ? AND status = 'PAYMENT_VERIFIED'", [applicationId]);
       if (!confirmedPayment) throw new HttpError(409, 'Confirm the membership payment before approving this application.');
       const memberCode = await nextMemberCode();
-      let user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
+      const credentials = await get('SELECT * FROM registration_credentials WHERE application_id = ?', [applicationId]);
+      let user = await get('SELECT * FROM users WHERE lower(email) = lower(?) OR phone = ?', [application.email, application.phone]);
+      if (credentials && user) throw new HttpError(409, 'An existing account needs staff review before this registration login can be activated.');
       if (!user) {
-        await run('INSERT INTO users (email, phone, role) VALUES (?, ?, ?)', [application.email, application.phone, 'member']);
-        user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
+        await run('INSERT INTO users (email, phone, role, username, password_hash) VALUES (?, ?, ?, ?, ?)', [application.email, application.phone, 'member', credentials?.username || null, credentials?.password_hash || null]);
+        user = await get('SELECT * FROM users WHERE lower(email) = lower(?) OR phone = ?', [application.email, application.phone]);
       }
       if (await get('SELECT id FROM members WHERE user_id = ?', [user.id])) throw new HttpError(409, 'This account already has a membership. Do not approve a duplicate application.');
       await run('INSERT INTO members (application_id, user_id, member_code, status) VALUES (?, ?, ?, ?)',
@@ -36,7 +38,7 @@ export async function activateApprovedMember(application, staffId) {
       const member = await get('SELECT * FROM members WHERE application_id = ?', [applicationId]);
       await run('INSERT INTO community_onboarding (member_id) VALUES (?)', [member.id]);
       await run("INSERT INTO ledger_accounts (member_id) VALUES (?)", [member.id]);
-      await run("UPDATE member_applications SET status = 'ACTIVE', updated_at = datetime('now') WHERE id = ?", [applicationId]);
+      await run("UPDATE member_applications SET status = 'ACTIVE', user_id = ?, updated_at = datetime('now') WHERE id = ?", [user.id, applicationId]);
   await awardReferralBonus(applicationId, staffId);
   return get('SELECT * FROM members WHERE application_id = ?', [applicationId]);
 }

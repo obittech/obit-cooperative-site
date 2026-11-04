@@ -74,6 +74,7 @@ function goToStep(stepName) {
     el.classList.toggle('active', i === idx);
     el.classList.toggle('done', i < idx);
   });
+  document.getElementById('registrationLoginFields').style.display = state.applicationId ? 'none' : '';
   if (stepName === 'done' && state.application) renderMembershipOutcome();
   if (stepName === 'payment' && state.applicationId) initPayment();
 }
@@ -84,7 +85,7 @@ function renderMembershipOutcome() {
   document.getElementById('membershipOutcomeHeading').textContent = active
     ? 'Membership Approved' : unavailable ? 'Membership unavailable' : 'Membership under review';
   document.getElementById('membershipOutcomeNote').textContent = active
-    ? 'Your membership is active. Log in to Finance to start transactions.'
+    ? (state.application.has_login_credentials === false ? 'Your membership is active. Set up your login once to access Finance.' : 'Your membership is active. Log in to Finance to start transactions.')
     : unavailable ? 'Your membership is not active. Please contact Obit support.'
       : state.application.membership_review_required
         ? 'Your membership fee has been confirmed. An existing membership record needs staff review before this application can be completed. Please do not pay again.'
@@ -93,8 +94,14 @@ function renderMembershipOutcome() {
   memberId.style.display = active && state.application.member_code ? '' : 'none';
   memberId.hidden = !active || !state.application.member_code;
   memberId.textContent = active && state.application.member_code ? `Member ID: ${state.application.member_code}` : '';
-  document.getElementById('btnMemberFinanceLogin').style.display = active ? '' : 'none';
+  const loginButton = document.getElementById('btnMemberFinanceLogin');
+  loginButton.style.display = active ? '' : 'none';
+  loginButton.textContent = state.application.has_login_credentials === false ? 'Set Up Your Login' : 'Log In to Finance';
+  loginButton.href = state.application.has_login_credentials === false ? 'portal.html?setup=1&next=finance' : 'https://finance.obitcooperative.com/';
   document.getElementById('memberFinanceLoginHelp').style.display = active ? '' : 'none';
+  document.getElementById('memberFinanceLoginHelp').textContent = state.application.has_login_credentials === false
+    ? 'Set your username and password once, then sign in to Finance.'
+    : 'Use your username or email and the password you chose during registration to sign in. Your membership code also works.';
 }
 
 function fieldIds() {
@@ -131,7 +138,7 @@ function fillReviewSummary(app) {
   const dl = document.getElementById('reviewSummary');
   const rows = [
     ['Name', app.full_legal_name], ['Phone', app.phone], ['Email', app.email],
-    ['Membership type', app.membership_type], ['State', app.state], ['LGA', app.lga],
+    ['Username', app.username], ['Membership type', app.membership_type], ['State', app.state], ['LGA', app.lga],
     ['Address', app.address], ['Occupation', app.occupation_category], ['Sponsor membership code', app.sponsor_code],
   ];
   dl.innerHTML = rows
@@ -146,24 +153,38 @@ async function saveProfileAndContinue() {
   const missing = required.filter((id) => !document.getElementById(id).value);
   if (missing.length) return showAlert('Please fill in all required fields before continuing.');
   if (fieldIds().some(id => !document.getElementById(id).reportValidity())) return;
-
+  const saveButton = document.getElementById('btnStartOrSave');
+  if (saveButton.disabled) return;
+  saveButton.disabled = true;
   try {
+    let updated;
     if (!state.applicationId) {
+      const username = document.getElementById('registrationUsername');
+      const password = document.getElementById('registrationPassword');
+      const confirmation = document.getElementById('registrationPasswordConfirm');
+      if (!username.value || !password.value || !confirmation.value) return showAlert('Choose a username and password and confirm your password.');
+      if (![username, password, confirmation].every(field => field.reportValidity())) return;
+      if (password.value !== confirmation.value) return showAlert('The passwords do not match.');
       const params = new URLSearchParams(window.location.search);
-      const created = await OBIT.post('/api/applications', {
+      updated = await OBIT.post('/api/applications/register', {
+        ...collectProfileFields(), username: username.value.trim(), password: password.value,
+        password_confirmation: confirmation.value,
         referral_source: params.get('ref') || undefined,
         campaign: params.get('campaign') || (params.get('path') ? `membership-path:${params.get('path')}` : undefined),
       });
-      state.applicationId = created.id;
-      localStorage.setItem('obit_application_id', created.id);
+      password.value = '';
+      confirmation.value = '';
+      state.applicationId = updated.id;
+      localStorage.setItem('obit_application_id', updated.id);
+    } else {
+      updated = { ...state.application, ...await OBIT.patch(`/api/applications/${state.applicationId}`, collectProfileFields()) };
     }
-    const updated = await OBIT.patch(`/api/applications/${state.applicationId}`, collectProfileFields());
     state.application = updated;
     fillReviewSummary(updated);
     goToStep('review');
   } catch (err) {
     showAlert(err.message);
-  }
+  } finally { saveButton.disabled = false; }
 }
 
 async function submitApplication() {

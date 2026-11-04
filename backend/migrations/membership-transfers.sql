@@ -20,3 +20,8 @@ CREATE TABLE IF NOT EXISTS membership_application_links (
  payment_id __INT__ NOT NULL REFERENCES membership_bank_payments(id),
  reviewed_by __INT__ NOT NULL REFERENCES users(id), reviewed_ms __INT__ NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS registration_credentials (
+ application_id __INT__ PRIMARY KEY REFERENCES member_applications(id),
+ username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL
+);
