@@ -41,7 +41,8 @@ document.getElementById('btnSetPassword').addEventListener('click', async () => 
   const password = document.getElementById('setupPassword').value;
   if (!user_id || !setup_code || !password) return showAlert('Fill in all fields.');
   try {
-    await OBIT.post('/api/auth/set-password', { user_id, setup_code, password });
+    await OBIT.post('/api/auth/set-password', { user_id, setup_code, password, username: document.getElementById('setupUsername').value.trim() || undefined });
+    if (new URLSearchParams(window.location.search).get('next') === 'finance') { window.location.assign('https://finance.obitcooperative.com/'); return; }
     showAlert('Password set. You can log in now.', 'success');
     switchTab('login');
   } catch (err) { showAlert(err.message); }
@@ -324,3 +325,5 @@ if (OBIT.getSession('member')) {
   document.getElementById('loggedInView').style.display = '';
   loadDashboard();
 }
+
+if (new URLSearchParams(window.location.search).get('setup') === '1') switchTab('setup');

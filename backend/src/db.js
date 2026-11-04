@@ -40,6 +40,8 @@ function sqliteMigrate() {
   const userCols = cols('users');
   if (!cols('market_listings').includes('image_url')) sqlite.exec('ALTER TABLE market_listings ADD COLUMN image_url TEXT');
   if (!userCols.includes('session_version')) sqlite.exec('ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0');
+  if (!userCols.includes('username')) sqlite.exec('ALTER TABLE users ADD COLUMN username TEXT');
+  sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users(lower(username)) WHERE username IS NOT NULL');
   const withdrawalCols = cols('withdrawal_requests');
   if (!withdrawalCols.includes('bank_account_id')) sqlite.exec('ALTER TABLE withdrawal_requests ADD COLUMN bank_account_id INTEGER REFERENCES member_bank_accounts(id)');
   if (!withdrawalCols.includes('transfer_reference')) sqlite.exec('ALTER TABLE withdrawal_requests ADD COLUMN transfer_reference TEXT');
@@ -80,6 +82,8 @@ export async function migrate() {
   await pool.query(schema);
   await pool.query(fs.readFileSync(path.join(__dirname, '..', 'migrations', 'kyc-cost-controls.sql'), 'utf8'));
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0");
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT');
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users(lower(username)) WHERE username IS NOT NULL');
   await pool.query('ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS image_url TEXT');
   await pool.query(commerceSchema());
   await pool.query(membershipTransferSchema());
