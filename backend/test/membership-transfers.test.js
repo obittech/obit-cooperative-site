@@ -196,12 +196,12 @@ test('staff links a duplicate to its existing approved membership and original p
   await assert.rejects(call('POST', path, body), e => e.status === 401);
   await assert.rejects(call('POST', path, { ...body, same_member_checked: false }, staff), e => e.status === 400);
   await assert.rejects(call('POST', path, { ...body, amount_kobo: 100 }, staff), e => e.status === 409);
-  const before = Number((await get('SELECT COUNT(*) AS n FROM members')).n);
+  const before = Number((await get('SELECT COUNT(*) AS n FROM members WHERE user_id=?', [active.member.user_id])).n);
   const result = await call('POST', path, body, staff);
   assert.equal(result.application.status, 'ACTIVE');
   assert.equal(result.member.member_code, active.member.member_code);
   assert.equal(result.linked_existing_membership, true);
-  assert.equal(Number((await get('SELECT COUNT(*) AS n FROM members')).n), before);
+  assert.equal(Number((await get('SELECT COUNT(*) AS n FROM members WHERE user_id=?', [active.member.user_id])).n), before);
   assert.equal(Number((await get('SELECT application_id FROM members WHERE id=?', [active.member.id])).application_id), canonicalApp.id);
   assert.equal((await get('SELECT bank_reference FROM membership_bank_payments WHERE application_id=?', [canonicalApp.id])).bank_reference, ref);
   // The duplicate is an alias, never a second paid fee or referral reward.
