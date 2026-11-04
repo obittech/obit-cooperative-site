@@ -3,6 +3,15 @@ import { HttpError } from '../router.js';
 import { nextMemberCode } from './member-code.js';
 import { awardReferralBonus } from './member-referrals.js';
 
+// A contact match requires staff review. It is not permission to merge accounts.
+export async function existingMembershipForApplication(application) {
+  return get(`SELECT m.id, m.application_id, m.member_code, m.status, m.user_id
+    FROM members m JOIN users u ON u.id = m.user_id
+    WHERE m.application_id = ? OR lower(u.email) = lower(?) OR u.phone = ?
+    ORDER BY CASE WHEN m.application_id = ? THEN 0 ELSE 1 END, m.id LIMIT 1`,
+    [application.id, application.email, application.phone, application.id]);
+}
+
 // Called inside the caller's atomic transaction after payment is confirmed.
 export async function activateApprovedMember(application, staffId) {
   const applicationId = application.id;

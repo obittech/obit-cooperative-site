@@ -6,7 +6,7 @@ import { audit } from '../utils/audit.js';
 import { parseNgnToKobo } from '../utils/money.js';
 import { bankTransferConfig } from '../services/market-bank-transfer.js';
 import { allocateBankCredit } from '../services/bank-credit.js';
-import { activateApprovedMember } from '../services/membership-approval.js';
+import { activateApprovedMember, existingMembershipForApplication } from '../services/membership-approval.js';
 
 import { sponsorForApplication } from '../services/member-referrals.js';
 
@@ -88,8 +88,13 @@ membershipTransfersRouter.post('/api/payments/membership/bank-transfer/:referenc
 });
 
 membershipTransfersRouter.get('/api/admin/membership-transfers', requireAuth('staff', 'admin'), async (req, res) => {
-  res.json(200, await all(`SELECT b.*, a.full_legal_name, a.status AS application_status, s.member_code AS sponsor_code, s.full_legal_name AS sponsor_name, s.phone AS sponsor_phone
-    FROM membership_bank_payments b JOIN member_applications a ON a.id = b.application_id LEFT JOIN application_sponsors s ON s.application_id = a.id ORDER BY b.created_ms DESC LIMIT 200`));
+  res.json(200, await all(`SELECT b.*, a.full_legal_name, a.status AS application_status, s.member_code AS sponsor_code, s.full_legal_name AS sponsor_name, s.phone AS sponsor_phone,
+    m.member_code AS existing_member_code, m.status AS existing_member_status, m.application_id AS existing_member_application_id
+    FROM membership_bank_payments b JOIN member_applications a ON a.id = b.application_id LEFT JOIN application_sponsors s ON s.application_id = a.id
+    LEFT JOIN members m ON m.id = (SELECT existing.id FROM members existing JOIN users u ON u.id = existing.user_id
+      WHERE existing.application_id = a.id OR lower(u.email) = lower(a.email) OR u.phone = a.phone
+      ORDER BY existing.id LIMIT 1)
+    ORDER BY b.created_ms DESC LIMIT 200`));
 });
 
 membershipTransfersRouter.post('/api/admin/membership-transfers/:reference/confirm', requireAuth('staff', 'admin'), async (req, res, params) => {
@@ -119,8 +124,8 @@ membershipTransfersRouter.post('/api/admin/membership-transfers/:reference/confi
 });
 
 
-// Single authorised action: bank credit verification and membership activation.
-// All writes roll back together if activation fails.
+// Verified bank credit is retained when a known membership conflict needs review.
+// Other failures still roll back. No duplicate membership or referral is created.
 membershipTransfersRouter.post('/api/admin/membership-transfers/:reference/confirm-and-approve', requireAuth('staff', 'admin'), async (req, res, params) => {
   const ref = String(req.body?.bank_reference || '').trim();
   if (req.body?.bank_credit_checked !== true || ref.length < 6 || ref.length > 120) throw new HttpError(400, 'Verify the bank credit and enter its transaction reference.');
@@ -133,19 +138,26 @@ membershipTransfersRouter.post('/api/admin/membership-transfers/:reference/confi
     const app = await get('SELECT * FROM member_applications WHERE id = ?', [payment.application_id]);
     if (!app) throw new HttpError(404, 'Application not found');
     if (req.body.amount_kobo !== Number(payment.amount_kobo)) throw new HttpError(409, 'Bank credit must match the membership fee exactly.');
-    if (app.status === 'ACTIVE') {
-      const member = await get('SELECT * FROM members WHERE application_id = ?', [app.id]);
-      if (payment.status !== 'CONFIRMED' || payment.bank_reference !== ref || !member) throw new HttpError(409, 'Existing approval does not match this bank credit.');
-      return { application: app, member, already_approved: true };
-    }
+    const existing = await existingMembershipForApplication(app);
+    const sameMembership = existing && Number(existing.application_id) === Number(app.id);
+    if (app.status === 'ACTIVE' && (!sameMembership || existing.status !== 'ACTIVE')) throw new HttpError(409, 'Application status requires manual membership reconciliation.');
     if (payment.status === 'CONFIRMED') {
-      if (payment.bank_reference !== ref || app.status !== 'UNDER_REVIEW') throw new HttpError(409, 'Payment or application requires manual reconciliation.');
+      if (payment.bank_reference !== ref || !['UNDER_REVIEW', 'ACTIVE'].includes(app.status)) throw new HttpError(409, 'Payment or application requires manual reconciliation.');
     } else {
-      if (payment.status !== 'CLAIMED' || app.status !== 'PAYMENT_PENDING') throw new HttpError(409, 'Applicant must complete KYC and report payment before approval.');
+      if (payment.status !== 'CLAIMED' || !['PAYMENT_PENDING', 'ACTIVE'].includes(app.status)) throw new HttpError(409, 'Applicant must complete KYC and report payment before approval.');
       await allocateBankCredit(ref, 'MEMBERSHIP', payment.id);
       await run("UPDATE membership_bank_payments SET status = 'CONFIRMED', bank_reference = ?, confirmed_ms = ?, confirmed_by = ? WHERE id = ?", [ref, Date.now(), req.user.id, payment.id]);
-      await run("UPDATE member_applications SET status = 'UNDER_REVIEW', updated_at = datetime('now') WHERE id = ?", [app.id]);
+      if (app.status !== 'ACTIVE') await run("UPDATE member_applications SET status = 'UNDER_REVIEW', updated_at = datetime('now') WHERE id = ?", [app.id]);
       await audit(req.user.id, 'MEMBERSHIP_TRANSFER_CONFIRMED', 'member_applications', app.id, { reference: payment.reference });
+    }
+    if (existing) {
+      if (sameMembership && existing.status === 'ACTIVE') {
+        await run("UPDATE member_applications SET status = 'ACTIVE', updated_at = datetime('now') WHERE id = ?", [app.id]);
+        return { application: await get('SELECT * FROM member_applications WHERE id = ?', [app.id]), member: existing, already_approved: true, payment_confirmed: true };
+      }
+      if (payment.status !== 'CONFIRMED') await audit(req.user.id, 'MEMBERSHIP_EXISTING_ACCOUNT_REVIEW', 'member_applications', app.id, { existing_member_id: existing.id, existing_application_id: existing.application_id });
+      return { application: await get('SELECT * FROM member_applications WHERE id = ?', [app.id]), member: null,
+        payment_confirmed: true, membership_review_required: true, existing_member: existing };
     }
     const member = await activateApprovedMember(app, req.user.id);
     await audit(req.user.id, 'APPLICATION_DECISION_APPROVE', 'member_applications', app.id, { via: 'confirm-and-approve' });

@@ -7,6 +7,7 @@ import { Router, HttpError } from '../router.js';
 import { get, run, atomic } from '../db.js';
 import { audit } from '../utils/audit.js';
 import { validateApplicationProfile } from '../utils/application-profile.js';
+import { existingMembershipForApplication } from '../services/membership-approval.js';
 
 import { applicationWithSponsor, saveSponsor, validateSavedSponsor, sponsorLocked } from '../services/member-referrals.js';
 
@@ -118,5 +119,6 @@ applicationsRouter.post('/api/applications/:id/submit', async (req, res, params)
 applicationsRouter.get('/api/applications/:id', async (req, res, params) => {
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
   if (!application) throw new HttpError(404, 'Application not found');
-  res.json(200, await applicationWithSponsor(application));
+  const existing = application.status === 'UNDER_REVIEW' ? await existingMembershipForApplication(application) : null;
+  res.json(200, { ...await applicationWithSponsor(application), membership_review_required: Boolean(existing) });
 });

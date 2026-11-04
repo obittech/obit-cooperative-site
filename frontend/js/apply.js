@@ -83,7 +83,9 @@ function renderSavingsStep() {
   const active = state.application.status === 'ACTIVE';
   document.getElementById('savingsReviewNote').textContent = active
     ? 'Membership approved! Your membership is active. Log in to your Member Portal to access your account and manage your savings.'
-    : 'Your membership fee has been confirmed. Your membership is under review. You can prepare a savings goal now and submit it after your membership is approved.';
+    : state.application.membership_review_required
+      ? 'Your membership fee has been confirmed. An existing membership record needs staff review before this application can be completed. Please do not pay again.'
+      : 'Your membership fee has been confirmed. Your membership is under review. You can prepare a savings goal now and submit it after your membership is approved.';
   try {
     const draft = JSON.parse(localStorage.getItem(savingsDraftKey()) || 'null');
     if (!draft) return;
@@ -439,8 +441,10 @@ async function refreshMembershipStatus() {
     const app = await OBIT.get(`/api/applications/${state.applicationId}`);
     const previous = state.application.status;
     state.application = app;
+    if (['PAYMENT_VERIFIED', 'UNDER_REVIEW', 'ACTIVE'].includes(app.status)) clearAlert();
     if (app.status === 'ACTIVE' && previous !== 'ACTIVE') goToStep('done');
     else if (['PAYMENT_VERIFIED', 'UNDER_REVIEW'].includes(app.status) && previous !== app.status) goToStep('done');
+    else if (['UNDER_REVIEW', 'ACTIVE'].includes(app.status)) renderSavingsStep();
   } catch { /* Keep existing screen and retry later. */ }
   finally { statusRefreshInFlight = false; }
 }
