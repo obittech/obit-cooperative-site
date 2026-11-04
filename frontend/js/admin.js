@@ -412,6 +412,3 @@ async function refreshBankPayments(token){
  root.querySelectorAll('[data-confirm-bank]').forEach(f=>{f.querySelector('[data-credit-refund-review]').addEventListener('click',async()=>{if(!f.reportValidity())return;const buttons=[...f.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);try{await OBIT.post(`/api/admin/market/orders/${f.dataset.confirmBank}/bank-transfer/refund-review`,{bank_reference:f.elements.bank_reference.value,amount_kobo:Number(f.dataset.amount),bank_credit_checked:f.elements.checked.checked},{token});await refreshBankPayments(token);await refreshMarketOrders(token);}catch(err){f.querySelector('[role=status]').textContent=err.message;buttons.forEach(b=>b.disabled=false);}});f.addEventListener('submit',async e=>{e.preventDefault();const b=f.querySelector('button');b.disabled=true;try{await OBIT.post(`/api/admin/market/orders/${f.dataset.confirmBank}/bank-transfer/confirm`,{bank_reference:f.elements.bank_reference.value,amount_kobo:Number(f.dataset.amount),bank_credit_checked:f.elements.checked.checked},{token});await refreshBankPayments(token);await refreshMarketOrders(token);}catch(err){f.querySelector('[role=status]').textContent=err.message;b.disabled=false;}});});
  }catch(e){root.textContent=e.message;}
 }
-
-// Restore the authenticated dashboard after refresh instead of showing a new login.
-loadAll();
