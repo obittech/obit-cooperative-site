@@ -132,7 +132,7 @@ membershipTransfersRouter.post('/api/admin/membership-transfers/:reference/appro
       await audit(req.user.id, 'MEMBERSHIP_BANK_REFERENCE_CORRECTED', 'member_applications', member.application_id, { previous_reference: canonical.bank_reference, bank_reference: ref });
     }
     if (!oldLink) {
-      await run('INSERT INTO membership_application_links (application_id, member_id, payment_id, reviewed_by, reviewed_ms) VALUES (?,?,?,?,?)', [app.id, member.id, canonical.id, req.user.id, Date.now()]);
+      await run('INSERT INTO membership_application_links (application_id, member_id, payment_id, reviewed_by, reviewed_ms) VALUES (?,?,?,?,?) RETURNING application_id', [app.id, member.id, canonical.id, req.user.id, Date.now()]);
       await audit(req.user.id, 'APPLICATION_APPROVED_EXISTING_MEMBERSHIP', 'member_applications', app.id, { member_code: member.member_code, canonical_application_id: member.application_id });
     }
     await run("UPDATE member_applications SET status = 'ACTIVE', updated_at = datetime('now') WHERE id = ?", [app.id]);
