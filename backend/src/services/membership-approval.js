@@ -12,6 +12,12 @@ export async function existingMembershipForApplication(application) {
     [application.id, application.email, application.phone, application.id]);
 }
 
+export async function approvedMembershipForApplication(applicationId) {
+  return get(`SELECT m.member_code, m.status FROM members m
+    WHERE m.application_id = ? OR m.id = (SELECT member_id FROM membership_application_links WHERE application_id = ?)
+    ORDER BY m.id LIMIT 1`, [applicationId, applicationId]);
+}
+
 // Called inside the caller's atomic transaction after payment is confirmed.
 export async function activateApprovedMember(application, staffId) {
   const applicationId = application.id;

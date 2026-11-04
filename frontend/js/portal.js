@@ -69,11 +69,11 @@ document.getElementById('logoutLink').addEventListener('click', async (e) => {
   document.getElementById('logoutLink').style.display = 'none';
 });
 
-function badge(status) {
+function badge(status, label = status) {
   const cls = ['ACTIVE', 'KYC_VERIFIED', 'PAYMENT_VERIFIED'].includes(status) ? 'ok'
     : status && status.includes('FAILED') ? 'fail'
     : status ? 'pending' : 'neutral';
-  return `<span class="status-badge ${cls}">${status || 'N/A'}</span>`;
+  return `<span class="status-badge ${cls}">${label || 'N/A'}</span>`;
 }
 
 async function loadDashboard() {
@@ -90,18 +90,18 @@ async function loadDashboard() {
     document.getElementById('referralTotals').textContent = `${referrals.referred_count} referred applications · ₦${(referrals.earned_kobo / 100).toLocaleString('en-NG')} earned · ₦${(referrals.payable_kobo / 100).toLocaleString('en-NG')} awaiting payout · ₦${(referrals.paid_kobo / 100).toLocaleString('en-NG')} paid`;
     document.getElementById('digitalMemberName').textContent = membership.full_legal_name || 'Member';
     document.getElementById('digitalMemberId').textContent = membership.digital_membership_id || membership.member_code;
-    document.getElementById('digitalMemberStatus').innerHTML = badge(membership.status);
+    document.getElementById('digitalMemberStatus').innerHTML = badge(membership.status, membership.status === 'ACTIVE' ? 'Membership Approved' : membership.status);
     document.getElementById('membershipSummary').innerHTML = `
       <dt>Member ID</dt><dd><span class="member-code">${membership.member_code}</span></dd>
       <dt>Name</dt><dd>${membership.full_legal_name || '—'}</dd>
-      <dt>Status</dt><dd>${badge(membership.status)}</dd>
+      <dt>Status</dt><dd>${badge(membership.status, membership.status === 'ACTIVE' ? 'Membership Approved' : membership.status)}</dd>
       <dt>KYC</dt><dd>${badge(membership.kyc_status)}</dd>
       <dt>Membership fee</dt><dd>${badge(membership.membership_payment?.status)} ₦${membership.membership_payment?.amount ?? '—'}</dd>
       <dt>WhatsApp community</dt><dd>${membership.community_onboarding.whatsapp_joined ? 'Joined' : 'Not yet joined'}</dd>
       <dt>Orientation</dt><dd>${membership.community_onboarding.orientation_completed ? 'Completed' : 'Pending'}</dd>
     `;
 
-    document.getElementById('statusTile').innerHTML = badge(membership.status);
+    document.getElementById('statusTile').innerHTML = badge(membership.status, membership.status === 'ACTIVE' ? 'Membership Approved' : membership.status);
     const statement = await OBIT.get('/api/me/statement', { token });
     document.getElementById('balanceTile').textContent = `₦${Number(statement.balance || 0).toLocaleString()}`;
     document.getElementById('statementSummary').innerHTML = `
