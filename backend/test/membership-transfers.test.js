@@ -106,3 +106,79 @@ test('a bank credit cannot fund both marketplace and membership, even concurrent
   await migrate();
   assert.equal(Number((await get('SELECT COUNT(*) AS n FROM bank_credit_allocations WHERE bank_reference=?', [ref])).n), 1);
 });
+
+const approveTransfer = (payment, ref, changes = {}, token = staff) => call('POST', `/api/admin/membership-transfers/${payment.reference}/confirm-and-approve`, { amount_kobo: payment.amount_kobo, bank_reference: ref, bank_credit_checked: true, ...changes }, token);
+async function identifiedApplication() {
+  const id = await app();
+  const email = `membership-${crypto.randomUUID()}@example.invalid`;
+  const phone = `test-${crypto.randomUUID()}`;
+  await run('UPDATE member_applications SET email=?, phone=? WHERE id=?', [email, phone, id]);
+  const payment = await start(id);
+  await paid(payment);
+  return {id, email, phone, payment};
+}
+
+test('combined confirmation activates one membership and is safe to repeat', async () => {
+  const a = await identifiedApplication(), ref = `BANK-${crypto.randomUUID()}`;
+  const result = await approveTransfer(a.payment, ref);
+  assert.equal(result.application.status, 'ACTIVE');
+  assert.equal(result.member.status, 'ACTIVE');
+  const retry = await approveTransfer(a.payment, ref);
+  assert.equal(Number(retry.member.id), Number(result.member.id));
+  assert.equal(retry.already_approved, true);
+  assert.equal(Number((await get('SELECT COUNT(*) AS n FROM members WHERE application_id=?', [a.id])).n), 1);
+  await assert.rejects(approveTransfer(a.payment, ref + '-other'), e => e.status === 409);
+  const { meRouter } = await import('../src/routes/me.js');
+  const user = await get('SELECT * FROM users WHERE id=?', [result.member.user_id]);
+  const portal = await call('GET', '/api/me/membership', {}, issueToken(user), meRouter);
+  assert.equal(portal.membership_payment.status, 'PAYMENT_VERIFIED');
+  assert.equal(portal.membership_payment.provider, 'bank_transfer');
+  assert.equal(portal.membership_payment.amount, 3000);
+});
+
+test('contact conflicts retain verified credit for review without duplicate memberships or referrals', async () => {
+  const first = await identifiedApplication();
+  const active = await approveTransfer(first.payment, `BANK-${crypto.randomUUID()}`);
+  for (const field of ['email', 'phone']) {
+    const duplicate = await identifiedApplication();
+    await run(`UPDATE member_applications SET ${field}=? WHERE id=?`, [field === 'email' ? first.email.toUpperCase() : first.phone, duplicate.id]);
+    const ref = `BANK-${crypto.randomUUID()}`;
+    await assert.rejects(approveTransfer(duplicate.payment, ref, { amount_kobo: 100 }), e => e.status === 409);
+    assert.equal((await get('SELECT status FROM membership_bank_payments WHERE application_id=?', [duplicate.id])).status, 'CLAIMED');
+    const result = await approveTransfer(duplicate.payment, ref);
+    assert.equal(result.membership_review_required, true);
+    assert.equal(result.payment_confirmed, true);
+    assert.equal(result.member, null);
+    assert.equal(result.existing_member.member_code, active.member.member_code);
+    assert.equal(result.application.status, 'UNDER_REVIEW');
+    assert.equal((await get('SELECT status FROM membership_bank_payments WHERE application_id=?', [duplicate.id])).status, 'CONFIRMED');
+    assert.equal(await get('SELECT id FROM members WHERE application_id=?', [duplicate.id]), undefined);
+    assert.equal(await get('SELECT id FROM referral_bonuses WHERE application_id=?', [duplicate.id]), undefined);
+    assert.equal((await paid(duplicate.payment)).status, 'CONFIRMED');
+    assert.equal((await approveTransfer(duplicate.payment, ref)).membership_review_required, true);
+    const { applicationsRouter } = await import('../src/routes/applications.js');
+    const applicant = await call('GET', `/api/applications/${duplicate.id}`, {}, '', applicationsRouter);
+    assert.equal(applicant.status, 'UNDER_REVIEW');
+    assert.equal(applicant.membership_review_required, true);
+    assert.equal(applicant.existing_member, undefined);
+    const rows = await call('GET', '/api/admin/membership-transfers', {}, staff);
+    assert.equal(rows.find(p => Number(p.application_id) === duplicate.id).existing_member_code, active.member.member_code);
+    const other = await identifiedApplication();
+    await assert.rejects(approveTransfer(other.payment, ref), e => e.status === 409);
+  }
+});
+
+test('existing membership on the same application is reused while its missing credit is confirmed', async () => {
+  const a = await identifiedApplication();
+  const user = await run("INSERT INTO users (email,phone,role) VALUES (?,?,'member')", [a.email, a.phone]);
+  const code = `OBT-2000-${String(a.id).padStart(6, '0')}`;
+  const member = await run("INSERT INTO members (application_id,user_id,member_code,status) VALUES (?,?,?,'ACTIVE')", [a.id, user.lastInsertRowid, code]);
+  // Legacy approval may already be ACTIVE even though its transfer stayed CLAIMED.
+  await run("UPDATE member_applications SET status='ACTIVE' WHERE id=?", [a.id]);
+  const result = await approveTransfer(a.payment, `BANK-${crypto.randomUUID()}`);
+  assert.equal(result.member.member_code, code);
+  assert.equal(Number(result.member.id), Number(member.lastInsertRowid));
+  assert.equal(result.application.status, 'ACTIVE');
+  assert.equal((await get('SELECT status FROM membership_bank_payments WHERE application_id=?', [a.id])).status, 'CONFIRMED');
+  assert.equal(Number((await get('SELECT COUNT(*) AS n FROM members WHERE user_id=?', [user.lastInsertRowid])).n), 1);
+});

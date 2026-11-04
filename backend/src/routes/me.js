@@ -40,7 +40,7 @@ meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
   const member = await memberForUser(req.user.id);
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [member.application_id]);
   const kyc = await get('SELECT status, verified_at FROM kyc_checks WHERE application_id = ? ORDER BY id DESC LIMIT 1', [member.application_id]);
-  const payment = await get(
+  let payment = await get(
     `SELECT status, verified_at, amount, currency
      FROM membership_payments
      WHERE application_id = ?
@@ -50,6 +50,11 @@ meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
      LIMIT 1`,
     [member.application_id]
   );
+  if (payment?.status !== 'PAYMENT_VERIFIED') {
+    const transfer = await get("SELECT reference, amount_kobo, confirmed_ms FROM membership_bank_payments WHERE application_id = ? AND status = 'CONFIRMED'", [member.application_id]);
+    if (transfer) payment = { status: 'PAYMENT_VERIFIED', provider: 'bank_transfer', reference: transfer.reference,
+      verified_at: new Date(Number(transfer.confirmed_ms)).toISOString(), amount: Number(transfer.amount_kobo) / 100, currency: 'NGN' };
+  }
   const onboarding = await get('SELECT whatsapp_joined, orientation_completed FROM community_onboarding WHERE member_id = ?', [member.id]);
 
   res.json(200, {
