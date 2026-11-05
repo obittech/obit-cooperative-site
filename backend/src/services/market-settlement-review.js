@@ -8,7 +8,7 @@ export async function verifySellerPayout(userId,sellerId,body){
  if(body.identity_checked!==true||body.payout_ownership_checked!==true||reference.length<6||reference.length>120||!/^\d{4}$/.test(last))throw new HttpError(400,'Check seller identity and matching bank ownership, then record the secure evidence reference and last four digits');
  return atomic(async()=>{
   if(!await get("SELECT id FROM members WHERE id=? AND status='ACTIVE'",[sellerId]))throw new HttpError(409,'Seller membership must be active');
-  await run('INSERT INTO market_seller_payout_checks (seller_member_id,evidence_reference,account_last_four,reviewed_by,reviewed_ms) VALUES (?,?,?,?,?) ON CONFLICT(seller_member_id) DO UPDATE SET evidence_reference=excluded.evidence_reference,account_last_four=excluded.account_last_four,reviewed_by=excluded.reviewed_by,reviewed_ms=excluded.reviewed_ms',[sellerId,reference,last,userId,Date.now()]);
+  await run('INSERT INTO market_seller_payout_checks (seller_member_id,evidence_reference,account_last_four,reviewed_by,reviewed_ms) VALUES (?,?,?,?,?) ON CONFLICT(seller_member_id) DO UPDATE SET evidence_reference=excluded.evidence_reference,account_last_four=excluded.account_last_four,reviewed_by=excluded.reviewed_by,reviewed_ms=excluded.reviewed_ms RETURNING seller_member_id AS id',[sellerId,reference,last,userId,Date.now()]);
   await audit(userId,'MARKET_PAYOUT_OWNERSHIP_CHECKED','members',sellerId);return {ok:true};
  });
 }

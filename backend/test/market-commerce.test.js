@@ -674,7 +674,7 @@ test('supplier drafts keep costs private, deduplicate and enforce evidence, memb
  await sup.importSupplierDrafts(uid,[{...verified,checked_ms:Date.now()-2*86400000}]);await assert.rejects(sup.publishSupplierDraft(uid,id),e=>e.status===409);
  await sup.importSupplierDrafts(uid,[verified]);const result=await sup.publishSupplierDraft(uid,id);assert.equal(result.status,'DRAFT');
  assert.equal((await sup.publishSupplierDraft(uid,id)).listing_id,result.listing_id);
- assert.equal((await db.get('SELECT price_kobo FROM market_listings WHERE id=?',[result.listing_id])).price_kobo,9500000);
+ assert.equal(Number((await db.get('SELECT price_kobo FROM market_listings WHERE id=?',[result.listing_id])).price_kobo),9500000);
  await db.run("UPDATE market_listings SET status='ACTIVE' WHERE id=?",[result.listing_id]);
  assert.equal((await m.preview([{id:result.listing_id,qty:1}])).lines[0].available,true);
  await db.run('UPDATE market_supplier_drafts SET valid_until_ms=0 WHERE id=?',[id]);

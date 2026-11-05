@@ -28,7 +28,7 @@ export async function startBankTransfer(buyerId,id,body){
   if(await get('SELECT id FROM market_payment_attempts WHERE order_id=?',[o.id]))throw new HttpError(409,'Another payment attempt exists. Contact support before paying.');
   await validateRequestPickup((await get('SELECT request_id FROM market_request_shops WHERE id=?',[o.shop_id])).request_id);
   await run("INSERT INTO market_bank_payments (order_id,status,amount_kobo,bank_name,account_name,account_number,created_ms) VALUES (?,'READY',?,?,?,?,?)",[o.id,o.total_kobo,cfg.bank_name,cfg.account_name,cfg.account_number,Date.now()]);
-  await run('INSERT INTO market_order_terms (order_id,version,buyer_id,total_kobo,accepted_ms) VALUES (?,?,?,?,?)',[o.id,PURCHASE_TERMS_VERSION,buyerId,o.total_kobo,Date.now()]);
+  await run('INSERT INTO market_order_terms (order_id,version,buyer_id,total_kobo,accepted_ms) VALUES (?,?,?,?,?) RETURNING order_id AS id',[o.id,PURCHASE_TERMS_VERSION,buyerId,o.total_kobo,Date.now()]);
   await run('UPDATE market_purchase_orders SET expires_ms=? WHERE id=?',[Date.now()+45*60000,o.id]);
   return result(o,await get('SELECT * FROM market_bank_payments WHERE order_id=?',[o.id]));
  });
