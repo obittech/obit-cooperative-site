@@ -93,7 +93,7 @@ messages are enabled.
 
 Main includes PR #62 (combined staff payment confirmation and approval), PR #68
 (registration credentials), and later reviewed-duplicate and member-finance
-changes. Both member-finance and WhatsApp migrations and routers are retained.
+changes through PR #73, including locked savings plans and equipment loans. Both member-finance and WhatsApp migrations and routers are retained.
 There is one activation helper, rather than separate WhatsApp account creation.
 It refuses privileged, suspended and ambiguous contact matches. Saved registration
 credentials cannot overwrite an existing user. Referral awards remain separate
