@@ -60,7 +60,7 @@ test('Membership always targets the cooperative and Marketplace has a separate s
   for (const page of ['index.html', 'apply.html', 'portal.html', 'news.html', 'news-membership.html', 'news-selling.html', 'news-opportunity-checklist.html']) {
     const html = fs.readFileSync(path.join(root, 'frontend', page), 'utf8');
     const nav = html.match(/<nav class="main-nav"[\s\S]*?<\/nav>/)[0];
-    assert.match(nav, /href="https:\/\/obitcooperative.com\/apply\.html">Become a Member</);
+    assert.match(nav, /href="https:\/\/obitcooperative.com\/apply\.html\?new=1">Become a Member</);
     assert.match(nav, /href="https:\/\/marketplace.obitcooperative.com\/">Marketplace</);
   }
 });
