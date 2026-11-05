@@ -96,8 +96,8 @@ function renderMembershipOutcome() {
   memberId.textContent = active && state.application.member_code ? `Member ID: ${state.application.member_code}` : '';
   const loginButton = document.getElementById('btnMemberFinanceLogin');
   loginButton.style.display = active ? '' : 'none';
-  loginButton.textContent = state.application.has_login_credentials === false ? 'Set Up Your Login' : 'Log In to Finance';
-  loginButton.href = state.application.has_login_credentials === false ? 'portal.html?setup=1&next=finance' : 'https://finance.obitcooperative.com/';
+  loginButton.textContent = state.application.has_login_credentials === false ? 'Set Up Your Login' : 'Log In';
+  loginButton.href = state.application.has_login_credentials === false ? 'portal.html?setup=1&next=finance' : 'portal.html';
   document.getElementById('memberFinanceLoginHelp').style.display = active ? '' : 'none';
   document.getElementById('memberFinanceLoginHelp').textContent = state.application.has_login_credentials === false
     ? 'Set your username and password once, then sign in to Finance.'

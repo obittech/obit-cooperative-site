@@ -56,7 +56,7 @@ document.getElementById('btnLogin').addEventListener('click', async () => {
     const res = await OBIT.post('/api/auth/login', { identifier, password });
     if (res.role !== 'member') throw new Error('This login is for members. Staff should use the admin console.');
     OBIT.saveSession('member', res.token);
-    await loadDashboard();
+    window.location.assign('index.html');
   } catch (err) { showAlert(err.message); }
 });
 
