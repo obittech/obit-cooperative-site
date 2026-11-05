@@ -93,6 +93,12 @@ function paintMarket(rows){
  grid.querySelectorAll('[data-watch]').forEach(button=>button.addEventListener('click',()=>{openProduct(Number(button.dataset.watch));document.getElementById('productDetails').querySelector('[data-play-product-video]')?.click();}));
  grid.querySelectorAll('[data-product]').forEach(button=>button.addEventListener('click',()=>openProduct(Number(button.dataset.product))));
 }
+function filterSourceProducts(min,max){
+ const section=document.getElementById('source-products');if(!section)return;const grid=section.querySelector('.source-grid'),q=document.getElementById('marketSearch').value.trim().toLowerCase(),sort=document.getElementById('marketSort').value,seller=document.getElementById('sellerFilter').value;
+ const cards=Array.from(grid.querySelectorAll('[data-source-product]'));let count=0;
+ for(const card of cards){const category=card.querySelector('.source-category').textContent.trim().toLowerCase(),title=card.querySelector('h3').textContent.toLowerCase(),price=Number(card.dataset.priceKobo)/100;const matches=!savedView&&!promotionsOnly&&!officialOnly&&!videosOnly&&!seller&&(selectedCategory==='All products'||category===selectedCategory.toLowerCase())&&(!q||title.includes(q))&&price>=min&&price<=max;card.hidden=!matches;if(matches)count++;}
+ cards.sort((a,b)=>sort==='price-low'?Number(a.dataset.priceKobo)-Number(b.dataset.priceKobo):sort==='price-high'?Number(b.dataset.priceKobo)-Number(a.dataset.priceKobo):Number(a.dataset.sourceProduct)-Number(b.dataset.sourceProduct));for(const card of cards)grid.append(card);section.hidden=count===0;section.querySelector('.source-count').textContent=count+' product'+(count===1?'':'s')+' to explore';
+}
 async function loadMarket(){
  clearTimeout(catalogTimer);const sequence=++catalogSequence;
  const alert=document.getElementById('marketAlert');alert.textContent='';
@@ -102,6 +108,7 @@ async function loadMarket(){
   const min=minRaw===''?0:Number(minRaw),max=maxRaw===''?3000000:Number(maxRaw);
   if(!Number.isFinite(min)||!Number.isFinite(max)||min<0||max<min||max>3000000)throw Error('Enter a valid price range up to ₦3,000,000.');
   document.getElementById('filterError').textContent='';
+  filterSourceProducts(min,max);
   const params=new URLSearchParams({page:String(catalogPage),page_size:'24',q:document.getElementById('marketSearch').value.trim(),category:selectedCategory,sort:document.getElementById('marketSort').value,seller:document.getElementById('sellerFilter').value,min_kobo:String(Math.round(min*100)),max_kobo:String(Math.round(max*100))});
   if(videosOnly)params.set('videos','1');
   if(savedView)params.set('ids',saved.join(','));
@@ -189,7 +196,7 @@ document.getElementById('productDialog').addEventListener('cancel',()=>MarketVid
 document.getElementById('productDialog').addEventListener('close',()=>MarketVideo.stop(document.getElementById('productDetails')));
 document.getElementById('closeProduct').addEventListener('click',closeProductDetails);
 document.getElementById('btnRefresh').addEventListener('click',()=>{loadMarket();loadSeller();});
-document.getElementById('globalSearch').addEventListener('submit',event=>{event.preventDefault();renderMarket();document.getElementById('shop').scrollIntoView({block:'start'});});
+document.getElementById('globalSearch').addEventListener('submit',event=>{event.preventDefault();renderMarket();scrollSearchResults();});
 for(const id of ['priceMin','priceMax'])document.getElementById(id).addEventListener('input',renderMarket);
 document.getElementById('sellerFilter').addEventListener('change',renderMarket);
 document.getElementById('wishlistButton').addEventListener('click',()=>{savedView=!savedView;updateBadges();renderMarket();document.getElementById('shop').scrollIntoView({block:'start'});});
@@ -199,9 +206,10 @@ document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',
 document.getElementById('bulkButton').addEventListener('click',()=>document.getElementById('bulkDialog').showModal());
 document.getElementById('bulkForm').addEventListener('submit',event=>{event.preventDefault();const f=new FormData(event.target);const q=Number(f.get('quantity'));if(!Number.isInteger(q)||q<1||q>100000)return;const text=['OBIT MARKET · BULK ENQUIRY DRAFT','Not an order or confirmed quotation.','Product: '+f.get('product'),'Quantity: '+q,'Delivery location: '+f.get('location'),'Requirements: '+f.get('notes'),'Prepared: '+new Date().toISOString(),'Contact: admin@obitcooperative.com'].join('\n');document.getElementById('bulkDraftWrap').hidden=false;document.getElementById('bulkDraft').value=text;const url=URL.createObjectURL(new Blob([text],{type:'text/plain'}));const a=document.createElement('a');a.href=url;a.download='Obit_Market_Enquiry.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);document.getElementById('bulkStatus').textContent='Draft prepared below and download requested. You can copy the text if your browser blocks the download. No message was sent.';});
 document.getElementById('categoryShowcase').innerHTML=categories.slice(1).map(c=>`<button type="button" data-showcase="${escapeHtml(c)}">${productArt(c)}<b>${escapeHtml(c)}</b><span>Explore category →</span></button>`).join('');
-function chooseCategory(c){savedView=false;selectedCategory=c;renderCategories();updateBadges();renderMarket();document.getElementById('shop').scrollIntoView({block:'start'});}
+function scrollSearchResults(){const min=Number(document.getElementById('priceMin').value||0),max=Number(document.getElementById('priceMax').value||3000000);filterSourceProducts(min,max);const source=document.getElementById('source-products');(source&&!source.hidden?source:document.getElementById('shop')).scrollIntoView({block:'start'});}
+function chooseCategory(c){savedView=false;selectedCategory=c;renderCategories();updateBadges();renderMarket();scrollSearchResults();}
 document.querySelectorAll('[data-showcase]').forEach(b=>b.addEventListener('click',()=>chooseCategory(b.dataset.showcase)));
-document.querySelectorAll('[data-quick-category]').forEach(b=>b.addEventListener('click',()=>chooseCategory(b.dataset.quickCategory)));
+document.querySelectorAll('[data-quick-category]').forEach(b=>b.addEventListener('click',event=>{event.preventDefault();chooseCategory(b.dataset.quickCategory);}));
 const initialSeller=new URLSearchParams(location.search).get('seller');if(initialSeller&&/^[1-9]\d*$/.test(initialSeller)){const option=new Option('Selected store',initialSeller);document.getElementById('sellerFilter').add(option);document.getElementById('sellerFilter').value=initialSeller;}
 renderCategories();updatePlan();updateBadges();loadMarket();loadSeller();
 
