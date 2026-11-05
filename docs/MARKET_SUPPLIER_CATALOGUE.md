@@ -22,3 +22,13 @@ Published source keys are immutable. To revise an offer, pause the old listing u
 This release also includes previously prepared versioned purchase terms and settlement-review checks. The commerce migration is additive for SQLite and PostgreSQL. Existing buyers and sellers are preserved. Automated settlement remains disabled. Supplier checklists do not execute transfers.
 
 Run marketplace regressions and frontend tests. CI must validate PostgreSQL before merge. After deployment, verify staff-only routes reject buyer sessions, import the research batch, check it stays private, and complete one authorised supplier listing review before live sales.
+
+## Supplier CSV workflow
+
+Download the CSV template from Admin → Market Listings. Suppliers can provide a file using the template. Staff can load that file, review the Naira costs and 30% marked-up prices, then save private drafts. Exports help staff update existing drafts using their stable source keys. Files stay local until the explicit save action sends parsed products to Obit's authenticated API.
+
+Required columns: source_key, supplier, source_url, title, description. Optional columns: category, image_url, cost_naira, quantity, delivery_days, seller_member_id. Use decimal Naira amounts with at most two decimal places. Blank costs remain unknown and blank quantities become zero. Import applies 30% markup and zero extra handling. It never marks agreements, image permissions or stock checks as confirmed. Maximum 100 products and 2 MB per import. Duplicate keys, broken quoting, malformed prices and invalid stock quantities are rejected. Spreadsheet formula prefixes are escaped on export.
+
+This is file-based catalogue exchange. It does not connect an external supplier account or establish an automated feed. No supplier messages or applications are submitted.
+
+The public sourcing product cards now follow the storefront's search, category, price range and price sorting. They remain separate from stock-backed member listings and do not appear as Official stores, promotions or saved inventory.
