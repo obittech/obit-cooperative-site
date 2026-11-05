@@ -83,7 +83,7 @@ meRouter.post('/api/me/contribution-plans', requireAuth('member'), async (req, r
   const id=await atomic(async()=>{
     await run('UPDATE members SET status=status WHERE id=?',[member.id]);
     const r=await run("INSERT INTO contribution_plans (member_id,amount,amount_kobo,frequency,purpose,target_amount,target_amount_kobo,status) VALUES (?,?,?,?,?,?,?,'PROPOSED')",[member.id,amountKobo/100,amountKobo,frequency,purpose,targetKobo/100,targetKobo]);
-    await run('INSERT INTO savings_plan_terms (plan_id,lock_months,business_type,equipment) VALUES (?,?,?,?)',[r.lastInsertRowid,lock_months,purpose==='Equipment'?business_type:'',purpose==='Equipment'?equipment:'']);
+    await run('INSERT INTO savings_plan_terms (plan_id,lock_months,business_type,equipment) VALUES (?,?,?,?) RETURNING plan_id AS id',[r.lastInsertRowid,lock_months,purpose==='Equipment'?business_type:'',purpose==='Equipment'?equipment:'']);
     return r.lastInsertRowid;
   });
   res.json(201,{id,status:'PROPOSED'});
