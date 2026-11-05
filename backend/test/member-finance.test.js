@@ -32,7 +32,7 @@ test('lock, plan ownership, charge and confirmed equipment eligibility are enfor
  await assert.rejects(start(u,input),e=>e.status===409);
  await run('UPDATE savings_plan_terms SET maturity_ms=? WHERE plan_id=?',[Date.now()-1,plan.id]);
  await assert.rejects(start(u,{...input,accept_fee:false}),e=>e.status===400);
- const w=await start(u,input);assert.equal(w.fee_kobo,1000);assert.equal(w.payout_kobo,9000);
+ const w=await start(u,input);assert.equal(Number(w.fee_kobo),1000);assert.equal(Number(w.payout_kobo),9000);
  await assert.rejects(loan(),e=>e.status===409);
  await call('POST',`/api/admin/finance-requests/${w.id}/reject`,{note:'Member cancelled withdrawal'},admin.token);
  const [a,b]=await Promise.all([loan(),loan()]);assert.equal(a.id,b.id);assert.equal(Number(a.requested_kobo),100000);
