@@ -294,6 +294,7 @@ async function refreshReferralBonuses(token) {
 }
 
 async function refreshWithdrawals(token) {
+  await refreshMemberFinanceRequests(token);
   const summary = await OBIT.get('/api/admin/finance/summary', { token });
   document.getElementById('financeCards').innerHTML = `
     <div class="card"><div class="eyebrow green">VERIFIED CONTRIBUTIONS</div><h2>₦${Number(summary.verified_contributions.total || 0).toLocaleString()}</h2></div>
@@ -413,3 +414,21 @@ async function refreshBankPayments(token){
  root.querySelectorAll('[data-confirm-bank]').forEach(f=>{f.querySelector('[data-credit-refund-review]').addEventListener('click',async()=>{if(!f.reportValidity())return;const buttons=[...f.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);try{await OBIT.post(`/api/admin/market/orders/${f.dataset.confirmBank}/bank-transfer/refund-review`,{bank_reference:f.elements.bank_reference.value,amount_kobo:Number(f.dataset.amount),bank_credit_checked:f.elements.checked.checked},{token});await refreshBankPayments(token);await refreshMarketOrders(token);}catch(err){f.querySelector('[role=status]').textContent=err.message;buttons.forEach(b=>b.disabled=false);}});f.addEventListener('submit',async e=>{e.preventDefault();const b=f.querySelector('button');b.disabled=true;try{await OBIT.post(`/api/admin/market/orders/${f.dataset.confirmBank}/bank-transfer/confirm`,{bank_reference:f.elements.bank_reference.value,amount_kobo:Number(f.dataset.amount),bank_credit_checked:f.elements.checked.checked},{token});await refreshBankPayments(token);await refreshMarketOrders(token);}catch(err){f.querySelector('[role=status]').textContent=err.message;b.disabled=false;}});});
  }catch(e){root.textContent=e.message;}
 }
+
+async function refreshMemberFinanceRequests(token) {
+  const rows = await OBIT.get('/api/admin/finance-requests', { token });
+  const box = document.getElementById('memberFinanceRequests');
+  box.innerHTML = rows.map(r => `<article class="card"><h3>${escapeMarket(r.kind)} · ₦${(Number(r.amount_kobo)/100).toLocaleString('en-NG')}</h3><p>${escapeMarket(r.full_legal_name)} · ${escapeMarket(r.member_code)} · ${escapeMarket(r.phone)}</p><p>${escapeMarket(r.reference)} · ${escapeMarket(r.status)}</p><p>${escapeMarket(r.bank_name)} · ${escapeMarket(r.account_name)} · ${escapeMarket(r.account_number)} · ${escapeMarket(r.designation)}</p>${r.status === 'REPORTED' ? `<form data-finance-request="${r.id}"><label>Bank transaction reference<input name="reference" minlength="6" maxlength="120" required autocomplete="off"></label><label><input type="checkbox" name="checked" required> ${r.kind === 'DEPOSIT' ? 'Bank credit confirmed' : 'Withdrawal paid to the recipient shown above'}</label><button class="btn" type="submit">${r.kind === 'DEPOSIT' ? 'Confirm Deposit' : 'Record Paid Withdrawal'}</button><p role="status"></p><label>Reason if rejecting<input name="rejection" maxlength="300"></label><button class="btn btn-secondary" type="button" data-finance-reject="${r.id}">Reject unconfirmed request</button></form>` : ''}</article>`).join('') || '<p>No deposit or manual withdrawal requests.</p>';
+  box.querySelectorAll('[data-finance-request]').forEach(form => form.addEventListener('submit', async e => {
+    e.preventDefault(); const row = rows.find(r => String(r.id) === form.dataset.financeRequest); const button = form.querySelector('button'); button.disabled = true;
+    try { await OBIT.post(`/api/admin/finance-requests/${row.id}/confirm`, {amount_kobo:Number(row.amount_kobo), bank_reference:form.elements.reference.value.trim(),confirmed:form.elements.checked.checked}, {token}); await refreshWithdrawals(token); }
+    catch (err) { form.querySelector('[role="status"]').textContent=err.message; button.disabled=false; }
+  }));
+}
+
+document.getElementById('memberFinanceRequests').addEventListener('click', async e => {
+  const button=e.target.closest('[data-finance-reject]');if(!button)return;
+  const form=button.closest('form');button.disabled=true;
+  try {const token=OBIT.getSession('staff');await OBIT.post(`/api/admin/finance-requests/${button.dataset.financeReject}/reject`,{note:form.elements.rejection.value.trim()},{token});await refreshWithdrawals(token);}
+  catch(err){form.querySelector('[role="status"]').textContent=err.message;button.disabled=false;}
+});
