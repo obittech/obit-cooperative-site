@@ -4,6 +4,7 @@ import {heldQuantity} from './market-stock.js';
 import {validateRequestPickup} from './market-delivery.js';
 import {audit} from '../utils/audit.js';
 import {allocateBankCredit} from './bank-credit.js';
+export const PURCHASE_TERMS_VERSION='2026-11-05-v1';
 export function bankTransferConfig(){
  const bank_name=String(process.env.MARKET_TRANSFER_BANK_NAME||'').trim(),account_name=String(process.env.MARKET_TRANSFER_ACCOUNT_NAME||'').trim(),account_number=String(process.env.MARKET_TRANSFER_ACCOUNT_NUMBER||'').trim();
  return {available:process.env.MARKET_TRANSFER_ENABLED==='true'&&bank_name.length>1&&account_name.length>2&&/^\d{10}$/.test(account_number),bank_name,account_name,account_number,whatsapp:'2348030567787'};
@@ -14,8 +15,10 @@ export async function startBankTransfer(buyerId,id,body){
  return atomic(async()=>{
   const initial=await orderFor(buyerId,id);await run('UPDATE market_purchase_orders SET status=status WHERE id=?',[initial.id]);const o=await orderFor(buyerId,id);
   if(body.expected_total_kobo!==Number(o.total_kobo))throw new HttpError(409,'Refresh and review the order total.');
+  if(await get('SELECT sd.id FROM market_supplier_drafts sd JOIN market_purchase_order_items i ON i.listing_id=sd.listing_id WHERE i.order_id=? AND sd.valid_until_ms<=?',[o.id,Date.now()]))throw new HttpError(409,'Supplier price and stock checks expired. Contact support for a fresh quote before paying.');
   const old=await get('SELECT * FROM market_bank_payments WHERE order_id=?',[o.id]);
   if(old){if(old.status==='READY'&&(o.status!=='AWAITING_PAYMENT'||Number(o.expires_ms)<=Date.now()))throw new HttpError(409,'Reservation expired. Contact support if you have transferred money.');return result(o,old);}
+  if(body.terms_accepted!==true||body.terms_version!==PURCHASE_TERMS_VERSION)throw new HttpError(400,'Review and accept the current purchase terms before opening bank transfer.');
   const cfg=bankTransferConfig();if(!cfg.available)throw new HttpError(503,'Bank-transfer checkout is awaiting confirmation of the company receiving account.');
   const items=await all('SELECT listing_id,quantity FROM market_purchase_order_items WHERE order_id=? ORDER BY listing_id',[o.id]);
   if(!items.length)throw new HttpError(409,'This order contains no products.');
@@ -25,6 +28,7 @@ export async function startBankTransfer(buyerId,id,body){
   if(await get('SELECT id FROM market_payment_attempts WHERE order_id=?',[o.id]))throw new HttpError(409,'Another payment attempt exists. Contact support before paying.');
   await validateRequestPickup((await get('SELECT request_id FROM market_request_shops WHERE id=?',[o.shop_id])).request_id);
   await run("INSERT INTO market_bank_payments (order_id,status,amount_kobo,bank_name,account_name,account_number,created_ms) VALUES (?,'READY',?,?,?,?,?)",[o.id,o.total_kobo,cfg.bank_name,cfg.account_name,cfg.account_number,Date.now()]);
+  await run('INSERT INTO market_order_terms (order_id,version,buyer_id,total_kobo,accepted_ms) VALUES (?,?,?,?,?)',[o.id,PURCHASE_TERMS_VERSION,buyerId,o.total_kobo,Date.now()]);
   await run('UPDATE market_purchase_orders SET expires_ms=? WHERE id=?',[Date.now()+45*60000,o.id]);
   return result(o,await get('SELECT * FROM market_bank_payments WHERE order_id=?',[o.id]));
  });

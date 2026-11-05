@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import {importSupplierDrafts,supplierDrafts,publishSupplierDraft} from '../services/market-suppliers.js';
+import {verifySellerPayout,settlementReview} from "../services/market-settlement-review.js";
 import {readAftercare,updateManualDelivery,requestReturn,decideReturn,recordRefund} from '../services/market-aftercare.js';
 import {verifyCreditForRefund,bankTransferConfig,startBankTransfer,claimBankTransfer,bankPaymentOperations,confirmBankTransfer} from '../services/market-bank-transfer.js';
 import {submitVideo,videoReviews,reviewVideo} from '../services/market-media.js';
@@ -92,3 +95,13 @@ marketCommerceRouter.get('/api/admin/market/bank-transfers',privateResponse,requ
 marketCommerceRouter.post('/api/admin/market/orders/:id/bank-transfer/confirm',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await confirmBankTransfer(req.user.id,p.id,req.body)));
 
 marketCommerceRouter.post('/api/admin/market/orders/:id/bank-transfer/refund-review',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await verifyCreditForRefund(req.user.id,p.id,req.body)));
+
+// Staff-only evidence and settlement review. No transfer or provider release.
+marketCommerceRouter.post('/api/admin/market/sellers/:id/payout-verification',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await verifySellerPayout(req.user.id,p.id,req.body)));
+marketCommerceRouter.get('/api/admin/market/orders/:id/settlement-review',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await settlementReview(req.user.id,p.id)));
+
+marketCommerceRouter.get('/api/admin/market/supplier-drafts',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await supplierDrafts(req.user.id)));
+marketCommerceRouter.post('/api/admin/market/supplier-drafts/import',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(201,await importSupplierDrafts(req.user.id,req.body.items)));
+marketCommerceRouter.post('/api/admin/market/supplier-drafts/:id/prepare',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await publishSupplierDraft(req.user.id,p.id)));
+
+marketCommerceRouter.get('/api/admin/market/supplier-research',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,JSON.parse(fs.readFileSync(new URL('../../data-catalogue/supplier-research-2026-11-05.json',import.meta.url),'utf8'))));

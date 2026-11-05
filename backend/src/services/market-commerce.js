@@ -14,7 +14,8 @@ const BASE=` FROM market_listings l JOIN members m ON m.id=l.seller_member_id
  JOIN communities c ON c.id=l.community_id LEFT JOIN market_inventory i ON i.listing_id=l.id
  LEFT JOIN market_stores s ON s.seller_member_id=l.seller_member_id AND s.status='APPROVED'
  LEFT JOIN market_promotions p ON p.listing_id=l.id LEFT JOIN market_listing_videos v ON v.listing_id=l.id`;
-const ACTIVE="l.status='ACTIVE' AND m.status='ACTIVE' AND c.status='ACTIVE' AND c.slug='obit-cooperative'";
+const activePredicate="NOT EXISTS (SELECT 1 FROM market_supplier_drafts sd WHERE sd.listing_id=l.id AND sd.valid_until_ms<=__SUPPLIER_NOW__) AND l.status='ACTIVE' AND m.status='ACTIVE' AND c.status='ACTIVE' AND c.slug='obit-cooperative'";
+function active(){return activePredicate.replace('__SUPPLIER_NOW__',String(Date.now()));}
 const FIELDS='l.id,l.seller_member_id,l.title,l.description,l.category,l.price_kobo,l.currency,l.image_url,l.created_at,v.video_url,v.description AS video_description,v.status AS video_status,i.quantity AS on_hand_quantity,s.name AS store_name,s.description AS store_description,s.official AS store_official,p.label AS promo_label,p.price_kobo AS promo_price,p.base_kobo AS promo_base,p.starts_ms,p.ends_ms,p.enabled AS promo_enabled';
 function sale(row,now=Date.now()){return Number(row.promo_enabled)===1 && Number(row.starts_ms)<=now && Number(row.ends_ms)>now && Number(row.promo_base)===Number(row.price_kobo) && Number(row.promo_price)<Number(row.price_kobo);}
 export function product(row,now=Date.now()) {
@@ -40,7 +41,7 @@ export function itemsInput(input, allowEmpty=false) {
 export async function catalogue(search) {
   const page=integer(search.get('page')||1,1,1000000,'page'), size=integer(search.get('page_size')||24,1,48,'page size');
   const q=(search.get('q')||'').trim();if(q.length>120)throw new HttpError(400,'Search is too long');
-  const now=Date.now(), filters=[ACTIVE], args=[];
+  const now=Date.now(), filters=[active()], args=[];
   const price=`(CASE WHEN ${PROMO_ACTIVE.replaceAll('CAST(? AS BIGINT)',String(now))} THEN p.price_kobo ELSE l.price_kobo END)`;
   for(const key of ['official','promotions','videos'])if(search.has(key)&&!['0','1'].includes(search.get(key)))throw new HttpError(400,'Invalid shop filter');
   if(search.get('videos')==='1')filters.push("v.status='APPROVED'");
@@ -63,13 +64,13 @@ export async function catalogue(search) {
   const where=' WHERE '+filters.join(' AND ');
   const total=Number((await get('SELECT COUNT(*) AS n'+BASE+where,args)).n);
   const rows=await all('SELECT '+FIELDS+','+heldStockSql()+' AS reserved_quantity'+BASE+where+' ORDER BY '+order+' LIMIT ? OFFSET ?',[...args,size,(page-1)*size]);
-  const shops=await all('SELECT DISTINCT l.seller_member_id,s.name,s.description,s.official'+BASE+' WHERE '+ACTIVE+' ORDER BY l.seller_member_id LIMIT 500');
+  const shops=await all('SELECT DISTINCT l.seller_member_id,s.name,s.description,s.official'+BASE+' WHERE '+active()+' ORDER BY l.seller_member_id LIMIT 500');
   return {items:rows.map(r=>product(r,now)),total,page,page_size:size,pages:Math.ceil(total/size),shops:shops.map(r=>({id:Number(r.seller_member_id),name:r.name||'Member shop '+r.seller_member_id,description:r.description||'',official:Number(r.official)===1}))};
 }
 export async function preview(input) {
   const items=itemsInput(input,true);
   if(!items.length)return {items:[],lines:[],total_kobo:0,count:0};
-  const rows=await all('SELECT '+FIELDS+','+heldStockSql()+' AS reserved_quantity'+BASE+' WHERE '+ACTIVE+' AND l.id IN ('+items.map(()=>'?').join(',')+')',items.map(i=>i.id));
+  const rows=await all('SELECT '+FIELDS+','+heldStockSql()+' AS reserved_quantity'+BASE+' WHERE '+active()+' AND l.id IN ('+items.map(()=>'?').join(',')+')',items.map(i=>i.id));
   const now=Date.now();
   const byId=new Map(rows.map(r=>[Number(r.id),r]));let total=0,count=0;
   const lines=items.map(item=>{
