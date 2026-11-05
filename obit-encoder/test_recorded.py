@@ -10,7 +10,7 @@ from recorded import YouTube, YouTubeError, CHANNEL, session_at, wait_for_record
 class DailyEventTests(unittest.TestCase):
     def fixture(self, channel=CHANNEL, broadcasts=None):
         self.posts=[]
-        state={'id':'new-event','status':{'privacyStatus':'unlisted','lifeCycleStatus':'ready'},'contentDetails':{'boundStreamId':'saved-stream','enableAutoStart':True,'enableAutoStop':True}}
+        state={'id':'new-event','status':{'privacyStatus':'unlisted','lifeCycleStatus':'ready'},'contentDetails':{'boundStreamId':'saved-stream','enableAutoStart':False,'enableAutoStop':True}}
         def handle(request):
             if request.url.host=='oauth2.googleapis.com':
                 return httpx.Response(200,json={'access_token':'test-token'})
@@ -147,7 +147,7 @@ class LiveStartTests(unittest.TestCase):
         youtube=YouTube(Mock()); youtube.prepared_id='event'; youtube.stream_id='stream'; youtube.visibility='public'
         youtube.authorize=Mock()
         youtube.broadcast_details=Mock(return_value={'id':'event','snippet':{'channelId':channel},
-            'status':{'lifeCycleStatus':lifecycle,'privacyStatus':visibility},'contentDetails':{'boundStreamId':bound,'monitorStream':{'enableMonitorStream':False}}})
+            'status':{'lifeCycleStatus':lifecycle,'privacyStatus':visibility},'contentDetails':{'enableAutoStart':False,'boundStreamId':bound,'monitorStream':{'enableMonitorStream':False}}})
         youtube.request=Mock(side_effect=[{'items':[{'id':'stream','status':{'streamStatus':'active' if active else 'inactive'}}]},
             {'id':'event','status':{'lifeCycleStatus':'liveStarting'}}])
         return youtube
@@ -229,14 +229,14 @@ class RejectedTransitionTests(unittest.TestCase):
     def test_rejection_reads_state_once_and_never_retries_live(self):
         youtube=self.fixture()
         youtube.request.side_effect=[{'items':[{'id':'stream','status':{'streamStatus':'active'}}]},YouTubeError('HTTP 403')]
-        youtube.broadcast_details.return_value['contentDetails'].update(enableAutoStart=True,enableAutoStop=True)
+        youtube.broadcast_details.return_value['contentDetails'].update(enableAutoStart=False,enableAutoStop=True)
         with patch('sys.stdout',new_callable=io.StringIO) as output:
             with self.assertRaisesRegex(YouTubeError,'HTTP 403'):
                 youtube.start_prepared_event('event')
             youtube.start_prepared_event('event')
         self.assertEqual(youtube.broadcast_details.call_count,2)
         self.assertEqual([c.args[0] for c in youtube.request.call_args_list],['GET','POST'])
-        self.assertIn('broadcast=ready monitor=disabled auto_start=enabled auto_stop=enabled binding=same',output.getvalue())
+        self.assertIn('broadcast=ready monitor=disabled auto_start=disabled auto_stop=enabled binding=same',output.getvalue())
 
     def test_rejected_testing_stage_never_repeats_post(self):
         youtube=self.fixture()
@@ -270,3 +270,11 @@ class RejectedTransitionTests(unittest.TestCase):
 
 if __name__=='__main__' : unittest.main()
 
+
+class ManualStartModeTests(unittest.TestCase):
+    def test_automatic_start_event_never_receives_manual_transition(self):
+        youtube=LiveStartTests().fixture()
+        youtube.broadcast_details.return_value['contentDetails']['enableAutoStart']=True
+        with self.assertRaisesRegex(YouTubeError,'Automatic-start event preserved'):
+            youtube.start_prepared_event('event')
+        youtube.request.assert_not_called()
