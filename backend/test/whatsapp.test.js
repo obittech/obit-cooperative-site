@@ -89,7 +89,7 @@ test('wrong amount, wrong chat, disabled approval, sandbox KYC and blocked admin
  }
 });
 test('a bank credit already allocated elsewhere cannot activate a member',async()=>{
- const a=await fixture(),ref='BANK-'+id();await run("INSERT INTO bank_credit_allocations(bank_reference,resource_type,resource_id) VALUES(?,'MARKET',123)",[ref]);
+ const a=await fixture(),ref='BANK-'+id();await run("INSERT INTO bank_credit_allocations(bank_reference,resource_type,resource_id) VALUES(?,'MARKET',123) RETURNING bank_reference",[ref]);
  await processMessage(command(a.ref,ref),{echo:true});assert.equal(await status(a),'PAYMENT_PENDING');
 });
 test('administrator/member collision rolls back payment and bank allocation',async()=>{
@@ -132,7 +132,11 @@ async function call(router, method, path, body = {}, token = '') {
  return res.body;
 }
 test('WhatsApp approval retains registration credentials, supports every login identifier and awards referral once',async()=>{
- const sponsor=await get("SELECT * FROM members WHERE status='ACTIVE' ORDER BY id LIMIT 1");
+ const sponsorPhone='080'+crypto.randomInt(10000000,99999999);
+ const sponsorApp=await fixture({phone:sponsorPhone});
+ await processMessage(command(sponsorApp.ref),{echo:true,to:'234'+sponsorPhone.slice(1)});
+ const sponsor=await get('SELECT * FROM members WHERE application_id=?',[sponsorApp.appId]);
+ assert.ok(sponsor);
  const phone='080'+crypto.randomInt(10000000,99999999),to='234'+phone.slice(1);
  const username='wa'+crypto.randomBytes(8).toString('hex'),password='Synthetic-WhatsApp-Password!';
  const app=await call(applicationsRouter,'POST','/api/applications/register',{
