@@ -1,3 +1,4 @@
+import {SAVINGS_TYPES,EQUIPMENT,plans as savingsPlans} from '../services/savings-policy.js';
 // routes/me.js — Member Portal Beta.
 // Contribution-plan endpoints exist per the handover's API list, but they are
 // COMING NEXT: creating a plan here only records member intent (status
@@ -73,24 +74,24 @@ meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
 
 meRouter.post('/api/me/contribution-plans', requireAuth('member'), async (req, res) => {
   const member = await memberForUser(req.user.id);
-  const { amount, frequency, purpose, target_amount } = req.body || {};
-  if (!amount || !frequency || !purpose) throw new HttpError(400, 'amount, frequency and purpose are required');
-
-  const result = await run(
-    `INSERT INTO contribution_plans (member_id, amount, frequency, purpose, target_amount, status)
-     VALUES (?, ?, ?, ?, ?, 'PROPOSED')`,
-    [member.id, amount, frequency, purpose, target_amount ?? null]
-  );
-  res.json(201, {
-    id: result.lastInsertRowid,
-    status: 'PROPOSED',
-    sandbox_note: 'Release 2 (thrift/contributions) is not live yet — this records intent only, no payment collection is triggered.',
+  const { amount, frequency, purpose, target_amount, lock_months, business_type='', equipment='' } = req.body || {};
+  if(member.status!=='ACTIVE')throw new HttpError(403,'Active membership required');
+  if(!SAVINGS_TYPES.includes(purpose)||!['DAILY','WEEKLY','MONTHLY','Daily','Weekly','Monthly'].includes(frequency)||![1,3,6,12].includes(lock_months))throw new HttpError(400,'Choose a savings type, frequency and a lock period of 1, 3, 6 or 12 months');
+  let amountKobo,targetKobo;try{amountKobo=parseNgnToKobo(amount,{maxKobo:10000000000});targetKobo=parseNgnToKobo(target_amount,{maxKobo:10000000000});}catch{throw new HttpError(400,'Enter a positive contribution and target amount');}
+  if(targetKobo<amountKobo)throw new HttpError(400,'Target must be at least the contribution amount');
+  if(purpose==='Equipment'&&!EQUIPMENT[business_type]?.includes(equipment))throw new HttpError(400,'Choose your business type and equipment');
+  const id=await atomic(async()=>{
+    await run('UPDATE members SET status=status WHERE id=?',[member.id]);
+    const r=await run("INSERT INTO contribution_plans (member_id,amount,amount_kobo,frequency,purpose,target_amount,target_amount_kobo,status) VALUES (?,?,?,?,?,?,?,'PROPOSED')",[member.id,amountKobo/100,amountKobo,frequency,purpose,targetKobo/100,targetKobo]);
+    await run('INSERT INTO savings_plan_terms (plan_id,lock_months,business_type,equipment) VALUES (?,?,?,?) RETURNING plan_id AS id',[r.lastInsertRowid,lock_months,purpose==='Equipment'?business_type:'',purpose==='Equipment'?equipment:'']);
+    return r.lastInsertRowid;
   });
+  res.json(201,{id,status:'PROPOSED'});
 });
 
 meRouter.get('/api/me/contribution-plans', requireAuth('member'), async (req, res) => {
   const member = await memberForUser(req.user.id);
-  const plans = await all('SELECT * FROM contribution_plans WHERE member_id = ? ORDER BY created_at DESC', [member.id]);
+  const plans = await savingsPlans(member.id);
   res.json(200, plans);
 });
 
@@ -99,6 +100,8 @@ meRouter.patch('/api/me/contribution-plans/:id/cancel', requireAuth('member'), a
   const id = Number(params.id);
   if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, 'Invalid plan ID');
   await atomic(async () => {
+    await run('UPDATE members SET status=status WHERE id=?',[member.id]);
+    if(await get('SELECT request_id FROM savings_request_terms WHERE plan_id=?',[id]))throw new HttpError(409,'A funded plan cannot be cancelled');
     const result = await run(
       "UPDATE contribution_plans SET status = 'CLOSED' WHERE id = ? AND member_id = ? AND status = 'PROPOSED'",
       [id, member.id]
@@ -184,6 +187,7 @@ meRouter.get('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
 });
 
 meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => {
+  throw new HttpError(409,'Use Finance withdrawals to select a savings plan and accept the 10% charge');
   const member = await memberForUser(req.user.id);
   const { amount, bank_account_id } = req.body || {};
   let amountKobo;
