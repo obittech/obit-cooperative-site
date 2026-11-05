@@ -1,0 +1,6 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');
+const {quote}=require('../frontend/js/market-source-orders.js');
+const product={title:'CORE 500 Dry Iron',priceKobo:5460000,stock:'Supplier preorder · November batch'};
+test('purchase request keeps delivery separate and includes quantity and preorder status',()=>{const q=quote(product,2,'Garki, Abuja FCT');assert.equal(q.subtotal,10920000);assert.match(q.text,/₦109,200\.00/);assert.match(q.text,/Delivery fee: awaiting quote/);assert.match(q.text,/Supplier preorder/);assert.match(q.text,/unpaid request/);assert.equal(new URL(q.url).searchParams.get('text'),q.text);});
+test('reject invalid quantities, missing destinations and unsafe prices',()=>{for(const n of [0,-1,1.5,101,NaN])assert.throws(()=>quote(product,n,'Abuja'));for(const l of ['', 'a','x'.repeat(121)])assert.throws(()=>quote(product,1,l));assert.throws(()=>quote({...product,priceKobo:null},1,'Abuja'));});
+test('user text stays encoded within the WhatsApp text parameter',()=>{const q=quote(product,1,'Abuja & text=change #?');assert.equal(new URL(q.url).searchParams.size,1);assert.match(new URL(q.url).searchParams.get('text'),/Abuja & text=change #\?/);});
