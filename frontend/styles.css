@@ -256,3 +256,6 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   .main-nav.open a:last-child{border-bottom:0}
   .main-nav.open a:hover,.main-nav.open a:focus-visible{background:#edf5ef;border-radius:8px}
 }
+
+/* Keep the cooperative name on its own line at every screen width. */
+.site-header .brand small{display:block;font-size:11px;line-height:1.2;letter-spacing:.02em;margin-top:4px;text-transform:none}
