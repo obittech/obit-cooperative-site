@@ -111,14 +111,16 @@ class YouTube:
             broadcast=self.request('POST','liveBroadcasts',params={'part':'snippet,status,contentDetails'},json={
                 'snippet':{'title':title,'description':DESCRIPTION,'scheduledStartTime':(now+dt.timedelta(seconds=30)).isoformat()},
                 'status':{'privacyStatus':visibility,'selfDeclaredMadeForKids':False},
-                'contentDetails':{'enableAutoStart':True,'enableAutoStop':True,'enableDvr':True,
+                'contentDetails':{'enableAutoStart':False,'enableAutoStop':True,'enableDvr':True,
                                  'monitorStream':{'enableMonitorStream':False},'recordFromStart':True}})
+        if today and broadcast.get('contentDetails',{}).get('enableAutoStart') is not False:
+            raise YouTubeError('Existing automatic-start event preserved; no replay or settings change')
         bound=self.request('POST','liveBroadcasts/bind',params={'part':'id,status,contentDetails','id':broadcast['id'],'streamId':matches[0]['id']})
         if bound.get('contentDetails',{}).get('boundStreamId')!=matches[0]['id']:
             raise YouTubeError('YouTube stream binding was not confirmed')
         details=self.broadcast_details(broadcast['id'],'id,status,contentDetails')
-        if details['status'].get('privacyStatus')!=visibility or not details['contentDetails'].get('enableAutoStart') or not details['contentDetails'].get('enableAutoStop'):
-            raise YouTubeError('YouTube visibility or automatic start/stop was not confirmed')
+        if details['status'].get('privacyStatus')!=visibility or details['contentDetails'].get('enableAutoStart') is not False or not details['contentDetails'].get('enableAutoStop'):
+            raise YouTubeError('YouTube visibility, manual start or automatic stop was not confirmed')
         print('Daily YouTube event prepared: '+broadcast['id'],flush=True)
         self.prepared_id=broadcast['id']
         self.visibility=visibility
@@ -182,6 +184,8 @@ class YouTube:
             details.get('snippet',{}).get('channelId')!=CHANNEL or
             content.get('boundStreamId')!=self.stream_id):
             raise YouTubeError('Prepared event identity, binding or visibility changed; live transition skipped')
+        if content.get('enableAutoStart') is not False:
+            raise YouTubeError('Automatic-start event preserved; manual transition skipped')
         monitor=content.get('monitorStream',{}).get('enableMonitorStream')
         if not isinstance(monitor,bool):
             raise YouTubeError('Monitor stream setting unavailable; transition skipped')
