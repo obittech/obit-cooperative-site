@@ -72,7 +72,7 @@
 
         <div class="tab-row">
           <button class="active" data-tab="queue">Application Queue</button>
-          <button data-tab="withdrawals">Withdrawals</button>
+          <button data-tab="withdrawals">Savings &amp; Withdrawals</button>
           <button data-tab="market">Market Listings</button>
           <button data-tab="reconciliation">Reconciliation</button>
           <button data-tab="audit">Audit Log</button>
@@ -90,6 +90,7 @@
         </div>
 
         <div id="panel-withdrawals" style="display:none">
+          <section class="card"><h2>Member deposits and manual withdrawals</h2><p>Record a deposit after bank credit confirmation. Record a withdrawal only after the recipient has been paid. These actions update savings and issue a receipt. They do not transfer money.</p><div id="memberFinanceRequests"></div></section>
           <div class="grid-2" style="margin-bottom:16px" id="financeCards"></div>
           <div class="table-wrap card">
             <table class="app-table"><thead><tr><th>Member</th><th>Amount</th><th>Verified bank</th><th>Status</th><th>Action</th></tr></thead><tbody id="withdrawalsBody"></tbody></table>
