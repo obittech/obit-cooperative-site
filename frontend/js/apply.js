@@ -149,6 +149,7 @@ function fillReviewSummary(app) {
 
 async function saveProfileAndContinue() {
   clearAlert();
+  if (!window.ObitDOB.validate()) return;
   const required = ['full_legal_name', 'date_of_birth', 'phone', 'email', 'address', 'state', 'lga', 'membership_type'];
   const missing = required.filter((id) => !document.getElementById(id).value);
   if (missing.length) return showAlert('Please fill in all required fields before continuing.');
@@ -410,7 +411,7 @@ document.getElementById('btnVerifyYouverify').addEventListener('click', verifyYo
 document.getElementById('btnInitPayment').addEventListener('click', initPayment);
 
 async function initializeApplicationPage() {
-  document.getElementById('date_of_birth').max = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  window.ObitDOB.init();
   const stateSelect = document.getElementById('state');
   const lgaSelect = document.getElementById('lga');
   stateSelect.addEventListener('change', () => window.ObitLocations.fillLgas(stateSelect, lgaSelect));
@@ -418,6 +419,7 @@ async function initializeApplicationPage() {
   if (!state.applicationId) document.getElementById('sponsor_code').value = launchParams.get('sponsor') || '';
   applyMembershipPathPreset();
   await restoreExistingApplication();
+  window.ObitDOB.restore();
 
   const params = new URLSearchParams(window.location.search);
   if (params.get('payment') === 'return' && state.applicationId) {

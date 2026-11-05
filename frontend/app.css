@@ -176,3 +176,5 @@ table.app-table tr:hover td{background:#fafcfb}
 @media(forced-colors:active){
   #panel-review .consent-option input[type="checkbox"]{appearance:auto;-webkit-appearance:checkbox;background-image:none}
 }
+/* Accessible numeric DOB entry shared by mobile and desktop browsers. */
+.dob-field{border:0;padding:0;margin:0;min-width:0}.dob-field legend{padding:0;margin-bottom:8px;font-weight:600}.dob-boxes{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1.5fr);gap:8px;align-items:end}.dob-boxes label{display:block;min-width:0;font-size:13px}.dob-boxes input{width:100%;min-width:0;font-size:16px;text-align:center;margin-top:5px}.dob-boxes>span{align-self:end;padding-bottom:17px;color:#758479}.dob-field small{display:block;margin-top:8px;line-height:1.5;font-size:12px}.dob-error{color:#b42318}.dob-error:empty{display:none}
