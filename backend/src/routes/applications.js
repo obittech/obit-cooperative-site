@@ -7,6 +7,9 @@ import { Router, HttpError } from '../router.js';
 import { get, run, atomic } from '../db.js';
 import { audit } from '../utils/audit.js';
 import { validateApplicationProfile } from '../utils/application-profile.js';
+import { existingMembershipForApplication, approvedMembershipForApplication } from '../services/membership-approval.js';
+import { registrationUsername, usernameAvailable, applicationLoginInfo } from '../services/registration-login.js';
+import { hashPassword } from '../utils/auth.js';
 
 import { applicationWithSponsor, saveSponsor, validateSavedSponsor, sponsorLocked } from '../services/member-referrals.js';
 
@@ -18,6 +21,31 @@ const EDITABLE_FIELDS = [
   'next_of_kin_name', 'next_of_kin_phone', 'intended_savings_amount',
   'intended_savings_frequency', 'referral_source', 'campaign',
 ];
+
+applicationsRouter.post('/api/applications/register', async (req, res) => {
+  const b = req.body || {};
+  validateApplicationProfile(b);
+  const username = registrationUsername(b.username);
+  if (typeof b.password !== 'string' || b.password.length < 8 || b.password.length > 256) throw new HttpError(422, 'Choose a password of 8 to 256 characters.');
+  if (b.password !== b.password_confirmation) throw new HttpError(422, 'The passwords do not match.');
+  const passwordHash = hashPassword(b.password);
+  const application = await atomic(async () => {
+    await usernameAvailable(username);
+    if (await get('SELECT id FROM users WHERE lower(email) = lower(?) OR phone = ?', [b.email.trim(), b.phone.trim()])) throw new HttpError(409, 'An account already uses this email or phone. Sign in or set up your existing login.');
+    const fields = EDITABLE_FIELDS.filter(key => key in b);
+    const values = fields.map(key => typeof b[key] === 'string' ? b[key].trim() : b[key]);
+    fields.push('interests_json', 'status');
+    values.push(Array.isArray(b.interests) ? JSON.stringify(b.interests) : null, 'APPLICATION_STARTED');
+    const created = await run(`INSERT INTO member_applications (${fields.join(',')}) VALUES (${fields.map(() => '?').join(',')})`, values);
+    const row = await get('SELECT * FROM member_applications WHERE id = ?', [created.lastInsertRowid]);
+    try { await run('INSERT INTO registration_credentials (application_id, username, password_hash) VALUES (?,?,?) RETURNING application_id', [row.id, username, passwordHash]); }
+    catch (err) { if (err.code === '23505' || err.code?.includes('CONSTRAINT')) throw new HttpError(409, 'That username is already registered. Choose another username.'); throw err; }
+    if ('sponsor_code' in b) await saveSponsor(row, b.sponsor_code);
+    await audit(null, 'APPLICATION_STARTED', 'member_applications', row.id, { login_created: true });
+    return { ...await applicationWithSponsor(row), username, has_login_credentials: true };
+  });
+  res.json(201, application);
+});
 
 applicationsRouter.post('/api/applications', async (req, res) => {
   const b = req.body || {};
@@ -118,5 +146,10 @@ applicationsRouter.post('/api/applications/:id/submit', async (req, res, params)
 applicationsRouter.get('/api/applications/:id', async (req, res, params) => {
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
   if (!application) throw new HttpError(404, 'Application not found');
-  res.json(200, await applicationWithSponsor(application));
+  const existing = application.status === 'UNDER_REVIEW' ? await existingMembershipForApplication(application) : null;
+  const member = application.status === 'ACTIVE' ? await approvedMembershipForApplication(application.id) : null;
+  res.json(200, { ...await applicationWithSponsor(application), membership_review_required: Boolean(existing),
+    status: application.status === 'ACTIVE' ? (member?.status || 'UNDER_REVIEW') : application.status,
+    member_code: member?.status === 'ACTIVE' ? member.member_code : null,
+    ...await applicationLoginInfo(application.id) });
 });

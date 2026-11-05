@@ -1,8 +1,9 @@
 // Isolated Monnify sandbox checkout. Live collection is deliberately unavailable.
+import {monnifyReadiness} from './market-monnify-readiness.js';
 export function checkoutConfig(){
  const apiKey=String(process.env.MARKET_MONNIFY_API_KEY||''),key=String(process.env.MARKET_MONNIFY_SECRET_KEY||''),contract=String(process.env.MARKET_MONNIFY_CONTRACT_CODE||'');
  let callback=null;try{const u=new URL(process.env.MARKET_MONNIFY_CALLBACK_URL||'');if(!u.username&&!u.password&&!u.search&&u.pathname.endsWith('/market-account.html')&&(u.protocol==='https:'||(u.protocol==='http:'&&['localhost','127.0.0.1','terminal.local'].includes(u.hostname))))callback=u.href;}catch{}
- const available=['test','development'].includes(process.env.NODE_ENV)&&process.env.MARKET_CHECKOUT_MODE==='test'&&apiKey.startsWith('MK_TEST_')&&key.length>=10&&/^\d{6,30}$/.test(contract)&&!!callback;
+ const available=monnifyReadiness().sandbox_configured;
  return {available,provider:'monnify',mode:available?'test':'off',callback,apiKey,key,contract,reason:available?'Monnify sandbox checkout. No real money or delivery.':'Payment collection is not available.'};
 }
 export function committedSql(order='mo.id'){

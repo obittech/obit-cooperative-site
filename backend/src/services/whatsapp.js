@@ -4,8 +4,7 @@ import {HttpError} from '../router.js';
 import {audit} from '../utils/audit.js';
 import {parseNgnToKobo} from '../utils/money.js';
 import {allocateBankCredit} from './bank-credit.js';
-import {activateReviewedApplication} from './membership-activation.js';
-import {awardReferralBonus} from './member-referrals.js';
+import {activateApprovedMember} from './membership-approval.js';
 
 export const businessPhone='2348030567787';
 const phone=v=>String(v||'').replace(/\D/g,'').replace(/^0(?=\d{10}$)/,'234');
@@ -35,10 +34,10 @@ export function businessReply(text){
  if(/\b(human|agent|staff|complaint|refund|dispute)\b/.test(t))return 'Your message has been marked for an Obit staff member. Please leave the details here. Do not send your password, PIN or verification codes.';
  if(/\b(paid|payment|transfer|receipt|confirmed)\b/.test(t))return 'Thank you. Please send your application or order reference and the payment receipt. Obit staff will check the actual bank credit. A receipt or “I have paid” message alone does not activate membership. Do not send your PIN, password or verification code.';
  if(/\b(solar|kiosk|ffk|investment|returns|loan)\b/.test(t))return 'Obit staff will confirm the current terms and availability for this service. Please tell us which service you need and your location.';
- if(/\b(cooperative|membership|member|join)\b/.test(t))return 'Obit Technologies Multipurpose Cooperative Society Limited supports members through community and technology. Apply at https://obitcooperative.com and follow the identity verification and payment steps shown there. Approved members use their membership code and password for Finance and seller access. Buyers can browse https://marketplace.obitcooperative.com without joining.';
+ if(/\b(cooperative|membership|member|join)\b/.test(t))return 'Obit Technologies Multipurpose Cooperative Society Limited supports members through community and technology. Apply at https://obitcooperative.com and follow the identity verification and payment steps shown there. Approved members can log in immediately with the username and password chosen during registration. Finance also accepts their registered email, phone number or membership code with their password. Existing members without a password can use member credential setup on the website. Buyers can browse https://marketplace.obitcooperative.com without joining.';
  if(/\b(obs|software|technology|technologies|website|automation|business system)\b/.test(t))return 'Obit Technologies Limited provides software and business automation services. OBS has Starter at ₦25,000 monthly for four core systems and Business at ₦100,000 monthly for all eight. Please tell us your business type and what you need help with. Details: https://obittechnologies.com';
- if(/\b(finance|savings|contribution|balance)\b/.test(t))return 'Members can use their cooperative membership code and password at https://finance.obitcooperative.com to view the records available to their account. Please use the portal for private financial details. For a correction, leave your application or membership reference for staff.';
- if(/\b(market|buy|sell|product|order)\b/.test(t))return 'Browse Obit Market at https://marketplace.obitcooperative.com. Buyers can browse without membership. Sellers must be approved cooperative members and sign in using their membership code and password. Staff can help with payment, delivery and order questions.';
+ if(/\b(finance|savings|contribution|balance)\b/.test(t))return 'Members can use their username, registered email, phone number or membership code and password at https://finance.obitcooperative.com to view the records available to their account. Please use the portal for private financial details. For a correction, leave your application or membership reference for staff.';
+ if(/\b(market|buy|sell|product|order)\b/.test(t))return 'Browse Obit Market at https://marketplace.obitcooperative.com. Buyers can browse without membership. Sellers must be approved cooperative members and sign in with their member login and password. Staff can help with payment, delivery and order questions.';
  return 'Hello, this is the Obit automated assistant. Are you asking about 1. Obit Technologies and OBS, 2. Cooperative membership, 3. Finance, or 4. Obit Market? You can also type HUMAN for staff assistance.';
 }
 export async function enqueueWhatsapp(payload,now=Date.now()){
@@ -99,8 +98,7 @@ async function confirmMembership(item,c){
    app.status='UNDER_REVIEW';
    await audit(actor.id,'MEMBERSHIP_TRANSFER_CONFIRMED','member_applications',app.id,{reference:row.reference,channel:'whatsapp'});
   }
-  const member=await activateReviewedApplication(app);
-  await awardReferralBonus(app.id,actor.id);
+  const member=await activateApprovedMember(app,actor.id);
   await audit(actor.id,'APPLICATION_DECISION_APPROVE','member_applications',app.id,{channel:'whatsapp',reference:row.reference});
   return member;
  });
@@ -130,7 +128,7 @@ export async function processWhatsappQueue(fetcher=fetch){
      const recipient=await get('SELECT * FROM whatsapp_contacts WHERE phone=?',[item.to]);
      if(result?.member_code&&!Number(recipient?.opted_out)&&Number(recipient?.last_customer_ms)>Date.now()-23*60*60*1000){
       await run("UPDATE whatsapp_events SET status='SENDING',updated_ms=? WHERE id=?",[Date.now(),event.id]);
-      await sendReply(item.to,`Your Obit Cooperative membership is active. Membership code: ${result.member_code}. Open https://obitcooperative.com to set up your member password. Keep your password and verification codes private.`,c,fetcher);
+      await sendReply(item.to,`Your Obit Cooperative membership is active. Membership code: ${result.member_code}. Log in at https://obitcooperative.com with the username and password chosen during registration. You can also use your registered email, phone number or membership code with your password. If you have not set a password, use member credential setup on the website. Keep your password and verification codes private.`,c,fetcher);
      }
      await run("UPDATE whatsapp_events SET status='DONE',result=?,updated_ms=? WHERE id=?",[result?'Membership approved':'Human takeover',Date.now(),event.id]);
     }else{

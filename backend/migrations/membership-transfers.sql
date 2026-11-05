@@ -12,3 +12,16 @@ CREATE TABLE IF NOT EXISTS bank_credit_allocations (
 INSERT INTO bank_credit_allocations (bank_reference, resource_type, resource_id)
  SELECT bank_reference, 'MARKET', id FROM market_bank_payments WHERE bank_reference IS NOT NULL
  ON CONFLICT(bank_reference) DO NOTHING;
+
+-- Reviewed duplicate applications use the original membership and payment.
+CREATE TABLE IF NOT EXISTS membership_application_links (
+ application_id __INT__ PRIMARY KEY REFERENCES member_applications(id),
+ member_id __INT__ NOT NULL REFERENCES members(id),
+ payment_id __INT__ NOT NULL REFERENCES membership_bank_payments(id),
+ reviewed_by __INT__ NOT NULL REFERENCES users(id), reviewed_ms __INT__ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS registration_credentials (
+ application_id __INT__ PRIMARY KEY REFERENCES member_applications(id),
+ username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL
+);

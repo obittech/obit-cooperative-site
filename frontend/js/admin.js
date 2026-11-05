@@ -31,35 +31,109 @@ document.getElementById('btnAdminActivate').addEventListener('click', async () =
   } catch (err) { showAlert(err.message); }
 });
 
-document.getElementById('btnLogin').addEventListener('click', async () => {
+const adminLoginForm = document.getElementById('adminLoginForm');
+const adminMfaForm = document.getElementById('adminMfaForm');
+const adminMfaCode = document.getElementById('adminMfaCode');
+let pendingAdminUserId = null;
+let adminAuthBusy = false;
+
+function setAdminAuthBusy(busy) {
+  adminAuthBusy = busy;
+  ['btnLogin', 'btnVerifyAdminCode', 'btnResendAdminCode', 'btnChangeAdminLogin'].forEach(id => {
+    document.getElementById(id).disabled = busy;
+  });
+}
+
+function resetAdminLogin() {
+  pendingAdminUserId = null;
+  adminMfaCode.value = '';
+  document.getElementById('loginPassword').value = '';
+  adminMfaForm.hidden = true;
+  adminLoginForm.hidden = false;
+  document.getElementById('btnShowAdminSetup').style.display = '';
+}
+
+async function requestAdminLoginCode() {
+  if (adminAuthBusy) return;
+  setAdminAuthBusy(true);
   const btn = document.getElementById('btnLogin');
-  if (btn.disabled) return;
-  btn.disabled = true;
-  btn.textContent = 'Signing in…';
-  const identifier = document.getElementById('loginIdentifier').value;
-  const password = document.getElementById('loginPassword').value;
+  const resend = document.getElementById('btnResendAdminCode');
+  btn.textContent = 'Signing in...';
+  resend.textContent = 'Sending...';
+  // A new login replaces the previous challenge. Never submit an old code after a resend.
+  pendingAdminUserId = null;
+  adminMfaCode.value = '';
   try {
+    const identifier = document.getElementById('loginIdentifier').value.trim();
+    const password = document.getElementById('loginPassword').value;
     const res = await OBIT.post('/api/auth/login', { identifier, password });
     if (!['staff', 'admin'].includes(res.role)) throw new Error('This login is for staff/admin accounts only.');
     if (res.mfa_required) {
-      const code = prompt('Use the newest 6-digit code from the email titled "Your Obit Admin login code". It expires in 10 minutes. Enter it here:');
-      if (code === null) {
-        showAlert('Login code was not entered. Click Log In to request a new code.');
-        return;
-      }
-      const verified = await OBIT.post('/api/auth/admin-mfa', { user_id: res.user_id, code: code.trim() });
-      OBIT.saveSession('staff', verified.token);
-    } else {
-      OBIT.saveSession('staff', res.token);
+      pendingAdminUserId = res.user_id;
+      adminLoginForm.hidden = true;
+      adminMfaForm.hidden = false;
+      document.getElementById('adminSetup').style.display = 'none';
+      document.getElementById('btnShowAdminSetup').style.display = 'none';
+      showAlert('Login code sent. Enter the newest emailed code in the box below.', 'success');
+      adminMfaCode.focus();
+      return;
     }
+    OBIT.saveSession('staff', res.token);
+    resetAdminLogin();
+    await loadAll();
+  } catch (err) {
+    resetAdminLogin();
+    showAlert(err.message);
+  } finally {
+    setAdminAuthBusy(false);
+    btn.textContent = 'Log In';
+    resend.textContent = 'Send New Code';
+  }
+}
+
+adminLoginForm.addEventListener('submit', event => {
+  event.preventDefault();
+  if (adminLoginForm.reportValidity()) return requestAdminLoginCode();
+});
+document.getElementById('btnResendAdminCode').addEventListener('click', requestAdminLoginCode);
+document.getElementById('btnChangeAdminLogin').addEventListener('click', () => {
+  if (adminAuthBusy) return;
+  resetAdminLogin();
+  document.getElementById('alertBox').textContent = '';
+  document.getElementById('loginPassword').focus();
+});
+
+adminMfaForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (adminAuthBusy) return;
+  const code = adminMfaCode.value.trim();
+  if (!/^[0-9]{6}$/.test(code)) {
+    showAlert('Enter the 6-digit code from your newest admin login email.');
+    adminMfaCode.focus();
+    return;
+  }
+  if (pendingAdminUserId === null) {
+    showAlert('Select Send New Code to request a fresh login code.');
+    return;
+  }
+  setAdminAuthBusy(true);
+  const btn = document.getElementById('btnVerifyAdminCode');
+  btn.textContent = 'Verifying...';
+  try {
+    const verified = await OBIT.post('/api/auth/admin-mfa', { user_id: pendingAdminUserId, code });
+    OBIT.saveSession('staff', verified.token);
+    resetAdminLogin();
+    document.getElementById('alertBox').textContent = '';
     await loadAll();
   } catch (err) {
     showAlert(err.message === 'Invalid or expired admin login code'
-      ? 'That code was not accepted. Click Log In again, then enter the code from the newest admin login email within 10 minutes.'
+      ? 'That code was not accepted. Enter the newest emailed code, or select Send New Code if it has expired.'
       : err.message);
+    adminMfaCode.value = '';
+    adminMfaCode.focus();
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Log In';
+    setAdminAuthBusy(false);
+    btn.textContent = 'Verify Code';
   }
 });
 
@@ -184,16 +258,19 @@ async function refreshQueue(token) {
 async function refreshMembershipTransfers(token) {
   const rows = await OBIT.get('/api/admin/membership-transfers', { token });
   const root = document.getElementById('membershipTransfers');
-  root.innerHTML = rows.map(p => `<article style="border-top:1px solid #ddd;padding:16px 0"><h3>Application ${Number(p.application_id)} · ${escapeMarket(p.full_legal_name || '')}</h3><p>${escapeMarket(p.reference)} · ₦${(Number(p.amount_kobo) / 100).toLocaleString('en-NG')} · ${escapeMarket(p.status)}</p><p>${escapeMarket(p.bank_name)} · ${escapeMarket(p.account_name)} · ${escapeMarket(p.account_number)}</p>${p.sponsor_code ? `<p><strong>Sponsor:</strong> ${escapeMarket(p.sponsor_code)} · ${escapeMarket(p.sponsor_name)} · ${escapeMarket(p.sponsor_phone)}<br>Referral bonus: ₦500 after membership approval.</p>` : `<p>No member sponsor recorded.</p>`}${p.status === 'CLAIMED' ? `<form data-membership-transfer="${escapeMarket(p.reference)}"><label class="field">Actual credit amount (₦)<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="field">Bank transaction reference<input name="bank_reference" minlength="6" maxlength="120" required></label><label class="checkbox-row"><input name="checked" type="checkbox" required><span>I checked this credit in the receiving bank account.</span></label><button class="btn btn-primary" type="submit">Confirm membership payment</button><p role="status"></p></form>` : p.status === 'CONFIRMED' ? '<p>Bank credit confirmed. The application requires membership review before activation.</p>' : '<p>Waiting for the applicant to report payment.</p>'}</article>`).join('') || '<p class="muted-note">No membership bank transfers yet.</p>';
+  root.innerHTML = rows.map(p => `<article style="border-top:1px solid #ddd;padding:16px 0"><h3>Application ${Number(p.application_id)} · ${escapeMarket(p.full_legal_name || '')}</h3><p>${escapeMarket(p.reference)} · ₦${(Number(p.amount_kobo) / 100).toLocaleString('en-NG')} · ${escapeMarket(p.status)}</p><p>${escapeMarket(p.bank_name)} · ${escapeMarket(p.account_name)} · ${escapeMarket(p.account_number)}</p>${p.bank_reference ? `<p><strong>Confirmed bank credit reference:</strong> ${escapeMarket(p.bank_reference)}</p>` : ''}${p.existing_member_code ? `<p><strong>Existing Member ID:</strong> ${escapeMarket(p.existing_member_code)} · ${escapeMarket(p.existing_member_status)} · Application ${Number(p.existing_member_application_id)}<br>${p.linked_member_id ? 'This application is approved under the existing membership.' : Number(p.existing_member_application_id) === Number(p.application_id) ? 'This application already has a membership record.' : 'Review the existing membership before approving a duplicate application.'}</p>` : ''}${p.sponsor_code ? `<p><strong>Sponsor:</strong> ${escapeMarket(p.sponsor_code)} · ${escapeMarket(p.sponsor_name)} · ${escapeMarket(p.sponsor_phone)}<br>Referral bonus: ₦500 after membership approval.</p>` : `<p>No member sponsor recorded.</p>`}${p.status === 'CLAIMED' ? `<form data-membership-transfer="${escapeMarket(p.reference)}" data-existing-member="${p.existing_member_code && Number(p.existing_member_application_id) !== Number(p.application_id) ? escapeMarket(p.existing_member_code) : ''}"><label class="field">Actual credit amount (₦)<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="field">Bank transaction reference<input name="bank_reference" minlength="6" maxlength="120" required></label><label class="checkbox-row"><input name="checked" type="checkbox" required><span>I checked this credit in the receiving bank account.</span></label>${p.existing_member_code && Number(p.existing_member_application_id) !== Number(p.application_id) ? `<label class="checkbox-row"><input name="same_member" type="checkbox" required><span>I checked that both applications belong to this same member and refer to the same payment.</span></label>` : ''}<button class="btn btn-primary" type="submit">${p.existing_member_code ? 'Confirm Payment & Approve Existing Membership' : 'Confirm Payment & Approve Membership'}</button><p role="status"></p></form>` : p.status === 'CONFIRMED' ? (p.application_status === 'ACTIVE' ? '<p>Payment confirmed. Membership is active.</p>' : p.existing_member_code ? '<p>Payment confirmed. Existing membership requires review. Please do not approve a duplicate application.</p>' : '<p>Payment confirmed. Membership approval is pending in the Application Queue.</p>') : '<p>Waiting for the applicant to report payment.</p>'}</article>`).join('') || '<p class="muted-note">No membership bank transfers yet.</p>';
   root.querySelectorAll('[data-membership-transfer]').forEach(form => form.addEventListener('submit', async event => {
     event.preventDefault();
     const button = form.querySelector('button');
     button.disabled = true;
     try {
-      await OBIT.post(`/api/admin/membership-transfers/${encodeURIComponent(form.dataset.membershipTransfer)}/confirm`, {
+      const result = await OBIT.post(`/api/admin/membership-transfers/${encodeURIComponent(form.dataset.membershipTransfer)}/${form.dataset.existingMember ? 'approve-existing' : 'confirm-and-approve'}`, {
         amount_kobo: Math.round(Number(form.elements.amount.value) * 100),
         bank_reference: form.elements.bank_reference.value.trim(), bank_credit_checked: form.elements.checked.checked,
+        ...(form.dataset.existingMember ? { member_code: form.dataset.existingMember, same_member_checked: form.elements.same_member.checked } : {}),
       }, { token });
+      if (result.membership_review_required) alert(`Payment confirmed. Existing Member ID: ${result.existing_member.member_code} (${result.existing_member.status}), linked to Application ${result.existing_member.application_id}. This application is under review. No duplicate membership was created.`);
+      else if (result.member?.member_code) alert(`Payment confirmed and membership active. Member ID: ${result.member.member_code}`);
       await refreshQueue(token);
     } catch (err) { form.querySelector('[role="status"]').textContent = err.message; button.disabled = false; }
   }));
@@ -217,6 +294,7 @@ async function refreshReferralBonuses(token) {
 }
 
 async function refreshWithdrawals(token) {
+  await refreshMemberFinanceRequests(token);
   const summary = await OBIT.get('/api/admin/finance/summary', { token });
   document.getElementById('financeCards').innerHTML = `
     <div class="card"><div class="eyebrow green">VERIFIED CONTRIBUTIONS</div><h2>₦${Number(summary.verified_contributions.total || 0).toLocaleString()}</h2></div>
@@ -336,3 +414,21 @@ async function refreshBankPayments(token){
  root.querySelectorAll('[data-confirm-bank]').forEach(f=>{f.querySelector('[data-credit-refund-review]').addEventListener('click',async()=>{if(!f.reportValidity())return;const buttons=[...f.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);try{await OBIT.post(`/api/admin/market/orders/${f.dataset.confirmBank}/bank-transfer/refund-review`,{bank_reference:f.elements.bank_reference.value,amount_kobo:Number(f.dataset.amount),bank_credit_checked:f.elements.checked.checked},{token});await refreshBankPayments(token);await refreshMarketOrders(token);}catch(err){f.querySelector('[role=status]').textContent=err.message;buttons.forEach(b=>b.disabled=false);}});f.addEventListener('submit',async e=>{e.preventDefault();const b=f.querySelector('button');b.disabled=true;try{await OBIT.post(`/api/admin/market/orders/${f.dataset.confirmBank}/bank-transfer/confirm`,{bank_reference:f.elements.bank_reference.value,amount_kobo:Number(f.dataset.amount),bank_credit_checked:f.elements.checked.checked},{token});await refreshBankPayments(token);await refreshMarketOrders(token);}catch(err){f.querySelector('[role=status]').textContent=err.message;b.disabled=false;}});});
  }catch(e){root.textContent=e.message;}
 }
+
+async function refreshMemberFinanceRequests(token) {
+  const rows = await OBIT.get('/api/admin/finance-requests', { token });
+  const box = document.getElementById('memberFinanceRequests');
+  box.innerHTML = rows.map(r => `<article class="card"><h3>${escapeMarket(r.kind)} · ₦${(Number(r.amount_kobo)/100).toLocaleString('en-NG')}</h3><p>${escapeMarket(r.full_legal_name)} · ${escapeMarket(r.member_code)} · ${escapeMarket(r.phone)}</p><p>${escapeMarket(r.reference)} · ${escapeMarket(r.status)}</p><p>${escapeMarket(r.bank_name)} · ${escapeMarket(r.account_name)} · ${escapeMarket(r.account_number)} · ${escapeMarket(r.designation)}</p>${r.status === 'REPORTED' ? `<form data-finance-request="${r.id}"><label>Bank transaction reference<input name="reference" minlength="6" maxlength="120" required autocomplete="off"></label><label><input type="checkbox" name="checked" required> ${r.kind === 'DEPOSIT' ? 'Bank credit confirmed' : 'Withdrawal paid to the recipient shown above'}</label><button class="btn" type="submit">${r.kind === 'DEPOSIT' ? 'Confirm Deposit' : 'Record Paid Withdrawal'}</button><p role="status"></p><label>Reason if rejecting<input name="rejection" maxlength="300"></label><button class="btn btn-secondary" type="button" data-finance-reject="${r.id}">Reject unconfirmed request</button></form>` : ''}</article>`).join('') || '<p>No deposit or manual withdrawal requests.</p>';
+  box.querySelectorAll('[data-finance-request]').forEach(form => form.addEventListener('submit', async e => {
+    e.preventDefault(); const row = rows.find(r => String(r.id) === form.dataset.financeRequest); const button = form.querySelector('button'); button.disabled = true;
+    try { await OBIT.post(`/api/admin/finance-requests/${row.id}/confirm`, {amount_kobo:Number(row.amount_kobo), bank_reference:form.elements.reference.value.trim(),confirmed:form.elements.checked.checked}, {token}); await refreshWithdrawals(token); }
+    catch (err) { form.querySelector('[role="status"]').textContent=err.message; button.disabled=false; }
+  }));
+}
+
+document.getElementById('memberFinanceRequests').addEventListener('click', async e => {
+  const button=e.target.closest('[data-finance-reject]');if(!button)return;
+  const form=button.closest('form');button.disabled=true;
+  try {const token=OBIT.getSession('staff');await OBIT.post(`/api/admin/finance-requests/${button.dataset.financeReject}/reject`,{note:form.elements.rejection.value.trim()},{token});await refreshWithdrawals(token);}
+  catch(err){form.querySelector('[role="status"]').textContent=err.message;button.disabled=false;}
+});

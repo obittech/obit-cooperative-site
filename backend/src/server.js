@@ -36,6 +36,7 @@ const { applicationsRouter } = await import('./routes/applications.js');
 const { kycRouter } = await import('./routes/kyc.js');
 const { paymentsRouter } = await import('./routes/payments.js');
 const { membershipTransfersRouter } = await import('./routes/membership-transfers.js');
+const { memberFinanceRouter } = await import('./routes/member-finance.js');
 const { meRouter } = await import('./routes/me.js');
 const { adminRouter } = await import('./routes/admin.js');
 const { systemRouter } = await import('./routes/system.js');
@@ -52,8 +53,12 @@ const {processWhatsappQueue}=await import('./services/whatsapp.js');
 
 await migrate();
 console.log(`Database runtime: ${DB_ENGINE}`);
+if (process.env.MARKET_MONNIFY_ACCEPTANCE === 'true') {
+  const {startMonnifyAcceptance} = await import('./services/market-monnify-acceptance.js');
+  await startMonnifyAcceptance();
+}
 
-const routers = [whatsappRouter,systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, membershipTransfersRouter, opportunitiesRouter, marketCommerceRouter, safePayRouter, meRouter, adminRouter];
+const routers = [whatsappRouter,systemRouter, authRouter, applicationsRouter, kycRouter, paymentsRouter, membershipTransfersRouter, opportunitiesRouter, marketCommerceRouter, safePayRouter, memberFinanceRouter, meRouter, adminRouter];
 if (process.env.ENABLE_DEV_ROUTES === 'true') routers.push(devRouter);
 
 const allowedOrigins = new Set(

@@ -19,6 +19,11 @@ async function accessToken(cfg){
  })();
  inflight={fingerprint,promise};try{return await promise;}finally{if(inflight?.promise===promise)inflight=null;}
 }
+// Authenticates only. Does not initialize a transaction or expose the token.
+export async function checkMonnifyAuthentication(cfg){
+ if(!cfg.available||cfg.mode!=='test')throw new HttpError(503,'Sandbox configuration is unavailable');
+ await accessToken(cfg);return true;
+}
 export function monnifyCheckoutUrl(value){try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='sandbox.sdk.monnify.com'&&!u.port&&!u.username&&!u.password&&!u.search&&!u.hash&&u.pathname.startsWith('/checkout/')&&u.pathname.length>15?u.href:null;}catch{return null;}}
 export async function initializeMonnify(cfg,{email,amount,reference,orderId}){
  const token=await accessToken(cfg);
@@ -34,7 +39,10 @@ function money(value,allowZero=false){
 }
 export function monnifyReceipt(data,notification=false){
  if(!data||typeof data!=='object'||Array.isArray(data)||typeof data.paymentReference!=='string'||!/^OBMP-[A-F0-9]{32}$/.test(data.paymentReference))throw new HttpError(422,'Invalid marketplace payment reference');
- const currency=notification?data.currency||data.currencyCode:data.currencyCode;
+ // The sandbox query API returns currency; some documented responses use currencyCode.
+ // Every supplied currency field must agree. Never hide a conflicting value.
+ const currencies=[data.currency,data.currencyCode].filter(value=>value!==undefined);
+ const currency=currencies.length&&currencies.every(value=>value==='NGN')?'NGN':null;
  if(currency!=='NGN'||typeof data.paymentStatus!=='string'||typeof data.transactionReference!=='string'||!/^MNFY\|[A-Za-z0-9|_-]{3,150}$/.test(data.transactionReference))throw new HttpError(422,'Invalid Monnify currency, reference or status');
  const statuses=['PAID','PENDING','PARTIALLY_PAID','OVERPAID','FAILED','REVERSED','EXPIRED'];if(!statuses.includes(data.paymentStatus))throw new HttpError(422,'Unknown Monnify payment status');
  return {id:data.transactionReference,reference:data.paymentReference,amount:money(data.amountPaid,true),total:money(data.totalPayable),currency,status:data.paymentStatus};

@@ -1,11 +1,21 @@
 # Obit WhatsApp integration
 
-Status: prepared, not connected or enabled. The existing WhatsApp number is
-+2348030567787. Earlier OBS work used mylogin.obittechnologies.com. During this
-change that dashboard could not be reached. Its live connection, provider API,
-webhook subscription and coexistence support still need verification. Do not
-replace its callback URL or subscribe another app without checking ownership
-and preserving the existing inbox.
+Status: prepared, not connected or enabled. Review updated 5 November 2026.
+The existing business number is +2348030567787. The current OBS portal is
+https://login.obittechnologies.com/login. It was reachable during this review
+but required sign-in. The old mylogin address is not evidence that OBS is down.
+
+Earlier session records reported this number connected in OBS with webhook
+active and Business app/API coexistence on 28 October and 1 November. They also
+reported automatic replies left off after Gemini failures. These are historical
+observations, not a fresh inspection of provider settings. WABA ID, phone ID,
+Meta app ownership, actual callback URL, subscriptions, secure forwarding,
+coexistence echo delivery and current inbox behavior remain unverified.
+
+Preserve the OBS inbox, connected number, callback URL and subscriptions.
+Do not disconnect/reconnect the number, replace the callback, add subscriptions
+or enable a second responder as part of this PR. No production settings were
+changed in this review.
 
 ## Intended operation
 
@@ -32,6 +42,14 @@ WABA, phone-number ID and business telephone number. Any person with access to
 that business app can produce such an echo, so linked devices must be restricted
 to authorized payment approvers. A standalone incoming “Confirmed” from a
 customer, or text forwarded through an unverified CRM callback, is rejected.
+Activation uses the current shared `activateApprovedMember` helper used by
+staff approvals. It copies the saved registration username and password hash
+into the new member account, links the application to the user and awards any
+referral once. New registrations can log in immediately after approval using
+username, registered email, phone number or membership code with their password.
+Existing members without credentials retain the website's identity-checked
+credential setup path. Passwords and setup codes are never sent by WhatsApp.
+
 An existing account must be an active member identity. Administrator identities
 cannot be converted into member identities.
 
@@ -52,7 +70,8 @@ automated assistant. It covers:
   ₦25,000 monthly for four core systems and Business at ₦100,000 for all eight.
 - Obit Technologies Multipurpose Cooperative Society Limited: website
   registration, identity verification, payment and membership access.
-- Finance: members use their membership code and password on
+- Finance: members use their username, registered email, phone number or
+  membership code and password on
   finance.obitcooperative.com. Private balances belong in the portal.
 - Obit Market: buyers may browse, sellers must be approved cooperative members.
 - Payment claims: receipt collection and staff bank-credit verification.
@@ -69,6 +88,48 @@ staff notification has been delivered. Staff reviews the existing inbox and the
 protected review endpoint. Automatic replies are sent only for incoming text
 messages less than 23 hours old. Welcome messages also require a recorded recent customer message and no opt-out. No bulk marketing or proactive template
 messages are enabled.
+
+## Compatibility with current membership
+
+Main includes PR #62 (combined staff payment confirmation and approval), PR #68
+(registration credentials), and later reviewed-duplicate and member-finance
+changes. Both member-finance and WhatsApp migrations and routers are retained.
+There is one activation helper, rather than separate WhatsApp account creation.
+It refuses privileged, suspended and ambiguous contact matches. Saved registration
+credentials cannot overwrite an existing user. Referral awards remain separate
+from savings and protected by the unique application constraint.
+
+The staff combined endpoint retains its existing behavior of keeping a verified
+payment when a known duplicate membership requires review. The stricter WhatsApp
+path rolls back payment and activation on identity conflicts and sends the event
+to administrator review. It never performs the staff-only approve-existing link
+operation. A repeat of the same confirmed reference and active application does
+not award another bonus or create another ledger. Wrong credit references fail.
+
+Business-app echoes authenticate the sending business number, not the individual
+staff device. The configured administrator is an audit attribution and must be
+active. It does not prove which human sent the message. Restrict linked devices
+to authorized approvers. Keep automatic approval off until that control and the
+provider event provenance are verified. ChatGPT text is not a webhook event and
+does not execute this command.
+
+## Proposed production configuration, awaiting approval
+
+| Item | Proposed change | Condition |
+| --- | --- | --- |
+| OBS number, inbox, callback and subscriptions | Preserve existing values | Inspect signed-in provider settings first |
+| Cooperative feature flags | `WHATSAPP_ENABLED=false`, `WHATSAPP_APPROVAL_ENABLED=false` | Initial deployment only after approval |
+| Secrets | Add app secret, verification token and sending token in secret settings | Confirm owner/provider and scopes, never commit values |
+| Account pins | Set WABA ID, phone ID, supported Graph version and active approver ID | Values still unknown, do not guess |
+| Event delivery | Provider-supported authenticated forwarding preserving raw bytes and Meta signature, or a separately reviewed authenticated adapter | Do not replace the OBS callback or accept unsigned CRM JSON |
+| Automated replies | One reply owner per conversation, preserve OBS inbox and manual takeover | Controlled handset validation and separate enablement approval |
+| Automated approvals | Leave disabled | Live identity, actual bank-credit check, echo provenance and approver-device controls validated and approved |
+
+If OBS cannot forward the original signed Meta body, this endpoint is not a
+compatible receiver for its callback. Obtain the provider's documented event and
+authentication contract, then review and test a dedicated adapter. No adapter or
+new subscription is assumed to exist. Rollback means disabling both feature
+flags while keeping staff web approval available and leaving OBS unchanged.
 
 ## Connection and release checklist
 
@@ -110,9 +171,11 @@ IDs and review outcomes remain for investigation. Opt-out records persist.
 Local SQLite tests cover signature checks, disabled configuration, account
 pinning, incoming-versus-outgoing authorization, duplicate events, exact amounts,
 credit reuse, identity checks, account collisions, opt-out and takeover. Existing
-membership and referral tests cover the shared activation helper. Live Meta/OBS
-delivery, PostgreSQL execution and end-to-end production approval have not been
-verified. No credentials were obtained and neither business has automatic
+membership and referral tests cover the shared activation helper. The compatibility suite now includes real registration through WhatsApp approval,
+all four login identifiers, saved password-hash retention, application/user linkage,
+referral replay and shared privileged/suspended/ambiguous-account rejection.
+The CI workflow runs it on SQLite and PostgreSQL. See the PR checks for execution
+results. Live Meta/OBS delivery and end-to-end production approval are unverified. No credentials were obtained and neither business has automatic
 WhatsApp replies enabled by this change.
 
 Provider references consulted:

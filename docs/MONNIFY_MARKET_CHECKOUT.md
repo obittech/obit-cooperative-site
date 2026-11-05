@@ -59,3 +59,30 @@ Complete the real sandbox exercise with the correct merchant credentials, an act
 ## Release validation
 
 92 backend tests and five cart tests pass locally. Ten new marketplace payment tests cover production gates, initialization ownership/idempotency, unknown outcomes and unsafe URLs, exact server verification, stock commitment once, late/partial/overpaid receipts, reference and currency checks, webhook verification, unsigned sandbox boundaries, cancellation and expiry races. Isolated phone QA used a mocked provider transport and fictional records, checked checkout-link preparation, receipt verification, staff reconciliation and 320/390/430 px layouts. PostgreSQL CI must pass before merge. This does not constitute a real merchant sandbox test.
+
+## Activation work sequence (1 November 2026)
+
+The existing BRM dashboard does not establish Monnify merchant activation or API access. Sign into the Monnify merchant dashboard for Obit Technologies Limited and check activation there. Ask Monnify to confirm marketplace collections and the proposed seller-payment arrangements. Choose the verified company account ending 446 as settlement destination if Monnify accepts it. Settlement configuration does not subscribe this account to incoming-credit notifications for unrelated direct transfers.
+
+1. Obtain sandbox API Key, Secret Key and Contract Code. Enter these in a separate staging service's protected environment settings using the `MARKET_MONNIFY_*` names above. Never put a bank password, PIN or OTP in these fields.
+2. Set the staging callback to its own `/market-account.html#orders` page. Register the staging backend's `/api/webhooks/market/monnify` in Developers → Webhook URLs → Transaction Completion. Do not register the production API while its checkout is disabled: it will return 503. Do not point staging notifications at production orders or the production database.
+3. From `backend/`, run `npm run check:monnify`. This checks configuration locally, prints only booleans and missing-setting names, and does not contact Monnify. A zero exit code means configuration is complete, not that a merchant or transaction was verified.
+4. Run `npm run check:monnify -- --authenticate` in the same protected staging environment. This only obtains an in-memory sandbox authentication token. It neither initializes a checkout nor transfers money. Success verifies credentials, not the Contract Code, settlement configuration, webhook delivery or a payment. Those require the actual sandbox exercise.
+5. Exercise one staging order through checkout and a real sandbox notification. Confirm independent provider verification, exact NGN total, one stock deduction, receipt visibility, duplicate handling, wrong amount, expired order and provider outage. Keep all test inventory and customer records in staging.
+6. After sandbox acceptance, obtain live credentials and confirm the provider-approved collection, settlement and seller-release arrangement. A separate live implementation must cover live checkout URLs, immutable per-attempt environment selection, delivery eligibility and aftercare for provider-paid orders. These currently depend on the manual bank-payment flow and must not be enabled by merely changing an environment variable.
+
+For direct incoming-credit monitoring of account 4006326446, ask Moniepoint for account-scoped credit notifications and a transaction-query API, including unique bank/session reference, credited account, amount, currency, confirmed status and reversal handling. This is a separate request from Monnify collections. An outgoing POS transfer event or a settlement notification is not sufficient evidence of a buyer's incoming credit.
+
+No live keys, merchant account access, provider sandbox payment, or continuous bank-feed access were available during this preparation. Production manual transfers remain the current route.
+
+## Controlled hosted acceptance fixture
+
+`MARKET_MONNIFY_ACCEPTANCE=true` enables one labelled sandbox order only on the designated disposable Render sandbox service. It refuses production, PostgreSQL, another service ID, another database path, live keys, or either manual-transfer option. It never runs unless explicitly enabled. The fixture creates one test buyer, test member seller, two units of test inventory and a single NGN 1,000 test order. These are acceptance records, not verified real sellers, real goods or a public demonstration.
+
+The normal checkout adapter initializes the actual Monnify sandbox checkout. The fixture prints only the sandbox checkout URL, test references and periodic order/stock status. It does not print authentication tokens or provider keys. Repeated startup on the same database reuses the order and payment attempt. The free sandbox filesystem is disposable, so a later rebuild may start a new fixture. Do not send real money.
+
+Use Monnify's sandbox bank simulator to pay the generated sandbox account, then inspect event delivery and the fixture's order status. Successful acceptance requires a provider-triggered webhook, authoritative verification, SUCCEEDED status, stock remaining one, and one PAYMENT_VERIFIED event. Resend the same notification and confirm those quantities remain unchanged. Configuration or authentication success alone is not payment acceptance. Disable the fixture after the exercise.
+
+### Observed sandbox currency field
+
+The 1 November 2026 provider exercise found that the actual transaction-query response uses `currency: "NGN"`, while the initial adapter expected only `currencyCode`. Both response field names are now accepted. If both fields are supplied, both must be NGN. Missing, null, foreign or conflicting currencies remain rejected. This correction does not relax exact amount, reference, status or signature checks.

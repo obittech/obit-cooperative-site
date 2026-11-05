@@ -1,6 +1,6 @@
 // apply.js — walks a visitor through:
 // LEAD/APPLICATION_STARTED -> APPLICATION_SUBMITTED -> KYC_PENDING/VERIFIED
-// -> PAYMENT_PENDING/VERIFIED -> savings draft while membership is under review
+// -> PAYMENT_PENDING/VERIFIED -> membership approval -> Finance login
 // exactly mirroring the backend's member_applications.status column, so this
 // page is always just reflecting server state, never inventing its own.
 
@@ -74,47 +74,34 @@ function goToStep(stepName) {
     el.classList.toggle('active', i === idx);
     el.classList.toggle('done', i < idx);
   });
-  if (stepName === 'done' && state.application) renderSavingsStep();
+  document.getElementById('registrationLoginFields').style.display = state.applicationId ? 'none' : '';
+  if (stepName === 'done' && state.application) renderMembershipOutcome();
   if (stepName === 'payment' && state.applicationId) initPayment();
 }
 
-function savingsDraftKey() { return `obit_savings_draft_${state.applicationId}`; }
-function renderSavingsStep() {
+function renderMembershipOutcome() {
   const active = state.application.status === 'ACTIVE';
-  document.getElementById('savingsReviewNote').textContent = active
-    ? 'Your membership is active. Prepare a savings goal here, then log in to your Member Portal to review and save it.'
-    : 'Your membership fee has been confirmed. Your membership is under review. You can prepare a savings goal now and submit it after your membership is approved.';
-  try {
-    const draft = JSON.parse(localStorage.getItem(savingsDraftKey()) || 'null');
-    if (!draft) return;
-    document.getElementById('draftPlanAmount').value = draft.amount;
-    document.getElementById('draftPlanFrequency').value = draft.frequency;
-    document.getElementById('draftPlanPurpose').value = draft.purpose;
-    document.getElementById('draftPlanTarget').value = draft.target_amount || '';
-    document.getElementById('savingsDraftStatus').textContent = 'Your plan draft is saved on this device.';
-  } catch { /* Ignore an invalid local draft. */ }
-}
-function saveSavingsDraft() {
-  const status = document.getElementById('savingsDraftStatus');
-  if (!state.application || !['PAYMENT_VERIFIED', 'UNDER_REVIEW', 'ACTIVE'].includes(state.application.status)) {
-    status.textContent = 'Wait for your membership fee to be confirmed before planning savings.';
-    return;
-  }
-  const amount = Number(document.getElementById('draftPlanAmount').value);
-  const targetValue = document.getElementById('draftPlanTarget').value;
-  const target_amount = targetValue ? Number(targetValue) : null;
-  if (!Number.isFinite(amount) || amount <= 0 || (targetValue && (!Number.isFinite(target_amount) || target_amount <= 0))) {
-    status.textContent = 'Enter a valid contribution amount and target amount.';
-    return;
-  }
-  const draft = {
-    amount,
-    frequency: document.getElementById('draftPlanFrequency').value,
-    purpose: document.getElementById('draftPlanPurpose').value,
-    target_amount,
-  };
-  localStorage.setItem(savingsDraftKey(), JSON.stringify(draft));
-  status.textContent = 'Draft saved on this device. After approval, log in to your portal to review and save it. No money was collected.';
+  const unavailable = ['SUSPENDED', 'CLOSED'].includes(state.application.status);
+  document.getElementById('membershipOutcomeHeading').textContent = active
+    ? 'Membership Approved' : unavailable ? 'Membership unavailable' : 'Membership under review';
+  document.getElementById('membershipOutcomeNote').textContent = active
+    ? (state.application.has_login_credentials === false ? 'Your membership is active. Set up your login once to access Finance.' : 'Your membership is active. Log in to Finance to start transactions.')
+    : unavailable ? 'Your membership is not active. Please contact Obit support.'
+      : state.application.membership_review_required
+        ? 'Your membership fee has been confirmed. An existing membership record needs staff review before this application can be completed. Please do not pay again.'
+        : 'Your membership fee has been confirmed. We will update this page once your membership is approved.';
+  const memberId = document.getElementById('approvedMemberId');
+  memberId.style.display = active && state.application.member_code ? '' : 'none';
+  memberId.hidden = !active || !state.application.member_code;
+  memberId.textContent = active && state.application.member_code ? `Member ID: ${state.application.member_code}` : '';
+  const loginButton = document.getElementById('btnMemberFinanceLogin');
+  loginButton.style.display = active ? '' : 'none';
+  loginButton.textContent = state.application.has_login_credentials === false ? 'Set Up Your Login' : 'Log In';
+  loginButton.href = state.application.has_login_credentials === false ? 'portal.html?setup=1&next=finance' : 'portal.html';
+  document.getElementById('memberFinanceLoginHelp').style.display = active ? '' : 'none';
+  document.getElementById('memberFinanceLoginHelp').textContent = state.application.has_login_credentials === false
+    ? 'Set your username and password once, then sign in to Finance.'
+    : 'Use your username or email and the password you chose during registration to sign in. Your membership code also works.';
 }
 
 function fieldIds() {
@@ -151,7 +138,7 @@ function fillReviewSummary(app) {
   const dl = document.getElementById('reviewSummary');
   const rows = [
     ['Name', app.full_legal_name], ['Phone', app.phone], ['Email', app.email],
-    ['Membership type', app.membership_type], ['State', app.state], ['LGA', app.lga],
+    ['Username', app.username], ['Membership type', app.membership_type], ['State', app.state], ['LGA', app.lga],
     ['Address', app.address], ['Occupation', app.occupation_category], ['Sponsor membership code', app.sponsor_code],
   ];
   dl.innerHTML = rows
@@ -166,24 +153,38 @@ async function saveProfileAndContinue() {
   const missing = required.filter((id) => !document.getElementById(id).value);
   if (missing.length) return showAlert('Please fill in all required fields before continuing.');
   if (fieldIds().some(id => !document.getElementById(id).reportValidity())) return;
-
+  const saveButton = document.getElementById('btnStartOrSave');
+  if (saveButton.disabled) return;
+  saveButton.disabled = true;
   try {
+    let updated;
     if (!state.applicationId) {
+      const username = document.getElementById('registrationUsername');
+      const password = document.getElementById('registrationPassword');
+      const confirmation = document.getElementById('registrationPasswordConfirm');
+      if (!username.value || !password.value || !confirmation.value) return showAlert('Choose a username and password and confirm your password.');
+      if (![username, password, confirmation].every(field => field.reportValidity())) return;
+      if (password.value !== confirmation.value) return showAlert('The passwords do not match.');
       const params = new URLSearchParams(window.location.search);
-      const created = await OBIT.post('/api/applications', {
+      updated = await OBIT.post('/api/applications/register', {
+        ...collectProfileFields(), username: username.value.trim(), password: password.value,
+        password_confirmation: confirmation.value,
         referral_source: params.get('ref') || undefined,
         campaign: params.get('campaign') || (params.get('path') ? `membership-path:${params.get('path')}` : undefined),
       });
-      state.applicationId = created.id;
-      localStorage.setItem('obit_application_id', created.id);
+      password.value = '';
+      confirmation.value = '';
+      state.applicationId = updated.id;
+      localStorage.setItem('obit_application_id', updated.id);
+    } else {
+      updated = { ...state.application, ...await OBIT.patch(`/api/applications/${state.applicationId}`, collectProfileFields()) };
     }
-    const updated = await OBIT.patch(`/api/applications/${state.applicationId}`, collectProfileFields());
     state.application = updated;
     fillReviewSummary(updated);
     goToStep('review');
   } catch (err) {
     showAlert(err.message);
-  }
+  } finally { saveButton.disabled = false; }
 }
 
 async function submitApplication() {
@@ -407,7 +408,6 @@ document.getElementById('btnSubmitApplication').addEventListener('click', submit
 document.getElementById('btnStartKyc').addEventListener('click', startKyc);
 document.getElementById('btnVerifyYouverify').addEventListener('click', verifyYouverifyKyc);
 document.getElementById('btnInitPayment').addEventListener('click', initPayment);
-document.getElementById('btnSaveSavingsDraft').addEventListener('click', saveSavingsDraft);
 
 async function initializeApplicationPage() {
   document.getElementById('date_of_birth').max = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -428,5 +428,26 @@ async function initializeApplicationPage() {
     window.history.replaceState({}, document.title, cleanUrl);
   }
 }
+
+// Refresh status when staff verify payment or approve membership.
+let statusRefreshInFlight = false;
+async function refreshMembershipStatus() {
+  if (!state.applicationId || statusRefreshInFlight || document.hidden) return;
+  if (!['PAYMENT_PENDING', 'PAYMENT_VERIFIED', 'UNDER_REVIEW', 'ACTIVE'].includes(state.application?.status)) return;
+  statusRefreshInFlight = true;
+  try {
+    const app = await OBIT.get(`/api/applications/${state.applicationId}`);
+    const previous = state.application.status;
+    state.application = app;
+    if (['PAYMENT_VERIFIED', 'UNDER_REVIEW', 'ACTIVE'].includes(app.status)) clearAlert();
+    if (app.status === 'ACTIVE' && previous !== 'ACTIVE') goToStep('done');
+    else if (['PAYMENT_VERIFIED', 'UNDER_REVIEW'].includes(app.status) && previous !== app.status) goToStep('done');
+    else if (['UNDER_REVIEW', 'ACTIVE'].includes(app.status)) renderMembershipOutcome();
+  } catch { /* Keep existing screen and retry later. */ }
+  finally { statusRefreshInFlight = false; }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshMembershipStatus(); });
+window.addEventListener('focus', refreshMembershipStatus);
+setInterval(refreshMembershipStatus, 15000);
 
 initializeApplicationPage();

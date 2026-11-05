@@ -9,6 +9,7 @@ import { hashPassword, verifyPassword, issueToken } from '../utils/auth.js';
 import { audit } from '../utils/audit.js';
 import { requireAuth } from '../middleware/auth.js';
 import crypto from 'node:crypto';
+import { registrationUsername, usernameAvailable } from '../services/registration-login.js';
 
 const setupCodes = new Map();
 const adminSetupCodes = new Map(); // userId -> { codeHash, expires, attempts }
@@ -77,23 +78,15 @@ function hashSetupCode(code) {
 authRouter.post('/api/auth/request-portal-setup', async (req, res) => {
   const identifier = String(req.body?.identifier || '').trim();
   if (!identifier) throw new HttpError(400, 'Enter your registered email address');
-  const application = await get('SELECT * FROM member_applications WHERE lower(email) = lower(?) OR phone = ?', [identifier, identifier]);
-  if (!application) throw new HttpError(404, 'No membership application matches that email or phone');
-  if (application.status !== 'ACTIVE') {
-    throw new HttpError(409, 'Portal setup opens after your membership application is approved and activated');
-  }
-
-  let user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
-  if (!user) {
-    await run('INSERT INTO users (email, phone, role) VALUES (?, ?, ?)', [application.email, application.phone, 'member']);
-    user = await get('SELECT * FROM users WHERE email = ? OR phone = ?', [application.email, application.phone]);
-  }
-
-  if (!application.email) throw new HttpError(409, 'This membership has no email address. Please contact Obit support.');
+  const user = await get(`SELECT u.* FROM users u JOIN members m ON m.user_id = u.id
+    WHERE (lower(u.email) = lower(?) OR u.phone = ? OR lower(u.username) = lower(?) OR upper(m.member_code) = upper(?))
+      AND u.role = 'member' AND u.status = 'ACTIVE' AND m.status = 'ACTIVE' LIMIT 1`, [identifier, identifier, identifier, identifier]);
+  if (!user) throw new HttpError(409, 'Portal setup opens after your membership application is approved and activated. Check your registered email or contact support.');
+  if (!user.email) throw new HttpError(409, 'This membership has no email address. Please contact Obit support.');
   const code = crypto.randomInt(100000, 1000000).toString();
   setupCodes.set(Number(user.id), { codeHash: hashSetupCode(code), expires: Date.now() + 15 * 60 * 1000, attempts: 0 });
   try {
-    await sendSetupEmail(application.email, code);
+    await sendSetupEmail(user.email, code);
   } catch (err) {
     setupCodes.delete(Number(user.id));
     throw err;
@@ -105,6 +98,8 @@ authRouter.post('/api/auth/request-portal-setup', async (req, res) => {
 authRouter.post('/api/auth/set-password', async (req, res, params) => {
   const { user_id, setup_code, password } = req.body;
   if (!password || password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters');
+  const username = req.body.username ? registrationUsername(req.body.username) : null;
+  if (username) await usernameAvailable(username, user_id);
 
   const entry = setupCodes.get(Number(user_id));
   if (!entry || entry.expires < Date.now()) {
@@ -121,7 +116,7 @@ authRouter.post('/api/auth/set-password', async (req, res, params) => {
   }
   setupCodes.delete(Number(user_id));
 
-  await run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [hashPassword(password), user_id]);
+  await run('UPDATE users SET password_hash = ?, username = COALESCE(?, username), session_version = session_version + 1 WHERE id = ?', [hashPassword(password), username, user_id]);
   await audit(user_id, 'PORTAL_PASSWORD_SET', 'user', user_id);
   res.json(200, { ok: true });
 });
@@ -202,7 +197,7 @@ authRouter.post('/api/auth/login', async (req, res, params) => {
   if (state?.lockedUntil > Date.now()) throw new HttpError(429, 'Too many failed login attempts. Try again later.');
   const login = identifier.trim();
   const user = await get(`SELECT u.* FROM users u LEFT JOIN members m ON m.user_id = u.id
-    WHERE lower(u.email) = lower(?) OR u.phone = ? OR (upper(m.member_code) = upper(?) AND m.status = 'ACTIVE')`, [login, login, login]);
+    WHERE lower(u.email) = lower(?) OR u.phone = ? OR lower(u.username) = lower(?) OR (upper(m.member_code) = upper(?) AND m.status = 'ACTIVE')`, [login, login, login, login]);
   if (!user || !verifyPassword(password, user.password_hash)) {
     const current = loginAttempts.get(key) || { count: 0, lockedUntil: 0 };
     current.count += 1;
@@ -212,6 +207,7 @@ authRouter.post('/api/auth/login', async (req, res, params) => {
   }
   loginAttempts.delete(key);
   if (user.status !== 'ACTIVE') throw new HttpError(403, 'Account is not active');
+  if (user.role === 'member' && !await get("SELECT id FROM members WHERE user_id = ? AND status = 'ACTIVE'", [user.id])) throw new HttpError(403, 'Membership approval is required before you can sign in.');
 
   if (user.role === 'admin') {
     const code = crypto.randomInt(100000, 1000000).toString();

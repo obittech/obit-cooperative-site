@@ -8,9 +8,8 @@ import { Router, HttpError } from '../router.js';
 import { get, all, run, atomic } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { audit } from '../utils/audit.js';
-import { activateReviewedApplication } from '../services/membership-activation.js';
+import { activateApprovedMember } from '../services/membership-approval.js';
 
-import { awardReferralBonus } from '../services/member-referrals.js';
 
 export const adminRouter = new Router();
 
@@ -75,13 +74,12 @@ adminRouter.post('/api/admin/applications/:id/decision', requireAuth('staff', 'a
     } else if (decision === 'NEEDS_INFORMATION') {
       await run("UPDATE member_applications SET status = 'NEEDS_INFORMATION', updated_at = datetime('now') WHERE id = ?", [params.id]);
     } else {
-      await activateReviewedApplication(application);
+      await activateApprovedMember(application, req.user.id);
     }
 
     await audit(req.user.id, `APPLICATION_DECISION_${decision}`, 'member_applications', params.id, { note: note ?? null });
     const updated = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
     const member = await get('SELECT * FROM members WHERE application_id = ?', [params.id]);
-    if (decision === 'APPROVE') await awardReferralBonus(params.id, req.user.id);
     return { application: updated, member: member ?? null };
   });
   res.json(200, result);

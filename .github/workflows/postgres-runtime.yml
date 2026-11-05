@@ -32,10 +32,12 @@ jobs:
       - run: npm install
       - name: Payment safety regression tests
         run: npm run test:payments
+      - name: Membership and referral regression tests
+        run: npm run test:registration
       - name: Marketplace commerce and cart regression tests
         run: |
-          node --experimental-sqlite --test test/market-commerce.test.js
-          node --test ../tests/market-state.test.cjs ../tests/navigation.test.cjs
+          node --experimental-sqlite --test test/market-commerce.test.js test/monnify-readiness.test.js test/monnify-acceptance.test.js
+          node --test ../tests/market-state.test.cjs ../tests/navigation.test.cjs ../tests/admin-login.test.cjs
       - name: Syntax check
         run: find src scripts -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: SQLite adapter smoke
@@ -52,6 +54,13 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
           PGSSL: disable
         run: npm run test:payments
+
+      - name: PostgreSQL membership and referral regression tests
+        env:
+          DB_ENGINE: postgres
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
+          PGSSL: disable
+        run: node --experimental-sqlite --test --test-concurrency=1 test/registration.test.js test/membership-transfers.test.js test/member-referrals.test.js
 
       - name: PostgreSQL adapter smoke
         env:
@@ -123,3 +132,21 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
           PGSSL: disable
         run: npm run test:registration
+
+      - name: Manual member finance (SQLite)
+        run: node --experimental-sqlite --test test/member-finance.test.js
+      - name: Manual member finance (PostgreSQL)
+        env:
+          DB_ENGINE: postgres
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
+          PGSSL: disable
+        run: node --experimental-sqlite --test test/member-finance.test.js
+
+      - name: WhatsApp membership compatibility (SQLite)
+        run: node --experimental-sqlite --test test/whatsapp.test.js
+      - name: WhatsApp membership compatibility (PostgreSQL)
+        env:
+          DB_ENGINE: postgres
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
+          PGSSL: disable
+        run: node --experimental-sqlite --test test/whatsapp.test.js

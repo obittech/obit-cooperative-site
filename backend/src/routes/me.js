@@ -40,7 +40,7 @@ meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
   const member = await memberForUser(req.user.id);
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [member.application_id]);
   const kyc = await get('SELECT status, verified_at FROM kyc_checks WHERE application_id = ? ORDER BY id DESC LIMIT 1', [member.application_id]);
-  const payment = await get(
+  let payment = await get(
     `SELECT status, verified_at, amount, currency
      FROM membership_payments
      WHERE application_id = ?
@@ -50,6 +50,11 @@ meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
      LIMIT 1`,
     [member.application_id]
   );
+  if (payment?.status !== 'PAYMENT_VERIFIED') {
+    const transfer = await get("SELECT reference, amount_kobo, confirmed_ms FROM membership_bank_payments WHERE application_id = ? AND status = 'CONFIRMED'", [member.application_id]);
+    if (transfer) payment = { status: 'PAYMENT_VERIFIED', provider: 'bank_transfer', reference: transfer.reference,
+      verified_at: new Date(Number(transfer.confirmed_ms)).toISOString(), amount: Number(transfer.amount_kobo) / 100, currency: 'NGN' };
+  }
   const onboarding = await get('SELECT whatsapp_joined, orientation_completed FROM community_onboarding WHERE member_id = ?', [member.id]);
 
   res.json(200, {
@@ -59,6 +64,7 @@ meRouter.get('/api/me/membership', requireAuth('member'), async (req, res) => {
     status: member.status,
     activated_at: member.activated_at,
     full_legal_name: application.full_legal_name,
+    phone: application.phone,
     kyc_status: kyc?.status || 'KYC_PENDING',
     membership_payment: payment || null,
     community_onboarding: onboarding || { whatsapp_joined: false, orientation_completed: false },
@@ -194,8 +200,9 @@ meRouter.post('/api/me/withdrawals', requireAuth('member'), async (req, res) => 
   const daily = await get("SELECT COALESCE(SUM(amount_kobo),0) AS total_kobo FROM withdrawal_requests WHERE member_id = ? AND status IN ('APPROVED','PAID') AND created_at >= datetime('now','-24 hours')", [member.id]);
   const dailyLimitKobo = Math.round(Number(process.env.DAILY_WITHDRAWAL_LIMIT_NGN || 1000000) * 100);
   if (Number(daily.total_kobo || 0) + amountKobo > dailyLimitKobo) throw new HttpError(409, 'Daily withdrawal limit exceeded. Contact Obit support for review.');
+  const manualPending = await get("SELECT COALESCE(SUM(amount_kobo),0) AS n FROM member_finance_requests WHERE member_id=? AND kind='WITHDRAWAL' AND status='REPORTED'", [member.id]);
   const pending = await get("SELECT COALESCE(SUM(amount_kobo),0) AS total_kobo FROM withdrawal_requests WHERE member_id = ? AND status IN ('PENDING','APPROVED')", [member.id]);
-  if (amountKobo > Number(account.balance_kobo ?? Math.round(account.balance * 100)) - Number(pending.total_kobo || 0)) throw new HttpError(409, 'Amount exceeds balance available after pending withdrawal requests');
+  if (amountKobo > Number(account.balance_kobo ?? Math.round(account.balance * 100)) - Number(pending.total_kobo || 0) - Number(manualPending.n || 0)) throw new HttpError(409, 'Amount exceeds balance available after pending withdrawal requests');
 
   // Prevent accidental double-click / rapid duplicate withdrawal submissions.
   const recentDuplicate = await get(`SELECT id, status FROM withdrawal_requests

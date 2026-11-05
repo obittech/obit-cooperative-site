@@ -41,7 +41,8 @@ document.getElementById('btnSetPassword').addEventListener('click', async () => 
   const password = document.getElementById('setupPassword').value;
   if (!user_id || !setup_code || !password) return showAlert('Fill in all fields.');
   try {
-    await OBIT.post('/api/auth/set-password', { user_id, setup_code, password });
+    await OBIT.post('/api/auth/set-password', { user_id, setup_code, password, username: document.getElementById('setupUsername').value.trim() || undefined });
+    if (new URLSearchParams(window.location.search).get('next') === 'finance') { window.location.assign('https://finance.obitcooperative.com/'); return; }
     showAlert('Password set. You can log in now.', 'success');
     switchTab('login');
   } catch (err) { showAlert(err.message); }
@@ -55,7 +56,7 @@ document.getElementById('btnLogin').addEventListener('click', async () => {
     const res = await OBIT.post('/api/auth/login', { identifier, password });
     if (res.role !== 'member') throw new Error('This login is for members. Staff should use the admin console.');
     OBIT.saveSession('member', res.token);
-    await loadDashboard();
+    window.location.assign('index.html');
   } catch (err) { showAlert(err.message); }
 });
 
@@ -69,11 +70,11 @@ document.getElementById('logoutLink').addEventListener('click', async (e) => {
   document.getElementById('logoutLink').style.display = 'none';
 });
 
-function badge(status) {
+function badge(status, label = status) {
   const cls = ['ACTIVE', 'KYC_VERIFIED', 'PAYMENT_VERIFIED'].includes(status) ? 'ok'
     : status && status.includes('FAILED') ? 'fail'
     : status ? 'pending' : 'neutral';
-  return `<span class="status-badge ${cls}">${status || 'N/A'}</span>`;
+  return `<span class="status-badge ${cls}">${label || 'N/A'}</span>`;
 }
 
 async function loadDashboard() {
@@ -90,18 +91,18 @@ async function loadDashboard() {
     document.getElementById('referralTotals').textContent = `${referrals.referred_count} referred applications · ₦${(referrals.earned_kobo / 100).toLocaleString('en-NG')} earned · ₦${(referrals.payable_kobo / 100).toLocaleString('en-NG')} awaiting payout · ₦${(referrals.paid_kobo / 100).toLocaleString('en-NG')} paid`;
     document.getElementById('digitalMemberName').textContent = membership.full_legal_name || 'Member';
     document.getElementById('digitalMemberId').textContent = membership.digital_membership_id || membership.member_code;
-    document.getElementById('digitalMemberStatus').innerHTML = badge(membership.status);
+    document.getElementById('digitalMemberStatus').innerHTML = badge(membership.status, membership.status === 'ACTIVE' ? 'Membership Approved' : membership.status);
     document.getElementById('membershipSummary').innerHTML = `
       <dt>Member ID</dt><dd><span class="member-code">${membership.member_code}</span></dd>
       <dt>Name</dt><dd>${membership.full_legal_name || '—'}</dd>
-      <dt>Status</dt><dd>${badge(membership.status)}</dd>
+      <dt>Status</dt><dd>${badge(membership.status, membership.status === 'ACTIVE' ? 'Membership Approved' : membership.status)}</dd>
       <dt>KYC</dt><dd>${badge(membership.kyc_status)}</dd>
       <dt>Membership fee</dt><dd>${badge(membership.membership_payment?.status)} ₦${membership.membership_payment?.amount ?? '—'}</dd>
       <dt>WhatsApp community</dt><dd>${membership.community_onboarding.whatsapp_joined ? 'Joined' : 'Not yet joined'}</dd>
       <dt>Orientation</dt><dd>${membership.community_onboarding.orientation_completed ? 'Completed' : 'Pending'}</dd>
     `;
 
-    document.getElementById('statusTile').innerHTML = badge(membership.status);
+    document.getElementById('statusTile').innerHTML = badge(membership.status, membership.status === 'ACTIVE' ? 'Membership Approved' : membership.status);
     const statement = await OBIT.get('/api/me/statement', { token });
     document.getElementById('balanceTile').textContent = `₦${Number(statement.balance || 0).toLocaleString()}`;
     document.getElementById('statementSummary').innerHTML = `
@@ -324,3 +325,5 @@ if (OBIT.getSession('member')) {
   document.getElementById('loggedInView').style.display = '';
   loadDashboard();
 }
+
+if (new URLSearchParams(window.location.search).get('setup') === '1') switchTab('setup');

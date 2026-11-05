@@ -10,6 +10,11 @@ process.env.WHATSAPP_PHONE_NUMBER_ID='12345';process.env.WHATSAPP_WABA_ID='67890
 process.env.WHATSAPP_ACCESS_TOKEN='synthetic-test-token';process.env.WHATSAPP_GRAPH_VERSION='v99.0';
 const {migrate,get,run,all,closeDatabase}=await import('../src/db.js');
 const {verifyWhatsappSignature,parseConfirmation,businessReply,enqueueWhatsapp,processWhatsappQueue,businessPhone}=await import('../src/services/whatsapp.js');
+const {authRouter}=await import('../src/routes/auth.js');
+const {applicationsRouter}=await import('../src/routes/applications.js');
+const {saveSponsor}=await import('../src/services/member-referrals.js');
+const {activateApprovedMember}=await import('../src/services/membership-approval.js');
+const {atomic}=await import('../src/db.js');
 const {handleWhatsappWebhook}=await import('../src/routes/whatsapp.js');
 await migrate();after(closeDatabase);
 const actor=await run("INSERT INTO users(email,role) VALUES('synthetic-admin@example.invalid','admin')");
@@ -117,4 +122,63 @@ test('welcome messages need a recent customer session and respect opt-out',async
 test('STOP is saved even while a conversation is held for staff',async()=>{
  const from='2348000000006';await processMessage('human',{from});await processMessage('STOP',{from});
  assert.equal(Number((await get('SELECT opted_out FROM whatsapp_contacts WHERE phone=?',[from])).opted_out),1);
+});
+
+async function call(router, method, path, body = {}, token = '') {
+ const route = router.match(method, path);
+ const req = {body, socket:{}, headers:{authorization:token ? `Bearer ${token}` : ''}};
+ const res = {json(status, body) { this.body = body; this.writableEnded = true; }};
+ for (const handler of route.handlers) { await handler(req,res,route.params); if(res.writableEnded)break; }
+ return res.body;
+}
+test('WhatsApp approval retains registration credentials, supports every login identifier and awards referral once',async()=>{
+ const sponsor=await get("SELECT * FROM members WHERE status='ACTIVE' ORDER BY id LIMIT 1");
+ const phone='080'+crypto.randomInt(10000000,99999999),to='234'+phone.slice(1);
+ const username='wa'+crypto.randomBytes(8).toString('hex'),password='Synthetic-WhatsApp-Password!';
+ const app=await call(applicationsRouter,'POST','/api/applications/register',{
+  full_legal_name:'Synthetic WhatsApp Member',date_of_birth:'1990-01-01',phone,
+  email:id()+'@example.invalid',address:'Synthetic test address',state:'FCT',lga:'Abuja Municipal',membership_type:'Individual',
+  username,password,password_confirmation:password
+ });
+ await assert.rejects(call(authRouter,'POST','/api/auth/login',{identifier:username,password}),e=>e.status===401);
+ await saveSponsor(await get('SELECT * FROM member_applications WHERE id=?',[app.id]),sponsor.member_code);
+ const ref='OBIT-MEM-'+crypto.randomBytes(16).toString('hex').toUpperCase(),bank=id();
+ await run("UPDATE member_applications SET status='PAYMENT_PENDING' WHERE id=?",[app.id]);
+ await run("INSERT INTO kyc_checks(application_id,provider,session_ref,status) VALUES(?,'YOUVERIFY',?,'KYC_VERIFIED')",[app.id,'youverify_live_'+id()]);
+ await run("INSERT INTO membership_bank_payments(application_id,reference,amount_kobo,bank_name,account_name,account_number,whatsapp,status,created_ms) VALUES(?,?,300000,'Test','Test','0000000000','2348030567787','CLAIMED',?)",[app.id,ref,Date.now()]);
+ await processMessage('membership',{from:to});
+ await processMessage(command(ref,bank),{echo:true,to});
+ const member=await get('SELECT * FROM members WHERE application_id=?',[app.id]);assert.ok(member);
+ const user=await get('SELECT * FROM users WHERE id=?',[member.user_id]);
+ const credentials=await get('SELECT * FROM registration_credentials WHERE application_id=?',[app.id]);
+ assert.equal(user.password_hash,credentials.password_hash);assert.equal(user.username,username);
+ assert.equal(Number((await get('SELECT user_id FROM member_applications WHERE id=?',[app.id])).user_id),Number(user.id));
+ for(const identifier of [username.toUpperCase(),app.email,phone,member.member_code]){
+  const session=await call(authRouter,'POST','/api/auth/login',{identifier,password});assert.equal(session.role,'member');assert.ok(session.token);
+ }
+ assert.match(sent.at(-1).body.text.body,/chosen during registration/);
+ assert.doesNotMatch(JSON.stringify(sent.at(-1)),new RegExp(password));
+ await processMessage(command(ref,bank),{echo:true,to});
+ assert.equal(Number((await get('SELECT COUNT(*) AS n FROM referral_bonuses WHERE application_id=?',[app.id])).n),1);
+ assert.equal(Number((await get('SELECT balance_kobo FROM ledger_accounts WHERE member_id=?',[member.id])).balance_kobo),0);
+});
+test('shared activation refuses privileged, suspended and ambiguous identities for manual and WhatsApp callers',async()=>{
+ for(const issue of ['staff','suspended','ambiguous']){
+  const phone='080'+crypto.randomInt(10000000,99999999),email=id()+'@example.invalid';
+  const a=await fixture({phone,email});
+  await run("UPDATE member_applications SET status='UNDER_REVIEW' WHERE id=?",[a.appId]);
+  await run("UPDATE membership_bank_payments SET status='CONFIRMED' WHERE application_id=?",[a.appId]);
+  await run('INSERT INTO users(email,phone,role,status) VALUES(?,?,?,?)',[email,phone,issue==='staff'?'staff':'member',issue==='suspended'?'SUSPENDED':'ACTIVE']);
+  if(issue==='ambiguous'){
+   await run('UPDATE users SET phone=NULL WHERE email=?',[email]);
+   await run("INSERT INTO users(email,phone,role) VALUES(?,?,'member')",[id()+'@example.invalid',phone]);
+  }
+  const app=await get('SELECT * FROM member_applications WHERE id=?',[a.appId]);
+  await assert.rejects(atomic(()=>activateApprovedMember(app,Number(actor.lastInsertRowid))),e=>e.status===409);
+  assert.equal(await get('SELECT id FROM members WHERE application_id=?',[a.appId]),undefined);
+ }
+});
+test('Finance replies describe current credentials and legacy member setup',()=>{
+ assert.match(businessReply('finance'),/username, registered email, phone number or membership code/);
+ assert.match(businessReply('membership'),/Existing members without a password/);
 });

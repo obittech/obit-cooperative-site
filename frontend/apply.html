@@ -22,7 +22,7 @@
       </a>
       <button class="nav-toggle" aria-label="Open navigation" aria-expanded="false">☰</button>
       <nav class="main-nav" aria-label="Main navigation">
-        <a href="https://obitcooperative.com/#membership">Membership</a>
+        <a href="https://obitcooperative.com/apply.html?new=1">Become a Member</a>
         <a href="https://finance.obitcooperative.com/">Finance</a>
         <a href="https://marketplace.obitcooperative.com/">Marketplace</a>
         <a href="https://obitcooperative.com/#millionaires">Millionaires Prayer</a>
@@ -49,9 +49,10 @@
         <div class="step" data-step="review">2. Review & Consent</div>
         <div class="step" data-step="kyc">3. Verify (KYC)</div>
         <div class="step" data-step="payment">4. Membership Fee</div>
-        <div class="step" data-step="done">5. Savings Plan</div>
+        <div class="step" data-step="done">5. Membership Status</div>
       </div>
 
+      <p style="text-align:right"><a href="apply.html?new=1">Register Another Member</a></p>
       <div id="alertBox"></div>
 
       <div class="card">
@@ -85,6 +86,14 @@
             <label class="field">Email
               <input id="email" type="email" required placeholder="you@example.com" />
             </label>
+            <div id="registrationLoginFields" style="grid-column:1/-1">
+              <h3>Create your login</h3>
+              <p class="muted-note">Choose your login now. You can sign in to Finance as soon as your membership is approved.</p>
+              <label class="field">Username<input id="registrationUsername" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="4" maxlength="24" pattern="[A-Za-z][A-Za-z0-9._]{3,23}" placeholder="For example, foluke.bosede" /></label>
+              <label class="field">Password<input id="registrationPassword" type="password" autocomplete="new-password" minlength="8" maxlength="256" /></label>
+              <label class="field">Confirm password<input id="registrationPasswordConfirm" type="password" autocomplete="new-password" minlength="8" maxlength="256" /></label>
+              <small>Use at least 8 characters. Keep your password private.</small>
+            </div>
             <label class="field">Sponsor membership code (optional)
               <input id="sponsor_code" maxlength="40" placeholder="e.g. OBT-2026-000123" autocapitalize="characters" spellcheck="false" aria-describedby="sponsorHelp" />
               <small id="sponsorHelp">Referred by a member? Enter their membership code. Their registered name and phone number will be included in your payment message to Obit for verification. They earn ₦500 after your payment is confirmed and membership is approved.</small>
@@ -194,19 +203,14 @@
           </div>
         </section>
 
-        <!-- STEP 5: DONE -->
-        <section id="panel-done" style="display:none">
-          <h2 style="margin-bottom:10px">Plan your savings</h2>
-          <p id="savingsReviewNote">Your membership fee has been confirmed. Your membership is under review. You can prepare a savings goal now and submit it after your membership is approved.</p>
-          <div class="grid-2">
-            <label class="field">Amount per contribution (₦)<input id="draftPlanAmount" type="number" min="1" step="0.01" inputmode="decimal" /></label>
-            <label class="field">Frequency<select id="draftPlanFrequency"><option>Daily</option><option>Weekly</option><option>Monthly</option></select></label>
-            <label class="field">Purpose<select id="draftPlanPurpose"><option>Emergency Fund</option><option>Business Capital</option><option>Rent</option><option>School Fees</option><option>Equipment</option><option>Vehicle</option><option>Housing</option><option>General Savings</option></select></label>
-            <label class="field">Target amount (optional, ₦)<input id="draftPlanTarget" type="number" min="1" step="0.01" inputmode="decimal" /></label>
-          </div>
-          <button class="btn btn-primary" type="button" id="btnSaveSavingsDraft">Keep this plan for my portal</button>
-          <p id="savingsDraftStatus" class="muted-note" role="status" aria-live="polite"></p>
-          <p class="muted-note">This draft stays on this device. It does not collect money. After approval, <a href="portal.html">log in to your Member Portal</a> to review and save the plan.</p>
+        <!-- STEP 5: MEMBERSHIP STATUS -->
+        <section id="panel-done" style="display:none" aria-live="polite">
+          <h2 id="membershipOutcomeHeading" style="margin-bottom:10px">Membership status</h2>
+          <p id="membershipOutcomeNote"></p>
+          <p id="approvedMemberId" class="status-badge ok" hidden></p>
+          <a id="btnMemberFinanceLogin" class="btn btn-primary btn-block" href="https://finance.obitcooperative.com/" style="display:none;margin-top:20px">Log In to Finance</a>
+          <p id="memberFinanceLoginHelp" class="muted-note" style="display:none">Use your membership code and password to access Finance and start transactions.</p>
+          <a class="btn btn-secondary btn-block" id="btnRegisterAnother" href="apply.html?new=1" style="margin-top:14px">Register Another Member</a>
         </section>
 
       </div>
@@ -224,6 +228,6 @@
   <script src="js/nav.js?v=20261101-menu"></script>
   <script src="js/api.js"></script>
   <script src="js/nigeria-locations.js?v=20261030-locations"></script>
-  <script src="js/apply.js?v=20261101-live-kyc"></script>
+  <script src="js/apply.js?v=20261104-registration-login"></script>
 </body>
 </html>
