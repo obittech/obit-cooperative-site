@@ -530,14 +530,14 @@ const bank=await import('../src/services/market-bank-transfer.js');
 function enableBank(){Object.assign(process.env,{MARKET_TRANSFER_ENABLED:'true',MARKET_TRANSFER_BANK_NAME:'Test Bank',MARKET_TRANSFER_ACCOUNT_NAME:'Test Company',MARKET_TRANSFER_ACCOUNT_NUMBER:'0123456789'});}
 test('internal checkout requires account configuration and order ownership',async()=>{
  const f=await paymentFixture(),b=await buyer();process.env.MARKET_TRANSFER_ENABLED='false';
- await assert.rejects(bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total}),e=>e.status===503);
- enableBank();await assert.rejects(bank.startBankTransfer(b.id,f.o.id,{expected_total_kobo:f.q.total}),e=>e.status===404);
- await assert.rejects(bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:1}),e=>e.status===409);
- assert.equal((await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total})).status,'READY');
+ await assert.rejects(bank.startBankTransfer(f.b.id,f.o.id,{terms_accepted:true,terms_version:'2026-11-05-v1',expected_total_kobo:f.q.total}),e=>e.status===503);
+ enableBank();await assert.rejects(bank.startBankTransfer(b.id,f.o.id,{terms_accepted:true,terms_version:'2026-11-05-v1',expected_total_kobo:f.q.total}),e=>e.status===404);
+ await assert.rejects(bank.startBankTransfer(f.b.id,f.o.id,{terms_accepted:true,terms_version:'2026-11-05-v1',expected_total_kobo:1}),e=>e.status===409);
+ assert.equal((await bank.startBankTransfer(f.b.id,f.o.id,{terms_accepted:true,terms_version:'2026-11-05-v1',expected_total_kobo:f.q.total})).status,'READY');
  assert.equal((await endpoint('POST',`/api/admin/market/orders/${f.o.id}/bank-transfer/confirm`,auth.buyerToken(f.b))).status,401);
 });
 test('payment notification remains pending until bank credit is confirmed, with stock and credit deduplication',async()=>{
- enableBank();const f=await paymentFixture();await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total});
+ enableBank();const f=await paymentFixture();await bank.startBankTransfer(f.b.id,f.o.id,{terms_accepted:true,terms_version:'2026-11-05-v1',expected_total_kobo:f.q.total});
  const [a,b]=await Promise.all([bank.claimBankTransfer(f.b.id,f.o.id),bank.claimBankTransfer(f.b.id,f.o.id)]);assert.equal(a.status,'CLAIMED');assert.equal(b.status,'CLAIMED');
  const u=new URL(a.whatsapp_url);assert.equal(u.pathname,'/2348030567787');assert.ok(u.searchParams.get('text').includes(f.o.reference));
  assert.equal((await orders.buyerOrders(f.b.id))[0].status,'PAYMENT_PENDING');assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),3);
@@ -548,17 +548,17 @@ test('payment notification remains pending until bank credit is confirmed, with 
  await bank.confirmBankTransfer(staff.lastInsertRowid,f.o.id,body);await bank.confirmBankTransfer(staff.lastInsertRowid,f.o.id,body);
  assert.equal(Number((await db.get('SELECT quantity FROM market_inventory WHERE listing_id=?',[f.p])).quantity),2);
  await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);const o=(await orders.buyerOrders(f.b.id))[0];assert.equal(o.status,'PAID');assert.equal(o.bank_payment.receipt_reference,'OBMR-'+o.reference);
- const g=await paymentFixture();await bank.startBankTransfer(g.b.id,g.o.id,{expected_total_kobo:g.q.total});await bank.claimBankTransfer(g.b.id,g.o.id);
+ const g=await paymentFixture();await bank.startBankTransfer(g.b.id,g.o.id,{terms_accepted:true,terms_version:'2026-11-05-v1',expected_total_kobo:g.q.total});await bank.claimBankTransfer(g.b.id,g.o.id);
  await assert.rejects(bank.confirmBankTransfer(staff.lastInsertRowid,g.o.id,{...body,amount_kobo:g.q.total}),e=>e.status===409);
 });
 test('late transfer notification goes to review and does not revive the reservation',async()=>{
- enableBank();const f=await paymentFixture();await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total});await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);assert.equal((await bank.claimBankTransfer(f.b.id,f.o.id)).status,'REVIEW');assert.equal(Number((await db.get('SELECT expires_ms FROM market_purchase_orders WHERE id=?',[f.o.id])).expires_ms),0);
+ enableBank();const f=await paymentFixture();await bank.startBankTransfer(f.b.id,f.o.id,{terms_accepted:true,terms_version:'2026-11-05-v1',expected_total_kobo:f.q.total});await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);assert.equal((await bank.claimBankTransfer(f.b.id,f.o.id)).status,'REVIEW');assert.equal(Number((await db.get('SELECT expires_ms FROM market_purchase_orders WHERE id=?',[f.o.id])).expires_ms),0);
 });
 
 const care=await import('../src/services/market-aftercare.js');
 test('late verified bank credits can be refunded without allocating stock or authorising dispatch',async()=>{
  enableBank();const f=await paymentFixture(),admin=await staff(),actor={kind:'STAFF',id:admin.id};
- await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total});await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);await bank.claimBankTransfer(f.b.id,f.o.id);
+ await bank.startBankTransfer(f.b.id,f.o.id,{terms_accepted:true,terms_version:'2026-11-05-v1',expected_total_kobo:f.q.total});await db.run('UPDATE market_purchase_orders SET expires_ms=0 WHERE id=?',[f.o.id]);await bank.claimBankTransfer(f.b.id,f.o.id);
  const body={bank_credit_checked:true,bank_reference:'LATE-CREDIT-'+crypto.randomUUID(),amount_kobo:f.q.total};
  await assert.rejects(bank.verifyCreditForRefund(f.s.uid,f.o.id,body),e=>e.status===403);
  await bank.verifyCreditForRefund(admin.id,f.o.id,body);await bank.verifyCreditForRefund(admin.id,f.o.id,body);
@@ -571,7 +571,7 @@ test('late verified bank credits can be refunded without allocating stock or aut
 });
 async function livePaidFixture(){
  enableBank();const f=await paymentFixture(),admin=await staff();
- await bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total});await bank.claimBankTransfer(f.b.id,f.o.id);
+ await bank.startBankTransfer(f.b.id,f.o.id,{terms_accepted:true,terms_version:'2026-11-05-v1',expected_total_kobo:f.q.total});await bank.claimBankTransfer(f.b.id,f.o.id);
  await bank.confirmBankTransfer(admin.id,f.o.id,{bank_credit_checked:true,bank_reference:'INBOUND-'+crypto.randomUUID(),amount_kobo:f.q.total});
  return {...f,admin,actor:{kind:'STAFF',id:admin.id},customer:{kind:'BUYER',id:f.b.id}};
 }
@@ -634,4 +634,50 @@ test('refund and dispatch races cannot progress a case or duplicate records',asy
  const body={amount_kobo:f.q.total,version:2,bank_debit_checked:true,recipient_checked:true};
  const refunds=await Promise.allSettled([care.recordRefund(f.admin.id,f.o.id,{...body,bank_reference:'DEBIT-'+crypto.randomUUID()}),care.recordRefund(f.admin.id,f.o.id,{...body,bank_reference:'DEBIT-'+crypto.randomUUID()})]);
  assert.equal(refunds.filter(r=>r.status==='fulfilled').length,1);
+});
+
+test('checkout requires current explicit terms and stores one immutable acceptance',async()=>{
+ enableBank();const f=await paymentFixture();
+ await assert.rejects(bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total}),e=>e.status===400);
+ await assert.rejects(bank.startBankTransfer(f.b.id,f.o.id,{expected_total_kobo:f.q.total,terms_accepted:true,terms_version:'old'}),e=>e.status===400);
+ const body={expected_total_kobo:f.q.total,terms_accepted:true,terms_version:'2026-11-05-v1'};
+ await bank.startBankTransfer(f.b.id,f.o.id,body);
+ const before=await db.get('SELECT * FROM market_order_terms WHERE order_id=?',[f.o.id]);
+ await bank.startBankTransfer(f.b.id,f.o.id,body);
+ assert.deepEqual(await db.get('SELECT * FROM market_order_terms WHERE order_id=?',[f.o.id]),before);
+ assert.equal(Number(before.buyer_id),Number(f.b.id));assert.equal(Number(before.total_kobo),f.q.total);
+});
+test('settlement review requires staff and blocks unverified payment and receipt',async()=>{
+ const review=await import('../src/services/market-settlement-review.js');const f=await paymentFixture();
+ await assert.rejects(review.settlementReview(f.s.uid,f.o.id),e=>e.status===403);
+ const u=await db.run("INSERT INTO users (email,role,status) VALUES (?,'staff','ACTIVE')",[`${tag}-settlement@example.test`]);
+ let result=await review.settlementReview(u.lastInsertRowid,f.o.id);
+ assert.ok(result.blockers.includes('PAYOUT_OWNERSHIP_UNVERIFIED'));assert.ok(result.blockers.includes('BANK_CREDIT_UNCONFIRMED'));assert.ok(result.blockers.includes('BUYER_RECEIPT_UNCONFIRMED'));assert.equal(result.automated_release_available,false);
+ await assert.rejects(review.verifySellerPayout(u.lastInsertRowid,f.s.id,{}),e=>e.status===400);
+ await review.verifySellerPayout(u.lastInsertRowid,f.s.id,{identity_checked:true,payout_ownership_checked:true,evidence_reference:'secure-case-123',account_last_four:'1234'});
+ result=await review.settlementReview(u.lastInsertRowid,f.o.id);assert.ok(!result.blockers.includes('PAYOUT_OWNERSHIP_UNVERIFIED'));assert.equal(result.review_ready,false);
+});
+
+test('supplier drafts keep costs private, deduplicate and enforce evidence, membership and freshness',async()=>{
+ const sup=await import('../src/services/market-suppliers.js'),s=await seller();
+ const u=await db.run("INSERT INTO users (email,role,status) VALUES (?,'staff','ACTIVE')",[`${tag}-supplier@example.test`]),uid=u.lastInsertRowid;
+ const item={source_key:tag+'-external',supplier:'Test distributor',source_url:'https://supplier.example/product',title:tag+' Supplier product',description:'A test product description',category:'Other',cost_kobo:8000000,handling_kobo:300000,markup_bps:1500,quantity:2};
+ assert.equal(sup.supplierPrice(item),9500000);
+ assert.throws(()=>sup.supplierPrice({...item,cost_kobo:-1}));
+ await assert.rejects(sup.importSupplierDrafts(s.uid,[item]),e=>e.status===403);
+ await assert.rejects(sup.importSupplierDrafts(uid,[item,item]),e=>e.status===400);
+ await sup.importSupplierDrafts(uid,[item]);await sup.importSupplierDrafts(uid,[item]);
+ let rows=(await sup.supplierDrafts(uid)).filter(r=>r.source_key===item.source_key);assert.equal(rows.length,1);
+ const id=rows[0].id;
+ await assert.rejects(sup.publishSupplierDraft(uid,id),e=>e.status===409);
+ const verified={...item,seller_member_id:s.id,delivery_days:4,image_url:'https://supplier.example/authorised.jpg',agreement_reference:'supply-123',verification_reference:'stock-123',content_authorised:true,supply_confirmed:true,checked_ms:Date.now()};
+ await sup.importSupplierDrafts(uid,[{...verified,checked_ms:Date.now()-2*86400000}]);await assert.rejects(sup.publishSupplierDraft(uid,id),e=>e.status===409);
+ await sup.importSupplierDrafts(uid,[verified]);const result=await sup.publishSupplierDraft(uid,id);assert.equal(result.status,'DRAFT');
+ assert.equal((await sup.publishSupplierDraft(uid,id)).listing_id,result.listing_id);
+ assert.equal(Number((await db.get('SELECT price_kobo FROM market_listings WHERE id=?',[result.listing_id])).price_kobo),9500000);
+ await db.run("UPDATE market_listings SET status='ACTIVE' WHERE id=?",[result.listing_id]);
+ assert.equal((await m.preview([{id:result.listing_id,qty:1}])).lines[0].available,true);
+ await db.run('UPDATE market_supplier_drafts SET valid_until_ms=0 WHERE id=?',[id]);
+ assert.equal((await m.preview([{id:result.listing_id,qty:1}])).lines[0].available,false);
+ await assert.rejects(sup.importSupplierDrafts(uid,[verified]),e=>e.status===409);
 });

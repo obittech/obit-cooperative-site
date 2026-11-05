@@ -191,3 +191,21 @@ CREATE TABLE IF NOT EXISTS market_aftercare_events (
  kind TEXT NOT NULL, note TEXT NOT NULL, actor TEXT NOT NULL CHECK(actor IN ('STAFF','BUYER')), occurred_ms __INT__ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_market_aftercare_order ON market_aftercare_events(order_id,id);
+
+CREATE TABLE IF NOT EXISTS market_order_terms (
+ order_id __INT__ PRIMARY KEY REFERENCES market_purchase_orders(id),
+ version TEXT NOT NULL, buyer_id __INT__ NOT NULL REFERENCES market_buyers(id),
+ total_kobo __INT__ NOT NULL, accepted_ms __INT__ NOT NULL
+);
+CREATE TABLE IF NOT EXISTS market_seller_payout_checks (
+ seller_member_id __INT__ PRIMARY KEY REFERENCES members(id),
+ evidence_reference TEXT NOT NULL, account_last_four TEXT NOT NULL,
+ reviewed_by __INT__ NOT NULL REFERENCES users(id), reviewed_ms __INT__ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS market_supplier_drafts (
+ id __ID__, source_key TEXT NOT NULL UNIQUE, payload_json TEXT NOT NULL,
+ listing_id __INT__ UNIQUE REFERENCES market_listings(id),
+ valid_until_ms __INT__ NOT NULL DEFAULT 0,
+ created_by __INT__ NOT NULL REFERENCES users(id), updated_ms __INT__ NOT NULL
+);
