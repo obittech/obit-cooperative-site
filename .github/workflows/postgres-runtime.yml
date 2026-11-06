@@ -142,3 +142,12 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
           PGSSL: disable
         run: node --experimental-sqlite --test test/member-finance.test.js
+
+      - name: WhatsApp membership compatibility (SQLite)
+        run: node --experimental-sqlite --test test/whatsapp.test.js
+      - name: WhatsApp membership compatibility (PostgreSQL)
+        env:
+          DB_ENGINE: postgres
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
+          PGSSL: disable
+        run: node --experimental-sqlite --test test/whatsapp.test.js
