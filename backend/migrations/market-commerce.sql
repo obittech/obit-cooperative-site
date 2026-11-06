@@ -209,3 +209,11 @@ CREATE TABLE IF NOT EXISTS market_supplier_drafts (
  valid_until_ms __INT__ NOT NULL DEFAULT 0,
  created_by __INT__ NOT NULL REFERENCES users(id), updated_ms __INT__ NOT NULL
 );
+
+-- Location directory extends the existing reviewed member store identity.
+CREATE TABLE IF NOT EXISTS market_shop_locations (
+ seller_member_id __INT__ PRIMARY KEY REFERENCES members(id),
+ profile_json TEXT NOT NULL,
+ location_verified INTEGER NOT NULL DEFAULT 0 CHECK(location_verified IN (0,1)),
+ updated_at __TIME__ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

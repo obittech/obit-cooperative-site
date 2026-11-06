@@ -118,7 +118,7 @@ test('seller enters membership code first, then password, and only then authenti
   assert.equal(s.requests.length,1);
   assert.equal(s.requests[0].body.identifier,'OBT-2026-000123');
   assert.equal(s.session().role,'member');
-  assert.equal(s.destination(),'market.html#sellerPanel');
+  assert.equal(s.destination(),'market-products.html#sellerPanel');
 });
 test('invalid seller codes stay on step one and changing a code clears the password', async () => {
   const s = sellerSignIn();
@@ -136,7 +136,7 @@ test('invalid seller codes stay on step one and changing a code clears the passw
   assert.equal(s.code.readOnly,false);
 });
 test('shopping page prioritises the catalogue before store explanations and the planner', () => {
-  const html=fs.readFileSync(path.join(root,'frontend/market.html'),'utf8');
+  const html=fs.readFileSync(path.join(root,'frontend/market-products.html'),'utf8');
   assert.ok(html.indexOf('id="listingGrid"')<html.indexOf('id="stores"'));
   assert.ok(html.indexOf('id="listingGrid"')<html.indexOf('id="plan"'));
   assert.ok(!html.includes('ecommerce-hero'));
