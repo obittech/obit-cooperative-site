@@ -1,4 +1,4 @@
-(()=>{'use strict';if(location.hash==='#sellerPanel'){location.replace('market-products.html#sellerPanel');return;}const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let regions,kind='',page=1,total=0,coords=null,request=0;
+(()=>{'use strict';if(['#sellerPanel','#amazon-finds','#plan','#source-products'].includes(location.hash)){location.replace('market-products.html'+location.search+location.hash);return;}const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let regions,kind='',page=1,total=0,coords=null,request=0;
 const fields={zone:'dirZone',state:'dirState',lga:'dirLga',community:'dirCommunity',cluster:'dirCluster'};
 function options(id,values,label){const el=$(id),old=el.value;el.replaceChildren(new Option(label,''));for(const value of values)el.add(new Option(value,value));el.value=values.includes(old)?old:'';}
 function fillStates(){options('dirState',$('dirZone').value?regions.zones[$('dirZone').value]:Object.keys(regions.areas),'All states');fillLgas();}
