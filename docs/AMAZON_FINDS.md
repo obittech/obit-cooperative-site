@@ -1,22 +1,18 @@
-# Amazon Finds, 5 November 2026
+# Amazon Finds, updated 6 November 2026
 
-The storefront has two ordinary external product links. Affiliate tracking is not active. No Amazon account was created or changed, no API credentials were configured, and no content was scraped into a feed. No copied product photos, ratings or prices are displayed.
+The owner supplied Amazon's signup confirmation showing Associate ID `obitmarket-20`. Both public Amazon product links now carry this tag. The required disclosure appears before the first paid link, and links use `sponsored noopener noreferrer`.
 
-Verified product destinations:
-- https://www.amazon.com/dp/0887307280 (The E-Myth Revisited)
-- https://www.amazon.com/dp/B004YAVF8I (Logitech M185 Wireless Mouse)
+This verifies link tagging only. Final application review, recorded commissions, payment setup and tax completion have not been independently verified. The signup screen states review follows qualifying sales and includes a 180-day qualifying-sales requirement.
 
-Buyers leave Obit to review current price, seller, returns and delivery eligibility on Amazon. These purchases bypass Obit checkout, SafePay and the 30% resale markup. External links open in a new tab with noopener and noreferrer.
+Product destinations:
+- https://www.amazon.com/dp/0887307280?tag=obitmarket-20
+- https://www.amazon.com/dp/B004YAVF8I?tag=obitmarket-20
 
-Before enabling affiliate links:
-1. Confirm the Amazon Associates owner/account, marketplace, registered website and valid tracking ID.
-2. Review the applicable operating agreement and content licence with the account owner.
-3. Replace the ordinary links with approved Special Links, add the required disclosure and sponsored link relationship, and verify the real tracking ID.
-4. Use authorised API access for images or current offers only after the account meets access requirements. Keep credentials server-side. Do not relabel an ordinary link as tracked.
+Buyers pay on Amazon and check current prices, seller terms and Nigerian delivery eligibility there. Obit's 30% markup and SafePay do not apply.
+
+No Amazon API/feed is connected. No product photos, prices or ratings are copied. Future image/offer integrations require authorised access. Credentials must stay server-side.
 
 Official references:
 - https://affiliate-program.amazon.com/help/operating/agreement/
 - https://affiliate-program.amazon.com/help/operating/policies
 - https://affiliate-program.amazon.com/creatorsapi/docs/en-us/introduction
-
-No automated supplier feed is connected by this release.
