@@ -217,3 +217,19 @@ CREATE TABLE IF NOT EXISTS market_shop_locations (
  location_verified INTEGER NOT NULL DEFAULT 0 CHECK(location_verified IN (0,1)),
  updated_at __TIME__ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Trial sellers use verified shopping identities, never membership identities.
+CREATE TABLE IF NOT EXISTS market_trial_sellers (
+ id __ID__, buyer_id __INT__ NOT NULL UNIQUE REFERENCES market_buyers(id),
+ phone_key TEXT NOT NULL UNIQUE,
+ other_cooperatives TEXT NOT NULL DEFAULT '', loan_interest INTEGER NOT NULL DEFAULT 0,
+ profile_json TEXT,
+ status TEXT NOT NULL DEFAULT 'DRAFT' CHECK(status IN ('DRAFT','PENDING','APPROVED','REJECTED','SUSPENDED')),
+ starts_ms __INT__ NOT NULL DEFAULT 0, expires_ms __INT__ NOT NULL DEFAULT 0,
+ converted_member_id __INT__ UNIQUE REFERENCES members(id),
+ location_verified INTEGER NOT NULL DEFAULT 0,
+ review_note TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1,
+ created_at __TIME__ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at __TIME__ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS market_trial_guard (id INTEGER PRIMARY KEY, touched INTEGER NOT NULL DEFAULT 0);
+INSERT INTO market_trial_guard (id,touched) VALUES (1,0) ON CONFLICT(id) DO NOTHING;

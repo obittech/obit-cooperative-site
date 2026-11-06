@@ -1,3 +1,4 @@
+import {registerTrial,trialMe,saveTrial,trialReviews,reviewTrial} from '../services/market-trials.js';
 import {directory,directoryShop,directoryRegions} from '../services/market-directory.js';
 import fs from 'node:fs';
 import {importSupplierDrafts,supplierDrafts,publishSupplierDraft} from '../services/market-suppliers.js';
@@ -109,3 +110,9 @@ marketCommerceRouter.post('/api/admin/market/supplier-drafts/import',privateResp
 marketCommerceRouter.post('/api/admin/market/supplier-drafts/:id/prepare',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await publishSupplierDraft(req.user.id,p.id)));
 
 marketCommerceRouter.get('/api/admin/market/supplier-research',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,JSON.parse(fs.readFileSync(new URL('../../data-catalogue/supplier-research-2026-11-05.json',import.meta.url),'utf8'))));
+
+marketCommerceRouter.post('/api/market/trial/register',privateResponse,requireBuyer,async(req,res)=>res.json(201,await registerTrial(req.buyer.id,req.body)));
+marketCommerceRouter.get('/api/market/trial/me',privateResponse,requireBuyer,async(req,res)=>res.json(200,await trialMe(req.buyer.id)));
+marketCommerceRouter.post('/api/market/trial/profile',privateResponse,requireBuyer,async(req,res)=>res.json(200,await saveTrial(req.buyer.id,req.body)));
+marketCommerceRouter.get('/api/admin/market/trials',privateResponse,requireAuth('staff','admin'),async(req,res)=>res.json(200,await trialReviews()));
+marketCommerceRouter.post('/api/admin/market/trials/:id/review',privateResponse,requireAuth('staff','admin'),async(req,res,p)=>res.json(200,await reviewTrial(req.user.id,p.id,req.body)));
