@@ -1,3 +1,4 @@
+import {directory,directoryShop,directoryRegions} from '../services/market-directory.js';
 import fs from 'node:fs';
 import {importSupplierDrafts,supplierDrafts,publishSupplierDraft} from '../services/market-suppliers.js';
 import {verifySellerPayout,settlementReview} from "../services/market-settlement-review.js";
@@ -29,6 +30,9 @@ marketCommerceRouter.get('/api/market/capabilities',async(req,res)=>res.json(200
   bank_transfer_available:bankTransferConfig().available,bank_transfer_whatsapp:bankTransferConfig().whatsapp,email_signin_available:!!process.env.RESEND_API_KEY,payments_available:false,payment_provider:'monnify',test_checkout_available:checkoutConfig().available,checkout_mode:checkoutConfig().mode,
   mode:'quotes_and_unpaid_orders',stock_reserved:false,orders_available:true,delivery_booking_available:false,delivery_test_available:deliveryTestAvailable(),reservation_minutes:HOLD_MS/60000,delivery_countries:['NG'],states:STATES
 }));
+marketCommerceRouter.get('/api/market/directory',async(req,res)=>res.json(200,await directory(new URL(req.url,'http://localhost').searchParams)));
+marketCommerceRouter.get('/api/market/directory/regions',async(req,res)=>res.json(200,directoryRegions()));
+marketCommerceRouter.get('/api/market/directory/shops/:id',async(req,res,p)=>res.json(200,await directoryShop(p.id)));
 marketCommerceRouter.get('/api/market/catalog',async(req,res)=>res.json(200,await catalogue(new URL(req.url,'http://localhost').searchParams)));
 marketCommerceRouter.post('/api/market/cart-preview',async(req,res)=>res.json(200,await preview(req.body?.items)));
 marketCommerceRouter.post('/api/market/buyer/request-code',privateResponse,async(req,res)=>res.json(200,await requestBuyerCode(req.body?.email)));

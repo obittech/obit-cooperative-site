@@ -44,7 +44,7 @@ sellerForm.addEventListener('submit', async event => {
     if (member.status !== 'ACTIVE') throw new Error('Your membership must be active before you can sell.');
     OBIT.saveSession('member', result.token);
     form.elements.password.value = '';
-    window.location.assign('market.html#sellerPanel');
+    window.location.assign('market-products.html#sellerPanel');
   } catch (error) {
     status.textContent = error.message;
     button.disabled = false;

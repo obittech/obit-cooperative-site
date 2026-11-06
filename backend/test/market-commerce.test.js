@@ -681,3 +681,33 @@ test('supplier drafts keep costs private, deduplicate and enforce evidence, memb
  assert.equal((await m.preview([{id:result.listing_id,qty:1}])).lines[0].available,false);
  await assert.rejects(sup.importSupplierDrafts(uid,[verified]),e=>e.status===409);
 });
+
+const directoryService=await import('../src/services/market-directory.js');
+const shopLocation={state:'FCT',lga:'Abuja Municipal Area Council',community:'Lugbe',kind:'plaza',cluster:'Directory Test Plaza',shop_number:'B12',address:'12 Test Street',landmark:'Test junction',hours:'Mon–Sat 8am–6pm',keywords:'affordable clothes fabrics shoes',phone:'08012345678',latitude:8.98,longitude:7.36};
+// Use the canonical label from the existing state / LGA source.
+shopLocation.lga=directoryService.directoryRegions().areas.FCT.find(x=>/municipal/i.test(x));
+test('directory only publishes reviewed active member stores, supports hierarchy, keywords and near search',async()=>{
+ const s=await seller(),admin=await staff();
+ await stores.submitStore(s.uid,{name:'Directory Test Trader',description:'A public clothing shop',version:0,location:shopLocation});
+ assert.equal((await directoryService.directory(new URLSearchParams({q:'Directory Test Trader'}))).total,0);
+ const row=await db.get('SELECT id FROM market_stores WHERE seller_member_id=?',[s.id]);
+ await stores.reviewStore(admin.id,row.id,{version:1,status:'APPROVED',official:false,location_verified:true,verification_note:'PRIVATE Checked shop B12 with trader on site'});
+ const found=await directoryService.directory(new URLSearchParams({q:'cheap cloths',state:'FCT',community:'Lugbe',cluster:'Directory Test Plaza'}));
+ assert.equal(found.total,1);assert.equal(found.items[0].id,s.id);assert.equal(found.items[0].location.zone,'North Central');assert.equal(found.items[0].location_verified,true);assert.equal(found.clusters[0].shops,1);assert.ok(!JSON.stringify(found).includes('PRIVATE'));assert.ok(!JSON.stringify(found).includes('member_code'));
+ assert.equal((await directoryService.directory(new URLSearchParams({lat:'8.98',lon:'7.36',radius:'1',q:'Directory Test Trader'}))).items[0].distance_km,0);
+ assert.equal((await directoryService.directory(new URLSearchParams({lat:'6.5',lon:'3.4',radius:'25',q:'Directory Test Trader'}))).total,0);
+ await stores.submitStore(s.uid,{name:'Directory Test Trader',description:'Edited',version:2,location:shopLocation});
+ await assert.rejects(directoryService.directoryShop(s.id),e=>e.status===404);
+ assert.equal(Number((await db.get('SELECT location_verified FROM market_shop_locations WHERE seller_member_id=?',[s.id])).location_verified),0);
+ await db.run("UPDATE market_stores SET status='APPROVED' WHERE seller_member_id=?",[s.id]);await db.run("UPDATE members SET status='SUSPENDED' WHERE id=?",[s.id]);await assert.rejects(directoryService.directoryShop(s.id),e=>e.status===404);
+});
+test('directory rejects invalid geography, unsafe media and malformed search coordinates',async()=>{
+ assert.throws(()=>directoryService.locationInput({...shopLocation,lga:'Not a real LGA'}),e=>e.status===400);
+ assert.throws(()=>directoryService.locationInput({...shopLocation,longitude:''}),e=>e.status===400);
+ assert.throws(()=>directoryService.locationInput({...shopLocation,image_url:'javascript:alert(1)',content_authorised:true}),e=>e.status===400);
+ assert.throws(()=>directoryService.locationInput({...shopLocation,image_url:'https://photos.example.com/shop.jpg'}),e=>e.status===400);
+ await assert.rejects(directoryService.directory(new URLSearchParams({lat:'NaN',lon:'7'})),e=>e.status===400);
+ await assert.rejects(directoryService.directory(new URLSearchParams({page:'-1'})),e=>e.status===400);
+ await assert.rejects(directoryService.directory(new URLSearchParams({radius:'NaN'})),e=>e.status===400);
+ const s=await seller(),admin=await staff();await stores.submitStore(s.uid,{name:'Location review test',description:'',version:0,location:shopLocation});const row=await db.get('SELECT id FROM market_stores WHERE seller_member_id=?',[s.id]);await assert.rejects(stores.reviewStore(admin.id,row.id,{version:1,status:'APPROVED',official:false,location_verified:true}),e=>e.status===400);
+});

@@ -1,29 +1,36 @@
+import {locationInput,parseLocation} from './market-directory.js';
 import {all,get,run,atomic} from '../db.js';
 import {HttpError} from '../router.js';
 import {integer,sellerMember} from './market-commerce.js';
 import {audit} from '../utils/audit.js';
 function text(value,min,max,label){if(typeof value!=='string'||value.trim().length<min||value.trim().length>max)throw new HttpError(400,'Check '+label);return value.trim();}
-export async function sellerStore(userId){const member=await sellerMember(userId);const row=await get('SELECT name,description,status,official,version FROM market_stores WHERE seller_member_id=?',[member.id]);return row?{...row,official:Number(row.official)===1,version:Number(row.version)}:null;}
+export async function sellerStore(userId){const member=await sellerMember(userId);const row=await get('SELECT s.name,s.description,s.status,s.official,s.version,d.profile_json,d.location_verified FROM market_stores s LEFT JOIN market_shop_locations d ON d.seller_member_id=s.seller_member_id WHERE s.seller_member_id=?',[member.id]);return row?{...row,location:parseLocation(row),official:Number(row.official)===1,version:Number(row.version)}:null;}
 export async function submitStore(userId,body){
  const member=await sellerMember(userId),name=text(body?.name,3,80,'store name'),description=text(body?.description,0,500,'store description'),version=integer(body?.version,0,2147483646,'store version');
+ const location=body.location===undefined?undefined:locationInput(body.location);
  return atomic(async()=>{
   await run('UPDATE members SET status=status WHERE id=?',[member.id]);
   const old=await get('SELECT version FROM market_stores WHERE seller_member_id=?',[member.id]);
   if(Number(old?.version||0)!==version)throw new HttpError(409,'Store profile changed. Refresh before submitting.');
   await run(`INSERT INTO market_stores (seller_member_id,name,description) VALUES (?,?,?) ON CONFLICT(seller_member_id) DO UPDATE SET name=excluded.name,description=excluded.description,status='PENDING',official=0,verification_note='',version=market_stores.version+1,updated_at=CURRENT_TIMESTAMP`,[member.id,name,description]);
+  if(location)await run(`INSERT INTO market_shop_locations (seller_member_id,profile_json) VALUES (?,?) ON CONFLICT(seller_member_id) DO UPDATE SET profile_json=excluded.profile_json,location_verified=0,updated_at=CURRENT_TIMESTAMP`,[member.id,JSON.stringify(location)]);
+  else await run('UPDATE market_shop_locations SET location_verified=0 WHERE seller_member_id=?',[member.id]);
   await audit(userId,'MARKET_STORE_SUBMITTED','members',member.id);
   return {ok:true,version:version+1};
  });
 }
-export async function reviewStores(){return all(`SELECT s.id,s.seller_member_id,s.name,s.description,s.status,s.official,s.version,s.verification_note,m.member_code,m.status AS member_status FROM market_stores s JOIN members m ON m.id=s.seller_member_id ORDER BY s.id DESC LIMIT 200`);}
+export async function reviewStores(){const rows=await all(`SELECT d.profile_json,d.location_verified,s.id,s.seller_member_id,s.name,s.description,s.status,s.official,s.version,s.verification_note,m.member_code,m.status AS member_status FROM market_stores s JOIN members m ON m.id=s.seller_member_id LEFT JOIN market_shop_locations d ON d.seller_member_id=s.seller_member_id ORDER BY s.id DESC LIMIT 200`);return rows.map(r=>({...r,location:parseLocation(r)}));}
 export async function reviewStore(userId,id,body){
  id=integer(id,1,Number.MAX_SAFE_INTEGER,'store');const version=integer(body?.version,1,2147483646,'store version');
  if(!['APPROVED','REJECTED'].includes(body?.status)||typeof body?.official!=='boolean')throw new HttpError(400,'Choose a store decision');
  if(body.official&&body.status!=='APPROVED')throw new HttpError(400,'Only approved stores can be official');
+ if(body.location_verified===true&&(body.status!=='APPROVED'||String(body.verification_note||'').trim().length<10))throw new HttpError(400,'Record how the shop location was checked before verifying it');
  const evidence=text(body?.verification_note||'',body.official?10:0,1000,'brand authorisation evidence or review note');
  return atomic(async()=>{
   const changed=await run('UPDATE market_stores SET status=?,official=?,verification_note=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND version=?',[body.status,body.official?1:0,evidence,id,version]);
   if(changed.changes!==1)throw new HttpError(409,'Store changed. Refresh and review again.');
+  const store=await get('SELECT seller_member_id FROM market_stores WHERE id=?',[id]);
+  await run('UPDATE market_shop_locations SET location_verified=? WHERE seller_member_id=?',[body.status==='APPROVED'&&body.location_verified===true?1:0,store.seller_member_id]);
   await audit(userId,'MARKET_STORE_REVIEWED','market_stores',id,{status:body.status,official:body.official});return {ok:true};
  });
 }
