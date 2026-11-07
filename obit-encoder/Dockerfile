@@ -3,7 +3,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certi
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY encoder.py recorded.py prepare_recording.py generate_narration.py ./
+COPY encoder.py recorded.py fresh_prayer.py prepare_recording.py generate_narration.py ./
 COPY assets ./assets
 RUN python generate_narration.py && python prepare_recording.py
 RUN useradd --create-home encoder

@@ -266,9 +266,17 @@ def run():
     if visibility not in ('unlisted','public') or (mode=='rehearsal' and visibility!='unlisted'):
         raise ConfigurationError('Rehearsal destination must be unlisted')
     output=destination(required('YOUTUBE_STREAM_KEY'))
-    slot=session_at(dt.datetime.now(dt.timezone.utc)) if mode=='daily' else 'morning'
+    now=dt.datetime.now(dt.timezone.utc)
+    slot=session_at(now) if mode=='daily' else 'morning'
     print('Selected session: '+slot,flush=True)
-    metadata=json.loads((ROOT/'media'/(slot+'-metadata.json')).read_text())
+    video=ROOT/'media'/(slot+'.mp4')
+    if os.environ.get('FRESH_PRAYER_ENABLED')=='true':
+        from fresh_prayer import recording
+        day=now.astimezone(dt.timezone(dt.timedelta(hours=1))).date().isoformat()
+        video, fresh_duration=recording(ROOT,day,slot)
+        metadata={'duration':fresh_duration}
+    else:
+        metadata=json.loads((ROOT/'media'/(slot+'-metadata.json')).read_text())
     repeats=1
     duration=metadata['duration']*repeats
     with httpx.Client(timeout=30) as client:
@@ -276,7 +284,7 @@ def run():
         if mode=='daily':
             broadcast=youtube.prepare(required('YOUTUBE_STREAM_KEY'),visibility)
         print('Recorded playback started: '+str(round(duration))+' seconds; no LiveAvatar session.',flush=True)
-        cmd=['ffmpeg','-hide_banner','-loglevel','error','-nostdin','-re','-stream_loop',str(repeats-1),'-i',str(ROOT/'media'/(slot+'.mp4')),
+        cmd=['ffmpeg','-hide_banner','-loglevel','error','-nostdin','-re','-stream_loop',str(repeats-1),'-i',str(video),
              '-t',str(duration),'-c:v','copy','-c:a','copy','-f','flv',output]
         process=subprocess.Popen(cmd,stderr=subprocess.PIPE,stdout=subprocess.DEVNULL)
         def stop(signum,frame):
