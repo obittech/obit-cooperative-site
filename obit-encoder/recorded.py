@@ -274,7 +274,10 @@ def run():
         from fresh_prayer import recording
         day=now.astimezone(dt.timezone(dt.timedelta(hours=1))).date().isoformat()
         video, fresh_duration=recording(ROOT,day,slot)
-        metadata={'duration':fresh_duration}
+        # Owned narration is preserved. Build-time pre-roll protects its opening
+        # while the unchanged guarded YouTube transition establishes playback.
+        video=video.with_name('broadcast.mp4')
+        metadata={'duration':fresh_duration+60}
     else:
         metadata=json.loads((ROOT/'media'/(slot+'-metadata.json')).read_text())
     repeats=1

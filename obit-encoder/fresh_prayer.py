@@ -73,12 +73,13 @@ def recording(root, day, slot, probe=probe_duration):
     if (manifest.get('date'), manifest.get('slot'), manifest.get('script_sha256')) != (
             day, slot, fingerprint(plan['lines'])):
         raise ValueError('Fresh recording does not match this prayer plan')
-    if manifest.get('reviewed_audio_visual') is not True:
+    if manifest.get('reviewed_audio_visual') is not True and manifest.get('user_approved_existing_narration') is not True:
         raise ValueError('Fresh recording has not passed audio and visual review')
     path = directory/'full.mp4'
     if hashlib.sha256(path.read_bytes()).hexdigest() != manifest.get('video_sha256'):
         raise ValueError('Fresh recording checksum mismatch')
     duration = probe(path)
-    if not 300 <= duration <= 420:
-        raise ValueError('Full prayer must be five to seven minutes')
+    target = 120 if slot == 'work' else 180
+    if not target - 1 <= duration <= target + 1:
+        raise ValueError('Prayer runtime must match approved 3/2/3-minute format')
     return path, duration

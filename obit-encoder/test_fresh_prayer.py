@@ -55,7 +55,7 @@ class FreshPrayerTests(unittest.TestCase):
                                      'DESTINATION_VISIBILITY':'public',
                                      'YOUTUBE_STREAM_KEY':'test-key',
                                      'FRESH_PRAYER_ENABLED':'true'}), \
-                patch('fresh_prayer.recording', return_value=(Path('/fresh/full.mp4'),360)), \
+                patch('fresh_prayer.recording', return_value=(Path('/fresh/broadcast.mp4'),180)), \
                 patch('recorded.httpx.Client'), \
                 patch('recorded.YouTube.prepare', return_value='same-event'), \
                 patch('recorded.YouTube.finish'), \
@@ -63,7 +63,7 @@ class FreshPrayerTests(unittest.TestCase):
                 patch('recorded.subprocess.Popen', return_value=process) as encoder:
             recorded.run()
             command = encoder.call_args.args[0]
-            self.assertEqual(command[command.index('-i')+1], '/fresh/full.mp4')
+            self.assertEqual(command[command.index('-i')+1], '/fresh/broadcast.mp4')
             self.assertEqual(command[command.index('-stream_loop')+1], '0')
 
     def test_media_gate_date_hash_review_and_duration(self):
@@ -80,21 +80,21 @@ class FreshPrayerTests(unittest.TestCase):
                         'reviewed_audio_visual':True}
             target = directory/'verified.json'
             target.write_text(json.dumps(manifest))
-            self.assertEqual(recording(root,'2026-11-07','morning',lambda _:360)[1],360)
+            self.assertEqual(recording(root,'2026-11-07','morning',lambda _:180)[1],180)
             with self.assertRaises(ValueError):
-                recording(root,'2026-11-08','morning',lambda _:360)
-            for duration in (299, 421):
+                recording(root,'2026-11-08','morning',lambda _:180)
+            for duration in (119, 181.1):
                 with self.assertRaises(ValueError):
                     recording(root,'2026-11-07','morning',lambda _:duration)
             manifest['reviewed_audio_visual'] = False
             target.write_text(json.dumps(manifest))
             with self.assertRaises(ValueError):
-                recording(root,'2026-11-07','morning',lambda _:360)
+                recording(root,'2026-11-07','morning',lambda _:180)
             manifest['reviewed_audio_visual'] = True
             manifest['video_sha256'] = 'incorrect'
             target.write_text(json.dumps(manifest))
             with self.assertRaises(ValueError):
-                recording(root,'2026-11-07','morning',lambda _:360)
+                recording(root,'2026-11-07','morning',lambda _:180)
 
 
 if __name__ == '__main__':

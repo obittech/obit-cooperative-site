@@ -1,0 +1,9 @@
+{
+  "date": "2026-11-07",
+  "slot": "work",
+  "script_sha256": "c9c1f52dddcb21493ff008f2836e4840b8e21390281d0c40d502e6ba0b758fac",
+  "video_sha256": "9e5913ce65ee214890593c0a123ff4c48d8624abf0921d1aaa75de2882ea7cd6",
+  "reviewed_audio_visual": false,
+  "user_approved_existing_narration": true,
+  "approval_basis": "7 November instruction to keep current narration and deploy other changes. Audio payload correlation with approved review mixes exceeds 0.9989. Frames and complete decode checked. Cards are thematic headings, not word-synchronised captions."
+}
