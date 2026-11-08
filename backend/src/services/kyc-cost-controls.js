@@ -74,7 +74,11 @@ export function providerReference(body) {
   if (!present.length) return { reference: null, status: 'MISSING' };
   if (present.some(value => typeof value !== 'string'
       || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value)
-      || /[0-9]{11}/.test(value)) || new Set(present).size !== 1) {
+      // Youverify report IDs are 24-character hexadecimal ObjectIds and can
+      // legitimately contain runs of 11 or more digits. Keep rejecting raw
+      // identity numbers and unexpected references containing those numbers.
+      || (/[0-9]{11}/.test(value)
+        && !(/^[a-f0-9]{24}$/i.test(value) && /[a-f]/i.test(value)))) || new Set(present).size !== 1) {
     return { reference: null, status: 'INVALID' };
   }
   return { reference: present[0], status: 'CAPTURED' };
