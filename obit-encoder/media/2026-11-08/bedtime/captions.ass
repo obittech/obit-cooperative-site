@@ -1,0 +1,71 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 720
+PlayResY: 1280
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,DejaVu Sans,44,&H00FFFFFF,&H00FFFFFF,&H00110C08,&H00000000,-1,0,0,0,100,100,0,0,1,2,1,5,145,145,0,1
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.38,Default,,0,0,0,,{\pos(360,655)}Dear Obit\NBillionaires,
+Dialogue: 0,0:00:01.51,0:00:03.35,Default,,0,0,0,,{\pos(360,655)}join us in this\Nbedtime prayer.
+Dialogue: 0,0:00:03.74,0:00:04.88,Default,,0,0,0,,{\pos(360,655)}Repeat after me.
+Dialogue: 0,0:00:07.68,0:00:09.08,Default,,0,0,0,,{\pos(360,655)}I welcome this\Nquiet evening.
+Dialogue: 0,0:00:12.17,0:00:12.89,Default,,0,0,0,,{\pos(360,655)}My breathing\Ngrows
+Dialogue: 0,0:00:12.89,0:00:14.01,Default,,0,0,0,,{\pos(360,655)}slow and gentle.
+Dialogue: 0,0:00:16.76,0:00:18.30,Default,,0,0,0,,{\pos(360,655)}I release the\Nhurry of today.
+Dialogue: 0,0:00:21.48,0:00:22.23,Default,,0,0,0,,{\pos(360,655)}I give thanks for
+Dialogue: 0,0:00:22.23,0:00:23.22,Default,,0,0,0,,{\pos(360,655)}what\Nsustained me.
+Dialogue: 0,0:00:25.97,0:00:27.09,Default,,0,0,0,,{\pos(360,655)}I remember\Na kindness
+Dialogue: 0,0:00:27.09,0:00:27.99,Default,,0,0,0,,{\pos(360,655)}I received.
+Dialogue: 0,0:00:31.01,0:00:32.42,Default,,0,0,0,,{\pos(360,655)}I honour the\Neffort I gave.
+Dialogue: 0,0:00:35.17,0:00:36.02,Default,,0,0,0,,{\pos(360,655)}Unfinished work
+Dialogue: 0,0:00:36.02,0:00:37.20,Default,,0,0,0,,{\pos(360,655)}can wait until\Ntomorrow.
+Dialogue: 0,0:00:40.50,0:00:42.05,Default,,0,0,0,,{\pos(360,655)}I allow myself\Nto rest tonight.
+Dialogue: 0,0:00:44.80,0:00:45.73,Default,,0,0,0,,{\pos(360,655)}I meet my\Nworries
+Dialogue: 0,0:00:45.73,0:00:46.68,Default,,0,0,0,,{\pos(360,655)}with\Ncompassion.
+Dialogue: 0,0:00:50.13,0:00:51.84,Default,,0,0,0,,{\pos(360,655)}I need not solve\Neverything now.
+Dialogue: 0,0:00:54.59,0:00:56.10,Default,,0,0,0,,{\pos(360,655)}May peace settle\Nin my heart.
+Dialogue: 0,0:00:59.40,0:01:00.35,Default,,0,0,0,,{\pos(360,655)}May kindness fill
+Dialogue: 0,0:01:00.35,0:01:01.27,Default,,0,0,0,,{\pos(360,655)}the home\Naround me.
+Dialogue: 0,0:01:04.02,0:01:05.81,Default,,0,0,0,,{\pos(360,655)}May those I love\Nfind comfort.
+Dialogue: 0,0:01:09.12,0:01:09.87,Default,,0,0,0,,{\pos(360,655)}May those\Nwithout
+Dialogue: 0,0:01:09.87,0:01:11.10,Default,,0,0,0,,{\pos(360,655)}shelter\Nfind safety.
+Dialogue: 0,0:01:13.86,0:01:15.50,Default,,0,0,0,,{\pos(360,655)}I hold my family\Nin gratitude.
+Dialogue: 0,0:01:18.69,0:01:19.45,Default,,0,0,0,,{\pos(360,655)}I wish peace to
+Dialogue: 0,0:01:19.45,0:01:20.48,Default,,0,0,0,,{\pos(360,655)}those working\Ntonight.
+Dialogue: 0,0:01:23.23,0:01:23.75,Default,,0,0,0,,{\pos(360,655)}I remember the
+Dialogue: 0,0:01:23.75,0:01:24.74,Default,,0,0,0,,{\pos(360,655)}lonely and\Ngrieving.
+Dialogue: 0,0:01:27.93,0:01:28.44,Default,,0,0,0,,{\pos(360,655)}May they find
+Dialogue: 0,0:01:28.44,0:01:29.37,Default,,0,0,0,,{\pos(360,655)}care and\Ncompany.
+Dialogue: 0,0:01:32.12,0:01:33.67,Default,,0,0,0,,{\pos(360,655)}I listen to my\Nbody's needs.
+Dialogue: 0,0:01:36.86,0:01:37.72,Default,,0,0,0,,{\pos(360,655)}I welcome care
+Dialogue: 0,0:01:37.72,0:01:38.87,Default,,0,0,0,,{\pos(360,655)}that supports\Nmy health.
+Dialogue: 0,0:01:41.62,0:01:42.84,Default,,0,0,0,,{\pos(360,655)}I seek help\Nwhen I need it.
+Dialogue: 0,0:01:46.20,0:01:47.06,Default,,0,0,0,,{\pos(360,655)}I need not carry
+Dialogue: 0,0:01:47.06,0:01:48.20,Default,,0,0,0,,{\pos(360,655)}every burden\Nalone.
+Dialogue: 0,0:01:50.94,0:01:51.68,Default,,0,0,0,,{\pos(360,655)}I make patient
+Dialogue: 0,0:01:51.68,0:01:52.58,Default,,0,0,0,,{\pos(360,655)}room for\Nhealing.
+Dialogue: 0,0:01:56.02,0:01:57.30,Default,,0,0,0,,{\pos(360,655)}I offer myself\Nkindness
+Dialogue: 0,0:01:57.30,0:01:58.33,Default,,0,0,0,,{\pos(360,655)}without\Njudgement.
+Dialogue: 0,0:02:01.09,0:02:02.09,Default,,0,0,0,,{\pos(360,655)}I release\Nharsh words
+Dialogue: 0,0:02:02.09,0:02:02.99,Default,,0,0,0,,{\pos(360,655)}against myself.
+Dialogue: 0,0:02:06.27,0:02:06.89,Default,,0,0,0,,{\pos(360,655)}I can learn from
+Dialogue: 0,0:02:06.89,0:02:07.95,Default,,0,0,0,,{\pos(360,655)}today's\Nmistakes.
+Dialogue: 0,0:02:10.70,0:02:12.26,Default,,0,0,0,,{\pos(360,655)}I keep one\Nuseful lesson.
+Dialogue: 0,0:02:15.32,0:02:16.09,Default,,0,0,0,,{\pos(360,655)}I let the\Nremaining
+Dialogue: 0,0:02:16.09,0:02:16.99,Default,,0,0,0,,{\pos(360,655)}noise fade.
+Dialogue: 0,0:02:19.68,0:02:20.56,Default,,0,0,0,,{\pos(360,655)}May wisdom\Nguide
+Dialogue: 0,0:02:20.56,0:02:21.60,Default,,0,0,0,,{\pos(360,655)}my next choices.
+Dialogue: 0,0:02:24.85,0:02:25.91,Default,,0,0,0,,{\pos(360,655)}May courage\Naccompany
+Dialogue: 0,0:02:25.91,0:02:27.02,Default,,0,0,0,,{\pos(360,655)}uncertain days.
+Dialogue: 0,0:02:29.77,0:02:30.90,Default,,0,0,0,,{\pos(360,655)}May compassion\Nshape
+Dialogue: 0,0:02:30.90,0:02:32.19,Default,,0,0,0,,{\pos(360,655)}my words\Nand actions.
+Dialogue: 0,0:02:35.34,0:02:36.24,Default,,0,0,0,,{\pos(360,655)}May hope\Nremain
+Dialogue: 0,0:02:36.24,0:02:37.66,Default,,0,0,0,,{\pos(360,655)}through difficult\Nseasons.
+Dialogue: 0,0:02:40.40,0:02:42.01,Default,,0,0,0,,{\pos(360,655)}I am grateful\Nfor this pause.
+Dialogue: 0,0:02:45.03,0:02:45.84,Default,,0,0,0,,{\pos(360,655)}I give my mind
+Dialogue: 0,0:02:45.84,0:02:46.93,Default,,0,0,0,,{\pos(360,655)}permission\Nto settle.
+Dialogue: 0,0:02:49.67,0:02:51.54,Default,,0,0,0,,{\pos(360,655)}I prepare for a\Npeaceful rest.
+Dialogue: 0,0:02:54.83,0:02:55.87,Default,,0,0,0,,{\pos(360,655)}I welcome\Ntomorrow
+Dialogue: 0,0:02:55.87,0:02:57.02,Default,,0,0,0,,{\pos(360,655)}as a fresh\Nbeginning.

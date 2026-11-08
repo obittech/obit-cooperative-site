@@ -1,0 +1,13 @@
+{
+  "date": "2026-11-08",
+  "slot": "work",
+  "script_sha256": "30e6d6db31ebe6c20b492996bbaadfb4d5045c817dfb70c26ad97ebbb6b2fa17",
+  "video_sha256": "ce05cb45d381d1307887588806b4956098b377346290da9986e7124ad259f44f",
+  "reviewed_audio_visual": true,
+  "review_method": "Full media decode, independent Whisper ASR compared to approved script, acoustic phrase alignment, representative encoded frames and mobile caption exclusion masks. No human listening review.",
+  "listening_review": "not_performed",
+  "voice": "Sarah - Mature, Reassuring, Confident",
+  "captioned": true,
+  "credit_batch_cap": 3000,
+  "credit_batch_used": 2536
+}
