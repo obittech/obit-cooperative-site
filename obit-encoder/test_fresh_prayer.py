@@ -12,8 +12,13 @@ class FreshPrayerTests(unittest.TestCase):
     def setUp(self):
         self.plans = json.loads((Path(__file__).parent/'assets/prayer_plans.json').read_text())
 
-    def test_approved_intros_and_three_distinct_sessions(self):
-        self.assertEqual(len(validate_catalog(self.plans)), 3)
+    def test_approved_intros_and_distinct_dated_sessions(self):
+        self.assertEqual(len(validate_catalog(self.plans)), 5)
+        self.assertEqual({(p['date'], p['slot']) for p in self.plans}, {
+            ('2026-11-07', 'morning'), ('2026-11-07', 'work'),
+            ('2026-11-07', 'bedtime'), ('2026-11-08', 'work'),
+            ('2026-11-08', 'bedtime'),
+        })
         for p in self.plans:
             self.assertEqual(p['intro'], INTROS[p['slot']])
 

@@ -1,0 +1,13 @@
+{
+  "date": "2026-11-08",
+  "slot": "bedtime",
+  "script_sha256": "afacde7b13ecf1c81c7fe34797eb1f282c605b275096fd7581af6a7c20423906",
+  "video_sha256": "1602c0723f4448ea65c46718284e2097c2c505e7ba2241f463f0e340cd471dc6",
+  "reviewed_audio_visual": true,
+  "review_method": "Full media decode, independent Whisper ASR compared to approved script, acoustic phrase alignment, representative encoded frames and mobile caption exclusion masks. No human listening review.",
+  "listening_review": "not_performed",
+  "voice": "Brian - Deep, Resonant and Comforting",
+  "captioned": true,
+  "credit_batch_cap": 3000,
+  "credit_batch_used": 2536
+}

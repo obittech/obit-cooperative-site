@@ -1,0 +1,46 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 720
+PlayResY: 1280
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,DejaVu Sans,44,&H00FFFFFF,&H00FFFFFF,&H00110C08,&H00000000,-1,0,0,0,100,100,0,0,1,2,1,5,145,145,0,1
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.73,Default,,0,0,0,,{\pos(360,655)}Dear Obit\NBillionaires, join
+Dialogue: 0,0:00:01.73,0:00:03.06,Default,,0,0,0,,{\pos(360,655)}us in this work\Nhour prayer.
+Dialogue: 0,0:00:03.13,0:00:04.18,Default,,0,0,0,,{\pos(360,655)}Repeat after me.
+Dialogue: 0,0:00:06.44,0:00:07.88,Default,,0,0,0,,{\pos(360,655)}I welcome this\Nworking hour.
+Dialogue: 0,0:00:10.32,0:00:11.57,Default,,0,0,0,,{\pos(360,655)}I breathe\Nand settle.
+Dialogue: 0,0:00:13.88,0:00:15.33,Default,,0,0,0,,{\pos(360,655)}I choose one\Nclear task.
+Dialogue: 0,0:00:17.79,0:00:18.88,Default,,0,0,0,,{\pos(360,655)}I begin\Nwith care.
+Dialogue: 0,0:00:21.14,0:00:22.46,Default,,0,0,0,,{\pos(360,655)}My attention\Nhas value.
+Dialogue: 0,0:00:24.87,0:00:25.66,Default,,0,0,0,,{\pos(360,655)}I put\Ndistractions
+Dialogue: 0,0:00:25.66,0:00:26.56,Default,,0,0,0,,{\pos(360,655)}aside.
+Dialogue: 0,0:00:28.56,0:00:29.87,Default,,0,0,0,,{\pos(360,655)}I work at a\Nsteady pace.
+Dialogue: 0,0:00:32.33,0:00:33.57,Default,,0,0,0,,{\pos(360,655)}I give each\Nstep thought.
+Dialogue: 0,0:00:35.82,0:00:36.99,Default,,0,0,0,,{\pos(360,655)}I ask when I\Nam unsure.
+Dialogue: 0,0:00:39.36,0:00:40.67,Default,,0,0,0,,{\pos(360,655)}I listen before\NI answer.
+Dialogue: 0,0:00:42.92,0:00:44.06,Default,,0,0,0,,{\pos(360,655)}I speak with\Npatience.
+Dialogue: 0,0:00:46.49,0:00:47.80,Default,,0,0,0,,{\pos(360,655)}I treat people\Nwith respect.
+Dialogue: 0,0:00:50.06,0:00:50.96,Default,,0,0,0,,{\pos(360,655)}I keep my word.
+Dialogue: 0,0:00:53.38,0:00:54.61,Default,,0,0,0,,{\pos(360,655)}I ask for\Nhelp early.
+Dialogue: 0,0:00:56.87,0:00:58.29,Default,,0,0,0,,{\pos(360,655)}I welcome useful\Ncorrection.
+Dialogue: 0,0:01:00.74,0:01:02.05,Default,,0,0,0,,{\pos(360,655)}I learn without\Nlosing heart.
+Dialogue: 0,0:01:04.31,0:01:05.36,Default,,0,0,0,,{\pos(360,655)}I can begin\Nagain.
+Dialogue: 0,0:01:07.89,0:01:09.31,Default,,0,0,0,,{\pos(360,655)}I notice small\Nprogress.
+Dialogue: 0,0:01:11.57,0:01:12.79,Default,,0,0,0,,{\pos(360,655)}I take rest\Nwhen needed.
+Dialogue: 0,0:01:15.25,0:01:16.79,Default,,0,0,0,,{\pos(360,655)}I return with\Nfresh attention.
+Dialogue: 0,0:01:19.05,0:01:19.67,Default,,0,0,0,,{\pos(360,655)}I appreciate
+Dialogue: 0,0:01:19.67,0:01:20.57,Default,,0,0,0,,{\pos(360,655)}those\Nbeside me.
+Dialogue: 0,0:01:23.02,0:01:24.59,Default,,0,0,0,,{\pos(360,655)}I use my skills\Nhonestly.
+Dialogue: 0,0:01:26.90,0:01:28.42,Default,,0,0,0,,{\pos(360,655)}I welcome fair\Nopportunities.
+Dialogue: 0,0:01:30.89,0:01:32.15,Default,,0,0,0,,{\pos(360,655)}I keep clear\Nrecords.
+Dialogue: 0,0:01:34.41,0:01:35.83,Default,,0,0,0,,{\pos(360,655)}I leave my\Nwork in order.
+Dialogue: 0,0:01:38.38,0:01:40.12,Default,,0,0,0,,{\pos(360,655)}I make room for\Ncooperation.
+Dialogue: 0,0:01:42.37,0:01:42.92,Default,,0,0,0,,{\pos(360,655)}I release
+Dialogue: 0,0:01:42.92,0:01:44.41,Default,,0,0,0,,{\pos(360,655)}unnecessary\Nconflict.
+Dialogue: 0,0:01:47.09,0:01:48.81,Default,,0,0,0,,{\pos(360,655)}I finish one\Nuseful step.
+Dialogue: 0,0:01:51.07,0:01:52.74,Default,,0,0,0,,{\pos(360,655)}I encourage\Nsomeone today.
+Dialogue: 0,0:01:55.51,0:01:56.29,Default,,0,0,0,,{\pos(360,655)}I continue with
+Dialogue: 0,0:01:56.29,0:01:57.38,Default,,0,0,0,,{\pos(360,655)}purpose\Nand hope.
