@@ -4,12 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'obit-kyc-'));
+process.env.AUTH_TOKEN_SECRET = 'application-access-fixture-only';
 process.env.DB_PATH = path.join(temp, 'test.db');
 process.env.YOUVERIFY_ENV = 'sandbox';
 process.env.YOUVERIFY_SECRET_KEY = 'test-only';
 const { migrate, get, run, all, closeDatabase } = await import('../src/db.js');
 const { reserveKycRequest, finishKycRequest, requireKycAccess, providerReference } = await import('../src/services/kyc-cost-controls.js');
 const { kycRouter } = await import('../src/routes/kyc.js');
+const { authorizedFixtureHandler } = await import('./helpers/application-session.js');
 await migrate();
 after(async () => { await closeDatabase(); fs.rmSync(temp, { recursive: true, force: true }); });
 async function fixture() {
@@ -18,7 +20,7 @@ async function fixture() {
   const check = await run("INSERT INTO kyc_checks (application_id, provider, session_ref, status) VALUES (?, 'YOUVERIFY', ?, 'KYC_PENDING')", [app.lastInsertRowid, `youverify_sandbox_${crypto.randomUUID()}`]);
   return get('SELECT * FROM kyc_checks WHERE id = ?', [check.lastInsertRowid]);
 }
-const verify = kycRouter.match('POST', '/api/kyc/session/test/verify').handlers[0];
+const verify = authorizedFixtureHandler(kycRouter, 'POST', '/api/kyc/session/test/verify');
 const request = { body: { type: 'nin', id_number: '12345678901' } };
 const response = { json: (status, body) => ({ status, body }) };
 

@@ -27,6 +27,7 @@ const STATUS_TO_STEP = {
 // Example: apply.html?new=1
 const launchParams = new URLSearchParams(window.location.search);
 if (launchParams.has('new')) {
+  OBIT.clearSession('application');
   localStorage.removeItem('obit_application_id');
   localStorage.removeItem('obit_kyc_session_ref');
   localStorage.removeItem('obit_payment_reference');
@@ -60,8 +61,13 @@ const state = {
 };
 
 function showAlert(message, type = 'error') {
-  document.getElementById('alertBox').innerHTML =
-    `<div class="alert alert-${type === 'error' ? 'error' : 'success'}">${message}</div>`;
+  const box = document.getElementById('alertBox');
+  box.textContent = '';
+  const alert = document.createElement('div');
+  alert.className = `alert alert-${type === 'error' ? 'error' : 'success'}`;
+  alert.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  alert.textContent = String(message);
+  box.appendChild(alert);
 }
 function clearAlert() { document.getElementById('alertBox').innerHTML = ''; }
 
@@ -175,6 +181,8 @@ async function saveProfileAndContinue() {
       });
       password.value = '';
       confirmation.value = '';
+      OBIT.saveSession('application', updated.application_token);
+      delete updated.application_token;
       state.applicationId = updated.id;
       localStorage.setItem('obit_application_id', updated.id);
     } else {
@@ -378,8 +386,12 @@ async function restoreExistingApplication() {
     fillReviewSummary(app);
     const target = STATUS_TO_STEP[app.status] || 'profile';
     goToStep(target);
-    if (target === 'kyc' && state.kycSessionRef) {
-      const check = await OBIT.get(`/api/kyc/${state.kycSessionRef}/status`);
+    if (target === 'kyc') {
+      let check;
+      try { check = await OBIT.get(`/api/kyc/${state.kycSessionRef || state.applicationId}/status`); }
+      catch (error) { if (error.status === 404) return; throw error; }
+      state.kycSessionRef = check.session_ref;
+      localStorage.setItem('obit_kyc_session_ref', check.session_ref);
       showKycProvider(check);
       renderKycStatus(check.status);
       if (check.restart_required) {
@@ -395,13 +407,47 @@ async function restoreExistingApplication() {
         document.getElementById('btnStartKyc').style.display = 'none';
       }
     }
-  } catch {
-    // Application id is stale (e.g. different backend/DB) — start fresh.
-    localStorage.removeItem('obit_application_id');
-    state.applicationId = null;
-    goToStep('profile');
+  } catch (error) {
+    // Preserve the existing application reference on expiry or network failure.
+    // Never turn an interrupted application into an accidental duplicate signup.
+    if ([401, 403].includes(error.status)) showApplicationResume();
+    else {
+      STEPS.forEach(step => { document.getElementById(`panel-${step}`).style.display = 'none'; });
+      showAlert('Your saved application could not be loaded. Refresh to retry or sign in below. Do not register or pay again.');
+      document.getElementById('applicationResume').open = true;
+    }
   }
 }
+
+function showApplicationResume() {
+  STEPS.forEach(step => { document.getElementById(`panel-${step}`).style.display = 'none'; });
+  document.getElementById('applicationResume').open = true;
+  document.getElementById('applicationResumeMessage').textContent = 'Please sign in to continue securely. Your application has not been deleted.';
+}
+window.addEventListener('obit-application-access-required', showApplicationResume);
+document.getElementById('applicationResumeForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = document.getElementById('btnResumeApplication');
+  if (button.disabled) return;
+  button.disabled = true;
+  const password = document.getElementById('resumePassword');
+  try {
+    const session = await OBIT.post('/api/applications/resume', { username: document.getElementById('resumeUsername').value, password: password.value });
+    OBIT.saveSession('application', session.application_token);
+    state.applicationId = session.application_id;
+    state.kycSessionRef = null;
+    state.application = null;
+    localStorage.setItem('obit_application_id', session.application_id);
+    localStorage.removeItem('obit_kyc_session_ref');
+    localStorage.removeItem('obit_payment_reference');
+    document.getElementById('applicationResumeMessage').textContent = '';
+    document.getElementById('applicationResume').open = false;
+    clearAlert();
+    await restoreExistingApplication();
+  } catch (error) {
+    document.getElementById('applicationResumeMessage').textContent = error.message;
+  } finally { password.value = ''; button.disabled = false; }
+});
 
 document.getElementById('btnStartOrSave').addEventListener('click', saveProfileAndContinue);
 document.getElementById('btnBackToProfile').addEventListener('click', () => goToStep('profile'));

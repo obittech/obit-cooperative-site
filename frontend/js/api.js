@@ -8,7 +8,9 @@ const OBIT = {
 
   async request(method, path, { body, token } = {}) {
     const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const applicationPath = /^\/api\/(?:applications\/\d+(?:\/submit)?|kyc\/.*|payments\/membership\/(?:initialize|bank-transfer)(?:\/.*)?)$/.test(path);
+    const accessToken = token || (applicationPath ? OBIT.getSession('application') || OBIT.getSession('member') : null);
+    if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
     const res = await fetch(`${OBIT.base()}${path}`, {
       method,
       headers,
@@ -18,7 +20,13 @@ const OBIT = {
     try { data = await res.json(); } catch { /* no body */ }
     if (!res.ok) {
       const message = (data && data.error) || `Request failed (${res.status})`;
-      throw new Error(message);
+      const error = new Error(message);
+      error.status = res.status;
+      if (applicationPath && [401, 403].includes(res.status)) {
+        if (!token) OBIT.clearSession('application');
+        window.dispatchEvent(new CustomEvent('obit-application-access-required'));
+      }
+      throw error;
     }
     return data;
   },

@@ -9,11 +9,37 @@ import { audit } from '../utils/audit.js';
 import { validateApplicationProfile } from '../utils/application-profile.js';
 import { existingMembershipForApplication, approvedMembershipForApplication } from '../services/membership-approval.js';
 import { registrationUsername, usernameAvailable, applicationLoginInfo } from '../services/registration-login.js';
-import { hashPassword } from '../utils/auth.js';
+import { hashPassword, verifyPassword } from '../utils/auth.js';
 
 import { applicationWithSponsor, saveSponsor, validateSavedSponsor, sponsorLocked } from '../services/member-referrals.js';
 
+import { applicationParam, issueApplicationSession, applicationCredential } from '../middleware/application-access.js';
+
 export const applicationsRouter = new Router();
+const resumeAttempts = new Map();
+const dummyHash = hashPassword('not-a-real-application-password');
+
+// A bounded, per-process limiter. Do not trust arbitrary forwarded IP headers.
+// The broad socket-IP cap accommodates shared proxies; deploy with a trusted
+// edge limiter for client-IP enforcement and shared limits when scaling.
+applicationsRouter.post('/api/applications/resume', async (req, res) => {
+  const username = typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : '';
+  const password = req.body?.password;
+  if (!/^[a-z][a-z0-9._]{3,23}$/.test(username) || typeof password !== 'string' || password.length < 1 || password.length > 256) throw new HttpError(401, 'Incorrect credentials.');
+  const now = Date.now();
+  for (const [key, entry] of resumeAttempts) if (entry.until <= now) resumeAttempts.delete(key);
+  const keys = [`user:${username}`, `ip:${req.socket?.remoteAddress || 'unknown'}`];
+  if (keys.some(key => (resumeAttempts.get(key)?.count || 0) >= (key.startsWith('ip:') ? 300 : 5))) throw new HttpError(429, 'Too many attempts. Try again in 15 minutes.');
+  if (resumeAttempts.size >= 10000 && keys.some(key => !resumeAttempts.has(key))) throw new HttpError(429, 'Please try again later.');
+  for (const key of keys) { const entry = resumeAttempts.get(key) || { count: 0, until: now + 15 * 60 * 1000 }; entry.count++; resumeAttempts.set(key, entry); }
+  const registration = await get('SELECT application_id FROM registration_credentials WHERE username = ?', [username]);
+  const credential = registration ? await applicationCredential(registration.application_id) : {};
+  const correct = verifyPassword(password, credential.password_hash || dummyHash);
+  if (!registration || !correct || (credential.linked && (credential.status !== 'ACTIVE' || credential.membership_status !== 'ACTIVE'))) throw new HttpError(401, 'Incorrect credentials.');
+  resumeAttempts.delete(`user:${username}`);
+  res.setHeader?.('Cache-Control', 'no-store');
+  res.json(200, { application_id: registration.application_id, application_token: await issueApplicationSession(registration.application_id) });
+});
 
 const EDITABLE_FIELDS = [
   'full_legal_name', 'date_of_birth', 'gender', 'phone', 'whatsapp', 'email',
@@ -44,7 +70,8 @@ applicationsRouter.post('/api/applications/register', async (req, res) => {
     await audit(null, 'APPLICATION_STARTED', 'member_applications', row.id, { login_created: true });
     return { ...await applicationWithSponsor(row), username, has_login_credentials: true };
   });
-  res.json(201, application);
+  res.setHeader?.('Cache-Control', 'no-store');
+  res.json(201, { ...application, application_token: await issueApplicationSession(application.id) });
 });
 
 applicationsRouter.post('/api/applications', async (req, res) => {
@@ -66,10 +93,11 @@ applicationsRouter.post('/api/applications', async (req, res) => {
     await audit(null, 'APPLICATION_STARTED', 'member_applications', application.id);
     return applicationWithSponsor(application);
   });
-  res.json(201, application);
+  res.setHeader?.('Cache-Control', 'no-store');
+  res.json(201, { ...application, application_token: await issueApplicationSession(application.id) });
 });
 
-applicationsRouter.patch('/api/applications/:id', async (req, res, params) => {
+applicationsRouter.patch('/api/applications/:id', applicationParam, async (req, res, params) => {
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
   if (!application) throw new HttpError(404, 'Application not found');
   if (!['LEAD', 'APPLICATION_STARTED', 'NEEDS_INFORMATION'].includes(application.status)) {
@@ -109,7 +137,7 @@ applicationsRouter.patch('/api/applications/:id', async (req, res, params) => {
   res.json(200, updated);
 });
 
-applicationsRouter.post('/api/applications/:id/submit', async (req, res, params) => {
+applicationsRouter.post('/api/applications/:id/submit', applicationParam, async (req, res, params) => {
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
   if (!application) throw new HttpError(404, 'Application not found');
   if (application.status === 'APPLICATION_SUBMITTED') return res.json(200, await applicationWithSponsor(application));
@@ -143,7 +171,7 @@ applicationsRouter.post('/api/applications/:id/submit', async (req, res, params)
   res.json(200, await applicationWithSponsor(updated));
 });
 
-applicationsRouter.get('/api/applications/:id', async (req, res, params) => {
+applicationsRouter.get('/api/applications/:id', applicationParam, async (req, res, params) => {
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [params.id]);
   if (!application) throw new HttpError(404, 'Application not found');
   const existing = application.status === 'UNDER_REVIEW' ? await existingMembershipForApplication(application) : null;

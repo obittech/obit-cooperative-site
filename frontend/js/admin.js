@@ -1,7 +1,7 @@
 // admin.js
 
 function showAlert(message, type = 'error') {
-  document.getElementById('alertBox').innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+  document.getElementById('alertBox').innerHTML = `<div class="alert alert-${type === 'success' ? 'success' : 'error'}">${escapeMarket(message)}</div>`;
 }
 
 document.getElementById('btnShowAdminSetup').addEventListener('click', () => {
@@ -158,7 +158,7 @@ function badge(status) {
   const cls = ['ACTIVE', 'PAYMENT_VERIFIED', 'KYC_VERIFIED'].includes(status) ? 'ok'
     : (status || '').includes('FAILED') || status === 'REJECTED' ? 'fail'
     : 'pending';
-  return `<span class="status-badge ${cls}">${status}</span>`;
+  return `<span class="status-badge ${cls}">${escapeMarket(status)}</span>`;
 }
 function escapeMarket(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -224,15 +224,15 @@ async function refreshQueue(token) {
   const apps = await OBIT.get('/api/admin/applications', { token });
   document.getElementById('queueBody').innerHTML = apps.map((a) => `
     <tr>
-      <td>${a.id}</td>
-      <td>${a.full_legal_name || '—'}</td>
+      <td>${escapeMarket(a.id)}</td>
+      <td>${escapeMarket(a.full_legal_name || '—')}</td>
       <td>${badge(a.status)}</td>
-      <td>${a.updated_at}</td>
+      <td>${escapeMarket(a.updated_at)}</td>
       <td>
         ${a.status === 'UNDER_REVIEW' ? `
-          <button class="btn btn-secondary" data-decide="${a.id}" data-decision="APPROVE">Approve</button>
-          <button class="btn btn-secondary" data-decide="${a.id}" data-decision="NEEDS_INFORMATION">Needs Info</button>
-          <button class="btn btn-secondary" data-decide="${a.id}" data-decision="REJECT">Reject</button>
+          <button class="btn btn-secondary" data-decide="${escapeMarket(a.id)}" data-decision="APPROVE">Approve</button>
+          <button class="btn btn-secondary" data-decide="${escapeMarket(a.id)}" data-decision="NEEDS_INFORMATION">Needs Info</button>
+          <button class="btn btn-secondary" data-decide="${escapeMarket(a.id)}" data-decision="REJECT">Reject</button>
         ` : '<span class="muted-note">—</span>'}
       </td>
     </tr>

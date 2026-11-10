@@ -1,3 +1,4 @@
+import { applicationBody, requireApplicationAccess, transferReference } from '../middleware/application-access.js';
 import crypto from 'node:crypto';
 import { Router, HttpError } from '../router.js';
 import { get, run, all, atomic } from '../db.js';
@@ -45,7 +46,7 @@ membershipTransfersRouter.get('/api/payments/membership/options', async (req, re
     account_number: bank.account_number, amount_kobo: membershipFee(), currency: 'NGN', whatsapp: bank.whatsapp });
 });
 
-membershipTransfersRouter.post('/api/payments/membership/bank-transfer', async (req, res) => {
+membershipTransfersRouter.post('/api/payments/membership/bank-transfer', applicationBody, async (req, res) => {
   const payment = await atomic(async () => {
     const id = req.body?.application_id;
     await run('UPDATE member_applications SET status = status WHERE id = ?', [id]);
@@ -70,13 +71,13 @@ membershipTransfersRouter.post('/api/payments/membership/bank-transfer', async (
   res.json(200, await details(payment));
 });
 
-membershipTransfersRouter.get('/api/payments/membership/bank-transfer/:applicationId', async (req, res, params) => {
+membershipTransfersRouter.get('/api/payments/membership/bank-transfer/:applicationId', requireApplicationAccess((req, params) => params.applicationId), async (req, res, params) => {
   const payment = await get('SELECT * FROM membership_bank_payments WHERE application_id = ?', [params.applicationId]);
   if (!payment) throw new HttpError(404, 'Membership transfer not found');
   res.json(200, await details(payment));
 });
 
-membershipTransfersRouter.post('/api/payments/membership/bank-transfer/:reference/paid', async (req, res, params) => {
+membershipTransfersRouter.post('/api/payments/membership/bank-transfer/:reference/paid', transferReference, async (req, res, params) => {
   const payment = await atomic(async () => {
     await run('UPDATE membership_bank_payments SET status = status WHERE reference = ?', [params.reference]);
     const row = await get('SELECT * FROM membership_bank_payments WHERE reference = ?', [params.reference]);

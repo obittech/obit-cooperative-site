@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'obit-yv-'));
+process.env.AUTH_TOKEN_SECRET = 'application-access-fixture-only';
 process.env.DB_PATH = path.join(temp, 'test.db');
 process.env.YOUVERIFY_ENV = 'sandbox';
 process.env.YOUVERIFY_SECRET_KEY = 'sandbox-test-secret';
@@ -11,10 +12,11 @@ const { migrate, get, run, all, closeDatabase } = await import('../src/db.js');
 const { kycRouter } = await import('../src/routes/kyc.js');
 const { requireKycAccess, reserveKycRequest, sandboxRequestStatus } = await import('../src/services/kyc-cost-controls.js');
 const { youverifyMatch } = await import('../src/services/youverify.js');
+const { authorizedFixtureHandler } = await import('./helpers/application-session.js');
 await migrate();
 after(async () => { await closeDatabase(); fs.rmSync(temp, { recursive: true, force: true }); });
-const verify = kycRouter.match('POST', '/api/kyc/session/test/verify').handlers[0];
-const start = kycRouter.match('POST', '/api/kyc/session').handlers[0];
+const verify = authorizedFixtureHandler(kycRouter, 'POST', '/api/kyc/session/test/verify');
+const start = authorizedFixtureHandler(kycRouter, 'POST', '/api/kyc/session');
 const request = { body: { type: 'nin', id_number: '11111111111' } };
 const response = { json: (status, body) => ({ status, body }) };
 async function fixture() {
@@ -106,7 +108,7 @@ test('name substrings and absent, invalid or mismatched DOB never verify', () =>
   }
 });
 
-const statusHandler = kycRouter.match('GET', '/api/kyc/test/status').handlers[0];
+const statusHandler = authorizedFixtureHandler(kycRouter, 'GET', '/api/kyc/test/status');
 
 test('sandbox status exposes only saved receipt metadata and never dispatches another call', async () => {
   const check = await fixture(); let calls = 0;

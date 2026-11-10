@@ -1,3 +1,4 @@
+import { applicationBody } from '../middleware/application-access.js';
 // routes/payments.js
 // Correct sequence per handover doc:
 //   backend creates reference -> secure provider checkout -> provider processes
@@ -116,7 +117,7 @@ paymentsRouter.post('/api/payments/contributions/initialize', requireAuth('membe
   }
 });
 
-paymentsRouter.post('/api/payments/membership/initialize', async (req, res) => {
+paymentsRouter.post('/api/payments/membership/initialize', applicationBody, async (req, res) => {
   const { application_id, provider } = req.body || {};
   if (!['paystack', 'monnify'].includes(provider)) {
     throw new HttpError(400, "provider must be 'paystack' or 'monnify'");

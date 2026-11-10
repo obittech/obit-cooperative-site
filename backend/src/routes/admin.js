@@ -4,6 +4,7 @@
 // on payment webhook, per "PAYMENT_VERIFIED -> UNDER_REVIEW -> ACTIVE"
 // in the handover's status flow.
 
+import { randomUUID } from 'node:crypto';
 import { Router, HttpError } from '../router.js';
 import { get, all, run, atomic } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -110,45 +111,70 @@ adminRouter.post('/api/admin/withdrawals/:id/decision', requireAuth('staff', 'ad
   if (decision === 'APPROVE') {
     const account = await get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
     if (!account || Number(account.balance_kobo ?? Math.round(account.balance * 100)) < Number(w.amount_kobo ?? Math.round(w.amount * 100))) throw new HttpError(409, 'Insufficient current member balance');
-    await run("UPDATE withdrawal_requests SET status = 'APPROVED', reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?", [req.user.id, w.id]);
+    const changed = await run("UPDATE withdrawal_requests SET status = 'APPROVED', reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ? AND status = 'PENDING' AND transfer_reference IS NULL", [req.user.id, w.id]);
+    if (!Number(changed.changes)) throw new HttpError(409, 'Withdrawal already decided');
   } else {
-    await run("UPDATE withdrawal_requests SET status = 'REJECTED', reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ?", [req.user.id, w.id]);
+    const changed = await run("UPDATE withdrawal_requests SET status = 'REJECTED', reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ? AND status = 'PENDING' AND transfer_reference IS NULL", [req.user.id, w.id]);
+    if (!Number(changed.changes)) throw new HttpError(409, 'Withdrawal already decided');
   }
   await audit(req.user.id, `WITHDRAWAL_${decision}`, 'withdrawal_requests', w.id, { amount: w.amount });
   res.json(200, await get('SELECT * FROM withdrawal_requests WHERE id = ?', [w.id]));
 });
 
 adminRouter.post('/api/admin/withdrawals/:id/initiate-payout', requireAuth('admin'), async (req, res, params) => {
-  const w = await get('SELECT * FROM withdrawal_requests WHERE id = ?', [params.id]);
-  if (!w) throw new HttpError(404, 'Withdrawal request not found');
-  if (w.status !== 'APPROVED') throw new HttpError(409, 'Withdrawal must be approved first');
-  let bank = await get('SELECT * FROM member_bank_accounts WHERE id = ? AND member_id = ? AND verified_at IS NOT NULL', [w.bank_account_id, w.member_id]);
-
-  // Backfill older withdrawal requests created before bank_account_id was added.
-  if (!bank) {
-    bank = await get(`SELECT * FROM member_bank_accounts
-                WHERE member_id = ? AND account_number = ? AND verified_at IS NOT NULL
-                ORDER BY verified_at DESC LIMIT 1`, [w.member_id, w.account_number]);
-    if (bank) await run('UPDATE withdrawal_requests SET bank_account_id = ? WHERE id = ?', [bank.id, w.id]);
-  }
-
-  if (!bank?.recipient_code) throw new HttpError(409, 'A verified Paystack transfer recipient is required');
-  const account = await get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
-  if (!account || Number(account.balance_kobo ?? Math.round(account.balance * 100)) < Number(w.amount_kobo ?? Math.round(w.amount * 100))) throw new HttpError(409, 'Insufficient current savings balance');
-
   const key = process.env.PAYSTACK_SECRET_KEY;
   if (!key) throw new HttpError(503, 'Paystack transfers are not configured');
-  const reference = `obit-wd-${w.id}-${Date.now()}`;
-  const response = await fetch('https://api.paystack.co/transfer', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ source: 'balance', amount: Number(w.amount_kobo ?? Math.round(Number(w.amount) * 100)), recipient: bank.recipient_code, reference, reason: 'Obit Cooperative savings withdrawal', currency: 'NGN' }),
+  // Commit the durable claim BEFORE contacting Paystack. An uncertain outcome
+  // must never clear or replace its reference, including after a process crash.
+  const claim = await atomic(async () => {
+    await run('UPDATE withdrawal_requests SET status = status WHERE id = ?', [params.id]);
+    const w = await get('SELECT * FROM withdrawal_requests WHERE id = ?', [params.id]);
+    if (!w) throw new HttpError(404, 'Withdrawal request not found');
+    if (w.transfer_reference) return { existing: true, w };
+    if (w.status !== 'APPROVED') throw new HttpError(409, 'Withdrawal must be approved first');
+    let bank = await get('SELECT * FROM member_bank_accounts WHERE id = ? AND member_id = ? AND verified_at IS NOT NULL', [w.bank_account_id, w.member_id]);
+    if (!bank) {
+      bank = await get(`SELECT * FROM member_bank_accounts
+        WHERE member_id = ? AND account_number = ? AND verified_at IS NOT NULL
+        ORDER BY verified_at DESC LIMIT 1`, [w.member_id, w.account_number]);
+    }
+    if (!bank?.recipient_code) throw new HttpError(409, 'A verified Paystack transfer recipient is required');
+    // Serialize claims for this account, including different withdrawal requests.
+    await run('UPDATE ledger_accounts SET balance = balance WHERE id = ?', [w.ledger_account_id]);
+    const account = await get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
+    const amount = Number(w.amount_kobo ?? Math.round(Number(w.amount) * 100));
+    const reserved = await get(`SELECT COALESCE(SUM(COALESCE(amount_kobo, CAST(ROUND(amount * 100) AS INTEGER))), 0) AS total
+      FROM withdrawal_requests WHERE ledger_account_id = ? AND status = 'APPROVED' AND transfer_reference IS NOT NULL`, [w.ledger_account_id]);
+    if (!Number.isSafeInteger(amount) || amount <= 0) throw new HttpError(409, 'Invalid withdrawal amount');
+    if (!account || Number(account.balance_kobo ?? Math.round(account.balance * 100)) - Number(reserved.total) < amount) throw new HttpError(409, 'Insufficient unreserved savings balance');
+    const reference = `obit-wd-${w.id}-${randomUUID()}`;
+    await run("UPDATE withdrawal_requests SET transfer_reference = ?, provider_status = 'initiating', bank_account_id = ? WHERE id = ?", [reference, bank.id, w.id]);
+    await audit(req.user.id, 'WITHDRAWAL_PAYOUT_CLAIMED', 'withdrawal_requests', w.id, { reference });
+    return { w, reference, amount, recipient: bank.recipient_code };
   });
-  const payload = await response.json();
-  if (!response.ok || !payload.status) throw new HttpError(502, payload.message || 'Could not initiate payout');
-  await run('UPDATE withdrawal_requests SET transfer_reference = ?, provider_status = ? WHERE id = ?', [reference, payload.data?.status || 'pending', w.id]);
+  if (claim.existing) {
+    res.json(200, { reference: claim.w.transfer_reference, provider_status: claim.w.provider_status, idempotent: true });
+    return;
+  }
+  const { w, reference, amount, recipient } = claim;
+  let payload;
+  try {
+    const response = await fetch('https://api.paystack.co/transfer', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(30000),
+      body: JSON.stringify({ source: 'balance', amount, recipient, reference, reason: 'Obit Cooperative savings withdrawal', currency: 'NGN' }),
+    });
+    payload = await response.json();
+    if (!response.ok || !payload.status) throw new Error('Provider did not confirm transfer');
+  } catch {
+    await run("UPDATE withdrawal_requests SET provider_status = 'unknown' WHERE id = ? AND provider_status = 'initiating'", [w.id]);
+    throw new HttpError(502, 'Payout outcome is uncertain. Reconcile this reference before any further action; do not initiate a replacement payout.');
+  }
+  // Do not overwrite a newer state observed by concurrent reconciliation.
+  await run("UPDATE withdrawal_requests SET provider_status = ? WHERE id = ? AND provider_status = 'initiating'", [payload.data?.status || 'pending', w.id]);
   await audit(req.user.id, 'WITHDRAWAL_PAYOUT_INITIATED', 'withdrawal_requests', w.id, { reference, paystack_status: payload.data?.status });
-  res.json(200, { reference, provider_status: payload.data?.status || 'pending' });
+  res.json(200, { reference, provider_status: (await get('SELECT provider_status FROM withdrawal_requests WHERE id = ?', [w.id])).provider_status });
 });
 
 adminRouter.post('/api/admin/withdrawals/:id/finalize-payout', requireAuth('admin'), async (req, res, params) => {
@@ -174,7 +200,7 @@ adminRouter.post('/api/admin/withdrawals/:id/finalize-payout', requireAuth('admi
   });
   const payload = await response.json();
   if (!response.ok || !payload.status) throw new HttpError(502, payload.message || 'Could not finalize payout');
-  await run('UPDATE withdrawal_requests SET provider_status = ? WHERE id = ?', [payload.data?.status || 'pending', w.id]);
+  await run("UPDATE withdrawal_requests SET provider_status = ? WHERE id = ? AND status = 'APPROVED' AND transfer_reference = ?", [payload.data?.status || 'pending', w.id, w.transfer_reference]);
   await audit(req.user.id, 'WITHDRAWAL_PAYOUT_OTP_CONFIRMED', 'withdrawal_requests', w.id, { reference: w.transfer_reference, paystack_status: payload.data?.status });
   res.json(200, { reference: w.transfer_reference, provider_status: payload.data?.status || 'pending' });
 });
@@ -185,15 +211,27 @@ adminRouter.post('/api/admin/withdrawals/:id/reconcile-payout', requireAuth('adm
   if (w.status === 'PAID') { res.json(200, { status: 'PAID', idempotent: true }); return; }
   if (w.status !== 'APPROVED' || !w.transfer_reference) throw new HttpError(409, 'No initiated approved payout to reconcile');
   const key = process.env.PAYSTACK_SECRET_KEY;
+  if (!key) throw new HttpError(503, 'Paystack transfers are not configured');
   const response = await fetch(`https://api.paystack.co/transfer/verify/${encodeURIComponent(w.transfer_reference)}`, { headers: { Authorization: `Bearer ${key}` } });
   const payload = await response.json();
   if (!response.ok || !payload.status) throw new HttpError(502, payload.message || 'Could not verify payout');
-  if (payload.data?.status !== 'success') { await run('UPDATE withdrawal_requests SET provider_status = ? WHERE id = ?', [payload.data?.status || 'unknown', w.id]); res.json(200, { status: w.status, provider_status: payload.data?.status || 'unknown' }); return; }
+  if (payload.data?.reference !== w.transfer_reference || payload.data?.currency !== 'NGN' || Number(payload.data?.amount) !== Number(w.amount_kobo ?? Math.round(w.amount * 100))) throw new HttpError(409, 'Provider transfer does not match this withdrawal');
+  if (payload.data?.status !== 'success') {
+    await run("UPDATE withdrawal_requests SET provider_status = ? WHERE id = ? AND status = 'APPROVED' AND transfer_reference = ?", [payload.data?.status || 'unknown', w.id, w.transfer_reference]);
+    const current = await get('SELECT status, provider_status FROM withdrawal_requests WHERE id = ?', [w.id]);
+    res.json(200, { ...current, ...(current.status === 'PAID' ? { idempotent: true } : {}) });
+    return;
+  }
 
-  const account = await get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
-  if (!account || Number(account.balance_kobo ?? Math.round(account.balance * 100)) < Number(w.amount_kobo ?? Math.round(w.amount * 100))) throw new HttpError(409, 'Insufficient current savings balance');
   let receiptNo;
   await atomic(async () => {
+    await run('UPDATE withdrawal_requests SET status = status WHERE id = ?', [w.id]);
+    const current = await get('SELECT * FROM withdrawal_requests WHERE id = ?', [w.id]);
+    if (current.status === 'PAID') return;
+    if (current.status !== 'APPROVED' || current.transfer_reference !== w.transfer_reference) throw new HttpError(409, 'Withdrawal changed during reconciliation');
+    await run('UPDATE ledger_accounts SET balance = balance WHERE id = ?', [w.ledger_account_id]);
+    const account = await get('SELECT * FROM ledger_accounts WHERE id = ?', [w.ledger_account_id]);
+    if (!account || Number(account.balance_kobo ?? Math.round(account.balance * 100)) < Number(w.amount_kobo ?? Math.round(w.amount * 100))) throw new HttpError(409, 'Insufficient current savings balance');
     let tx = await get("SELECT * FROM transactions WHERE provider_reference = ? AND type = 'WITHDRAWAL'", [w.transfer_reference]);
     if (!tx) {
       const wk = Number(w.amount_kobo ?? Math.round(w.amount * 100));

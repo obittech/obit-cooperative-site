@@ -54,6 +54,18 @@
 
       <p style="text-align:right"><a href="apply.html?new=1">Register Another Member</a></p>
       <div id="alertBox"></div>
+      <details id="applicationResume" class="panel" style="margin:16px 0">
+        <summary>Already registered? Resume your application</summary>
+        <form id="applicationResumeForm">
+          <p>Sign in with the username and password chosen during registration. An application number alone cannot restore access.</p>
+          <label class="field">Username<input id="resumeUsername" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="24" required /></label>
+          <label class="field">Password<input id="resumePassword" type="password" autocomplete="current-password" maxlength="256" required /></label>
+          <button id="btnResumeApplication" class="btn btn-primary" type="submit">Resume securely</button>
+          <p id="applicationResumeMessage" role="status"></p>
+          <p>If your older application has no username and password, contact Obit support. Active members can <a href="portal.html">sign in to the Member Portal</a>. Do not register or pay again to recover access.</p>
+        </form>
+      </details>
+
 
       <div class="card">
 
@@ -236,9 +248,9 @@
 
   <script src="js/config.js"></script>
   <script src="js/nav.js?v=20261101-menu"></script>
-  <script src="js/api.js"></script>
+  <script src="js/api.js?v=20261110-security"></script>
   <script src="js/nigeria-locations.js?v=20261030-locations"></script>
   <script src="js/dob.js?v=20261105-dob-boxes"></script>
-  <script src="js/apply.js?v=20261105-dob-boxes"></script>
+  <script src="js/apply.js?v=20261110-security"></script>
 </body>
 </html>

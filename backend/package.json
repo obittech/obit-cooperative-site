@@ -12,6 +12,7 @@
     "simulate-webhook": "node scripts/simulate-webhook.js",
     "migrate:postgres": "node --experimental-sqlite scripts/migrate-sqlite-to-postgres.js",
     "check:monnify": "node scripts/check-monnify.js",
+    "test:access": "node --experimental-sqlite --test test/application-access.test.js",
     "test:kyc": "node --experimental-sqlite --test --test-concurrency=1 test/kyc-cost-controls.test.js test/youverify.test.js",
     "test": "node --experimental-sqlite --test test/*.test.js",
     "test:payments": "node --experimental-sqlite --test test/payment-safety.test.js",

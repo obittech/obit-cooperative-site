@@ -1,3 +1,4 @@
+import { applicationBody, kycReference, kycStatus } from '../middleware/application-access.js';
 // routes/kyc.js
 // Youverify is the sole KYC provider. Sandbox is the default. Live calls require explicit
 // provider authorization, approved products, credentials and spending controls.
@@ -30,7 +31,7 @@ async function hasRequiredConsent(applicationId) {
   return Boolean(terms?.accepted && privacy?.accepted);
 }
 
-kycRouter.post('/api/kyc/session', async (req, res) => {
+kycRouter.post('/api/kyc/session', applicationBody, async (req, res) => {
   const { application_id } = req.body || {};
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [application_id]);
   if (!application) throw new HttpError(404, 'Application not found');
@@ -73,7 +74,7 @@ kycRouter.post('/api/kyc/session', async (req, res) => {
   });
 });
 
-kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
+kycRouter.post('/api/kyc/session/:ref/verify', kycReference, async (req, res, params) => {
   const check = await get('SELECT * FROM kyc_checks WHERE session_ref = ?', [params.ref]);
   if (!check) throw new HttpError(404, 'KYC session not found');
   if (check.status === 'KYC_VERIFIED') return res.json(200, { status: 'KYC_VERIFIED' });
@@ -135,7 +136,7 @@ kycRouter.post('/api/kyc/session/:ref/verify', async (req, res, params) => {
   });
 });
 
-kycRouter.get('/api/kyc/:id/status', async (req, res, params) => {
+kycRouter.get('/api/kyc/:id/status', kycStatus, async (req, res, params) => {
   const numericId = /^\d+$/.test(String(params.id)) ? Number(params.id) : null;
   const check = numericId
     ? await get('SELECT * FROM kyc_checks WHERE session_ref = ? OR application_id = ? ORDER BY id DESC LIMIT 1', [params.id, numericId])
@@ -156,7 +157,7 @@ kycRouter.get('/api/kyc/:id/status', async (req, res, params) => {
 
 // Legacy simulation is deliberately disabled in deployed production. It is
 // retained only for local development when explicitly enabled.
-kycRouter.post('/api/kyc/session/:ref/simulate', async (req, res, params) => {
+kycRouter.post('/api/kyc/session/:ref/simulate', kycReference, async (req, res, params) => {
   if (process.env.NODE_ENV === 'production' || process.env.ENABLE_DEV_ROUTES !== 'true') {
     throw new HttpError(404, 'Not found');
   }

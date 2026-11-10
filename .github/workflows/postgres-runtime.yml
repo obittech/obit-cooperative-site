@@ -1,7 +1,7 @@
 name: PostgreSQL Runtime Validation
 on:
   push:
-    branches: [feature/postgres-runtime]
+    branches: [main, 'security/**', feature/postgres-runtime]
   pull_request:
     branches: [main]
 jobs:
@@ -30,6 +30,14 @@ jobs:
         with:
           node-version: '22'
       - run: npm install
+      - name: Application ownership regression tests (SQLite)
+        run: npm run test:access
+      - name: Application ownership regression tests (PostgreSQL)
+        env:
+          DB_ENGINE: postgres
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/obit_ci
+          PGSSL: disable
+        run: npm run test:access
       - name: Payment safety regression tests
         run: npm run test:payments
       - name: Membership and referral regression tests

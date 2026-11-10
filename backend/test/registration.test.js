@@ -21,11 +21,13 @@ const { authRouter } = await import('../src/routes/auth.js');
 const { meRouter } = await import('../src/routes/me.js');
 const { issueToken } = await import('../src/utils/auth.js');
 const { handlePaymentWebhook } = await import('../src/routes/webhooks.js');
+const { fixtureApplicationToken } = await import('./helpers/application-session.js');
 await migrate();
 after(closeDatabase);
 let n = 0;
 async function call(router, method, path, body = {}, token = '') {
   const route = router.match(method, path);
+  if (!token) token = await fixtureApplicationToken(path, body, route.params);
   const req = { body, socket: {}, headers: { authorization: token ? `Bearer ${token}` : '' } };
   const res = { json(status, body) { this.status = status; this.body = body; this.writableEnded = true; } };
   for (const handler of route.handlers) { await handler(req, res, route.params); if (res.writableEnded) break; }

@@ -13,6 +13,7 @@ const { membershipTransfersRouter: router } = await import('../src/routes/member
 const { paymentsRouter } = await import('../src/routes/payments.js');
 const { issueToken } = await import('../src/utils/auth.js');
 const { allocateBankCredit } = await import('../src/services/bank-credit.js');
+const { fixtureApplicationToken } = await import('./helpers/application-session.js');
 await migrate();
 after(closeDatabase);
 const created = await run("INSERT INTO users (email,role,status) VALUES (?, 'staff','ACTIVE')", [`transfer-staff-${crypto.randomUUID()}@example.invalid`]);
@@ -20,6 +21,7 @@ const staff = issueToken(await get('SELECT * FROM users WHERE id = ?', [created.
 async function call(method, path, body = {}, token = '', target = router) {
   const route = target.match(method, path);
   assert.ok(route);
+  if (!token) token = await fixtureApplicationToken(path, body, route.params);
   const req = { body, headers: { authorization: token ? `Bearer ${token}` : '' } };
   const res = { json(status, body) { this.status = status; this.body = body; this.writableEnded = true; } };
   for (const handler of route.handlers) { await handler(req, res, route.params); if (res.writableEnded) break; }
@@ -223,7 +225,8 @@ test('staff links a duplicate to its existing approved membership and original p
   assert.equal(row.application_status, 'ACTIVE');
   assert.equal(row.bank_reference, ref);
   await run("UPDATE members SET status='SUSPENDED' WHERE id=?", [active.member.id]);
-  assert.equal((await call('GET', `/api/applications/${duplicate.id}`, {}, '', applicationsRouter)).status, 'SUSPENDED');
+  // Staff retain review access; suspended members cannot issue sessions.
+  assert.equal((await call('GET', `/api/applications/${duplicate.id}`, {}, staff, applicationsRouter)).status, 'SUSPENDED');
 });
 
 test('existing membership links reject unrelated payments, contact mismatches and reused credits', async () => {
