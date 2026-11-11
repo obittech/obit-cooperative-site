@@ -1,4 +1,4 @@
-import { get, run } from '../db.js';
+import { get, all, run } from '../db.js';
 import { HttpError } from '../router.js';
 import { nextMemberCode } from './member-code.js';
 import { awardReferralBonus } from './member-referrals.js';
@@ -20,18 +20,23 @@ export async function approvedMembershipForApplication(applicationId) {
 
 // Called inside the caller's atomic transaction after payment is confirmed.
 export async function activateApprovedMember(application, staffId) {
+  const current = await get('SELECT status FROM member_applications WHERE id = ?', [application.id]);
+  if (current?.status !== 'UNDER_REVIEW') throw new HttpError(409, 'Application is not ready for approval');
   const applicationId = application.id;
       const confirmedPayment = await get("SELECT id FROM membership_bank_payments WHERE application_id = ? AND status = 'CONFIRMED'", [applicationId])
         || await get("SELECT id FROM membership_payments WHERE application_id = ? AND status = 'PAYMENT_VERIFIED'", [applicationId]);
       if (!confirmedPayment) throw new HttpError(409, 'Confirm the membership payment before approving this application.');
       const memberCode = await nextMemberCode();
       const credentials = await get('SELECT * FROM registration_credentials WHERE application_id = ?', [applicationId]);
-      let user = await get('SELECT * FROM users WHERE lower(email) = lower(?) OR phone = ?', [application.email, application.phone]);
+      const matches = await all('SELECT * FROM users WHERE lower(email) = lower(?) OR phone = ?', [application.email, application.phone]);
+      if (matches.length > 1) throw new HttpError(409, 'Member identity needs staff review');
+      let user = matches[0];
       if (credentials && user) throw new HttpError(409, 'An existing account needs staff review before this registration login can be activated.');
       if (!user) {
         await run('INSERT INTO users (email, phone, role, username, password_hash) VALUES (?, ?, ?, ?, ?)', [application.email, application.phone, 'member', credentials?.username || null, credentials?.password_hash || null]);
         user = await get('SELECT * FROM users WHERE lower(email) = lower(?) OR phone = ?', [application.email, application.phone]);
       }
+      if (user.role !== 'member' || user.status !== 'ACTIVE') throw new HttpError(409, 'An active separate member account is required');
       if (await get('SELECT id FROM members WHERE user_id = ?', [user.id])) throw new HttpError(409, 'This account already has a membership. Do not approve a duplicate application.');
       await run('INSERT INTO members (application_id, user_id, member_code, status) VALUES (?, ?, ?, ?)',
         [applicationId, user.id, memberCode, 'ACTIVE']);
