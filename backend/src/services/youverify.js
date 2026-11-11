@@ -17,9 +17,12 @@ export async function youverifyPost(type, idNumber, requestId, environment) {
   let body = null;
   try { body = await response.json(); } catch {}
   const tracked = await recordProviderResponse(requestId, body, response.status);
-  // HTTP success alone is insufficient. Pending, missing and unrecognised
-  // reports require reconciliation and never trigger an automatic retry.
-  if (!response.ok || !tracked || body?.success !== true || body?.data?.status !== 'found') {
+  // Only the documented terminal report statuses may settle a request. A
+  // not_found report is a completed lookup, not a transport failure or a
+  // successful identity match. Never infer it from an HTTP 404 or a message.
+  // Pending, missing and unrecognised reports still require reconciliation.
+  if (!response.ok || response.status !== 200 || !tracked || body?.success !== true
+      || !['found', 'not_found'].includes(body?.data?.status)) {
     const error = new HttpError(502, 'Verification requires reconciliation.');
     error.providerStatus = response.status;
     error.uncertain = true;
@@ -48,3 +51,4 @@ export function youverifyMatch(application, entity) {
   const dobMatch = Boolean(providerDob && appDob && providerDob === appDob);
   return { matched: nameMatch && dobMatch, nameMatch, dobMatch, providerDobPresent: Boolean(providerDob), appDobPresent: Boolean(appDob) };
 }
+

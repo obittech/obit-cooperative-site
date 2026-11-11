@@ -302,7 +302,7 @@ async function simulateKycVerified() {
   try {
     await OBIT.post(`/api/kyc/session/${state.kycSessionRef}/simulate`, { outcome: 'VERIFIED' });
     const check = await OBIT.get(`/api/kyc/${state.kycSessionRef}/status`);
-    renderKycStatus(check.status);
+    renderKycStatus(check.status, check.message);
     if (check.status === 'KYC_VERIFIED') {
       setTimeout(() => goToStep('payment'), 700);
     }
@@ -393,7 +393,7 @@ async function restoreExistingApplication() {
       state.kycSessionRef = check.session_ref;
       localStorage.setItem('obit_kyc_session_ref', check.session_ref);
       showKycProvider(check);
-      renderKycStatus(check.status);
+      renderKycStatus(check.status, check.message);
       if (check.restart_required) {
         state.kycSessionRef = null;
         localStorage.removeItem('obit_kyc_session_ref');

@@ -6,7 +6,7 @@ import { applicationBody, kycReference, kycStatus } from '../middleware/applicat
 // written to the Obit database or audit log.
 
 import { Router, HttpError } from '../router.js';
-import { get, run } from '../db.js';
+import { atomic, get, run } from '../db.js';
 import { audit } from '../utils/audit.js';
 import crypto from 'node:crypto';
 import { youverifyPost, youverifyMatch } from '../services/youverify.js';
@@ -15,6 +15,7 @@ import { requireKycAccess, reserveKycRequest, finishKycRequest, sandboxRequestSt
 export const kycRouter = new Router();
 
 const PROVIDER = 'YOUVERIFY';
+const NOT_FOUND_MESSAGE = 'No matching identity record was returned. Your application is still awaiting verification. This product cannot be retried within 24 hours. Contact support if you need help.';
 const KYC_ENV = (process.env.YOUVERIFY_ENV || 'sandbox').toLowerCase();
 const providerConfigured = () => Boolean(process.env.YOUVERIFY_SECRET_KEY);
 const availableProducts = () => KYC_ENV === 'sandbox' ? ['nin', 'bvn']
@@ -108,6 +109,38 @@ kycRouter.post('/api/kyc/session/:ref/verify', kycReference, async (req, res, pa
     throw new HttpError(error.status || 502, 'Identity verification could not be completed. Contact support before retrying.');
   }
 
+  if (providerResponse.data.status === 'not_found') {
+    // A completed negative lookup must not become a permanent UNKNOWN lock or
+    // an identity decision. Publish the safe outcome and audit together. Keep
+    // its cost reservation and attempt history; a retry is never automatic.
+    await atomic(async () => {
+      const request = await run(
+        "UPDATE kyc_provider_requests SET state = 'NOT_FOUND', provider_status = 200, finished_ms = ? WHERE id = ? AND state = 'DISPATCHED'",
+        [Date.now(), requestId]
+      );
+      if (request.changes !== 1) throw new HttpError(409, 'Verification requires reconciliation. Contact support before retrying.');
+      const updatedCheck = await run(
+        "UPDATE kyc_checks SET status = 'KYC_PENDING', raw_status_detail = ?, verified_at = NULL WHERE id = ? AND status IN ('KYC_PENDING', 'KYC_FAILED')",
+        [JSON.stringify({ environment: KYC_ENV, outcome: 'NOT_FOUND', id_type: type }), check.id]
+      );
+      const updatedApplication = await run(
+        "UPDATE member_applications SET status = 'KYC_PENDING', updated_at = datetime('now') WHERE id = ? AND status IN ('KYC_PENDING', 'KYC_FAILED')",
+        [check.application_id]
+      );
+      if (updatedCheck.changes !== 1 || updatedApplication.changes !== 1) {
+        throw new HttpError(409, 'Application changed during verification. Contact support before retrying.');
+      }
+      await audit(null, 'KYC_NOT_FOUND', 'member_applications', check.application_id, {
+        provider: PROVIDER, environment: KYC_ENV, sessionRef: check.session_ref,
+        idType: type, requestId, potentiallyBillable: true,
+      });
+    });
+    return res.json(200, {
+      status: 'KYC_PENDING', outcome: 'NOT_FOUND', provider: PROVIDER,
+      environment: KYC_ENV, message: NOT_FOUND_MESSAGE,
+    });
+  }
+
   const match = youverifyMatch(application, providerResponse.data);
   const matched = match.matched;
   const newStatus = matched ? 'KYC_VERIFIED' : 'KYC_FAILED';
@@ -143,6 +176,13 @@ kycRouter.get('/api/kyc/:id/status', kycStatus, async (req, res, params) => {
     : await get('SELECT * FROM kyc_checks WHERE session_ref = ? ORDER BY id DESC LIMIT 1', [params.id]);
   if (!check) throw new HttpError(404, 'KYC session not found');
   const sandboxRequest = await sandboxRequestStatus(check, KYC_ENV);
+  // Read the latest receipt, not an old detail string. This also preserves
+  // operator-reconciled NOT_FOUND results without rewriting applicant data.
+  const latestRequest = check.status === 'KYC_PENDING' && check.provider === PROVIDER
+      && check.session_ref.startsWith(`youverify_${KYC_ENV}_`)
+    ? await get('SELECT state, environment FROM kyc_provider_requests WHERE check_id = ? AND application_id = ? ORDER BY started_ms DESC, id DESC LIMIT 1', [check.id, check.application_id])
+    : null;
+  const notFound = latestRequest?.state === 'NOT_FOUND' && latestRequest.environment === KYC_ENV;
   res.json(200, {
     status: check.status,
     session_ref: check.session_ref,
@@ -151,6 +191,7 @@ kycRouter.get('/api/kyc/:id/status', kycStatus, async (req, res, params) => {
     restart_required: check.status !== 'KYC_VERIFIED' && (check.provider !== PROVIDER || !check.session_ref.startsWith(`youverify_${KYC_ENV}_`)),
     verified_at: check.verified_at,
     available_products: availableProducts(),
+    ...(notFound ? { outcome: 'NOT_FOUND', message: NOT_FOUND_MESSAGE } : {}),
     ...(sandboxRequest ? { sandbox_request: sandboxRequest } : {}),
   });
 });
@@ -170,3 +211,4 @@ kycRouter.post('/api/kyc/session/:ref/simulate', kycReference, async (req, res, 
   await audit(null, 'KYC_SIMULATED', 'member_applications', check.application_id, { newStatus });
   res.json(200, { status: newStatus });
 });
+
