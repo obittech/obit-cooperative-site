@@ -4,6 +4,20 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { notFoundMessage } from '../src/services/kyc-status-message.js';
+
+test('retry wording follows the inclusive 24-hour boundary and handles missing dates safely', () => {
+  const started = Date.parse('2026-11-11T11:15:00Z');
+  const until = started + 86400000;
+  for (const now of [started, until - 1, until]) {
+    assert.match(notFoundMessage(started, now), /ends after 2026-11-12T11:15:00.000Z/);
+  }
+  assert.match(notFoundMessage(String(started), until + 1), /has ended/);
+  assert.doesNotMatch(notFoundMessage(started, until + 1), /cannot be retried|ends after/);
+  for (const invalid of [null, undefined, '', 'bad', -1, Infinity, 8640000000000000]) {
+    assert.match(notFoundMessage(invalid, until), /check the previous request/);
+  }
+});
 
 // Every provider response is synthetic. Never send an identity request in tests.
 const originalFetch = globalThis.fetch;
@@ -63,6 +77,27 @@ const receipt = check => get('SELECT * FROM kyc_provider_requests WHERE check_id
 const audits = check => all("SELECT * FROM audit_events WHERE entity_id = ? AND action = 'KYC_NOT_FOUND'", [check.application_id]);
 const age = row => run('UPDATE kyc_provider_requests SET started_ms = ? WHERE id = ?', [Date.now() - 172800000, row.id]);
 
+test('aged NOT_FOUND status explains elapsed wait without dispatching or changing records', async () => {
+  const check = await fixture();
+  globalThis.fetch = async () => response();
+  await call(check);
+  await age(await receipt(check));
+  const before = await receipt(check);
+  const beforeCheck = await get('SELECT * FROM kyc_checks WHERE id = ?', [check.id]);
+  const beforeAudit = await audits(check);
+  globalThis.fetch = async () => { throw new Error('Read-only status must not dispatch'); };
+  for (let i = 0; i < 3; i++) {
+    const result = await readStatus(check);
+    assert.equal(result.body.status, 'KYC_PENDING');
+    assert.equal(result.body.outcome, 'NOT_FOUND');
+    assert.match(result.body.message, /has ended/);
+    assert.match(result.body.message, /Other verification limits still apply/);
+  }
+  assert.deepEqual(await receipt(check), before);
+  assert.deepEqual(await get('SELECT * FROM kyc_checks WHERE id = ?', [check.id]), beforeCheck);
+  assert.deepEqual(await audits(check), beforeAudit);
+});
+
 test('exact terminal not_found persists KYC_PENDING, safe outcome, audit and all costs for NIN/BVN', async () => {
   for (const type of ['nin', 'bvn']) {
     const check = await fixture(); let calls = 0;
@@ -77,7 +112,7 @@ test('exact terminal not_found persists KYC_PENDING, safe outcome, audit and all
     assert.equal(result.status, 200);
     assert.equal(result.body.status, 'KYC_PENDING');
     assert.equal(result.body.outcome, 'NOT_FOUND');
-    assert.match(result.body.message, /24 hours/);
+    assert.match(result.body.message, /24-hour/);
     assert.equal(result.body.sandbox_match, undefined);
     const row = await receipt(check);
     assert.equal(row.state, 'NOT_FOUND');
