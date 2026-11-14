@@ -9,13 +9,14 @@ import { Router, HttpError } from '../router.js';
 import { atomic, get, run } from '../db.js';
 import { audit } from '../utils/audit.js';
 import crypto from 'node:crypto';
+import { notFoundMessage } from '../services/kyc-status-message.js';
 import { youverifyPost, youverifyMatch } from '../services/youverify.js';
 import { requireKycAccess, reserveKycRequest, finishKycRequest, sandboxRequestStatus } from '../services/kyc-cost-controls.js';
 
 export const kycRouter = new Router();
 
 const PROVIDER = 'YOUVERIFY';
-const NOT_FOUND_MESSAGE = 'No matching identity record was returned. Your application is still awaiting verification. This product cannot be retried within 24 hours. Contact support if you need help.';
+
 const KYC_ENV = (process.env.YOUVERIFY_ENV || 'sandbox').toLowerCase();
 const providerConfigured = () => Boolean(process.env.YOUVERIFY_SECRET_KEY);
 const availableProducts = () => KYC_ENV === 'sandbox' ? ['nin', 'bvn']
@@ -137,7 +138,7 @@ kycRouter.post('/api/kyc/session/:ref/verify', kycReference, async (req, res, pa
     });
     return res.json(200, {
       status: 'KYC_PENDING', outcome: 'NOT_FOUND', provider: PROVIDER,
-      environment: KYC_ENV, message: NOT_FOUND_MESSAGE,
+      environment: KYC_ENV, message: notFoundMessage((await get('SELECT started_ms FROM kyc_provider_requests WHERE id = ?', [requestId]))?.started_ms),
     });
   }
 
@@ -180,7 +181,7 @@ kycRouter.get('/api/kyc/:id/status', kycStatus, async (req, res, params) => {
   // operator-reconciled NOT_FOUND results without rewriting applicant data.
   const latestRequest = check.status === 'KYC_PENDING' && check.provider === PROVIDER
       && check.session_ref.startsWith(`youverify_${KYC_ENV}_`)
-    ? await get('SELECT state, environment FROM kyc_provider_requests WHERE check_id = ? AND application_id = ? ORDER BY started_ms DESC, id DESC LIMIT 1', [check.id, check.application_id])
+    ? await get('SELECT state, environment, started_ms FROM kyc_provider_requests WHERE check_id = ? AND application_id = ? ORDER BY started_ms DESC, id DESC LIMIT 1', [check.id, check.application_id])
     : null;
   const notFound = latestRequest?.state === 'NOT_FOUND' && latestRequest.environment === KYC_ENV;
   res.json(200, {
@@ -191,7 +192,7 @@ kycRouter.get('/api/kyc/:id/status', kycStatus, async (req, res, params) => {
     restart_required: check.status !== 'KYC_VERIFIED' && (check.provider !== PROVIDER || !check.session_ref.startsWith(`youverify_${KYC_ENV}_`)),
     verified_at: check.verified_at,
     available_products: availableProducts(),
-    ...(notFound ? { outcome: 'NOT_FOUND', message: NOT_FOUND_MESSAGE } : {}),
+    ...(notFound ? { outcome: 'NOT_FOUND', message: notFoundMessage(latestRequest.started_ms) } : {}),
     ...(sandboxRequest ? { sandbox_request: sandboxRequest } : {}),
   });
 });

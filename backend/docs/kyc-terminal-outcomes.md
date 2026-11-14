@@ -36,3 +36,15 @@ different shape, it remains safely unresolved instead of being automatically
 cleared. Confirm the failed NIN contract with Youverify before widening this
 allowlist. Do not automatically rewrite historical `UNKNOWN` records: each
 requires evidence-backed reconciliation.
+
+## Retry-time messaging
+
+The public negative-result message is calculated from the saved request's
+`started_ms`, not from the time the page is reopened. During the inclusive
+24-hour duplicate window it shows the original UTC end timestamp. After that
+window it says the previous waiting period has ended and still asks the
+applicant to contact support to check their details. It does not promise that
+another request will be accepted: consent, unresolved-request, attempt,
+product and budget checks remain unchanged. Missing/invalid timestamps produce
+support guidance without inventing a retry time. Status reads never dispatch
+a provider request or alter history.
