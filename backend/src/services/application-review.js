@@ -47,7 +47,7 @@ export async function recordReview(id, body, actor) {
    if(await get('SELECT id FROM membership_bank_payments WHERE application_id=?',[id]) || await get('SELECT id FROM membership_payments WHERE application_id=?',[id])) throw new HttpError(409,'Payment evidence exists; reconcile it before holding this record.');
   }
   await run(`INSERT INTO application_reviews(application_id,decision,retained_application_id,note,reviewed_by,updated_ms) VALUES(?,?,?,?,?,?)
-   ON CONFLICT(application_id) DO UPDATE SET decision=excluded.decision,retained_application_id=excluded.retained_application_id,note=excluded.note,reviewed_by=excluded.reviewed_by,updated_ms=excluded.updated_ms`,[id,decision,retained,note,actor,Date.now()]);
+   ON CONFLICT(application_id) DO UPDATE SET decision=excluded.decision,retained_application_id=excluded.retained_application_id,note=excluded.note,reviewed_by=excluded.reviewed_by,updated_ms=excluded.updated_ms RETURNING application_id`,[id,decision,retained,note,actor,Date.now()]);
   await audit(actor,'APPLICATION_REVIEW_'+decision,'member_applications',id,{previous_decision:previous?.decision||null,retained_application_id:retained,note});
   return {review:await get('SELECT * FROM application_reviews WHERE application_id=?',[id]),active_membership_granted:false,identity_verified:false,payment_confirmed:false};
  });
