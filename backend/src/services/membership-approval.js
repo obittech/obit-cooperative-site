@@ -1,3 +1,4 @@
+import { assertApplicationNotHeld } from './application-review.js';
 import { get, run } from '../db.js';
 import { HttpError } from '../router.js';
 import { nextMemberCode } from './member-code.js';
@@ -21,6 +22,7 @@ export async function approvedMembershipForApplication(applicationId) {
 // Called inside the caller's atomic transaction after payment is confirmed.
 export async function activateApprovedMember(application, staffId) {
   const applicationId = application.id;
+  await assertApplicationNotHeld(applicationId);
       const confirmedPayment = await get("SELECT id FROM membership_bank_payments WHERE application_id = ? AND status = 'CONFIRMED'", [applicationId])
         || await get("SELECT id FROM membership_payments WHERE application_id = ? AND status = 'PAYMENT_VERIFIED'", [applicationId]);
       if (!confirmedPayment) throw new HttpError(409, 'Confirm the membership payment before approving this application.');

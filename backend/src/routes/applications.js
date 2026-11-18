@@ -176,8 +176,32 @@ applicationsRouter.get('/api/applications/:id', applicationParam, async (req, re
   if (!application) throw new HttpError(404, 'Application not found');
   const existing = application.status === 'UNDER_REVIEW' ? await existingMembershipForApplication(application) : null;
   const member = application.status === 'ACTIVE' ? await approvedMembershipForApplication(application.id) : null;
-  res.json(200, { ...await applicationWithSponsor(application), membership_review_required: Boolean(existing),
+  const review = await get('SELECT decision FROM application_reviews WHERE application_id=?',[application.id]);
+  res.json(200, { ...await applicationWithSponsor(application), administrative_review: review?.decision || null, membership_review_required: Boolean(existing),
     status: application.status === 'ACTIVE' ? (member?.status || 'UNDER_REVIEW') : application.status,
     member_code: member?.status === 'ACTIVE' ? member.member_code : null,
     ...await applicationLoginInfo(application.id) });
+});
+
+// Applicant-only access: uses app.* sessions, never a member login token.
+applicationsRouter.get('/api/applications/:id/limited-portal', applicationParam, async(req,res,params)=>{
+ const review=await get('SELECT decision FROM application_reviews WHERE application_id=?',[params.id]);
+ if(review?.decision!=='CONDITIONAL_ACCEPTANCE') throw new HttpError(403,'Limited portal access requires conditional administrative acceptance. Contact staff; do not register or pay again.');
+ const app=await get('SELECT id,full_legal_name,email,phone,status FROM member_applications WHERE id=?',[params.id]);
+ const kyc=await get('SELECT status FROM kyc_checks WHERE application_id=? ORDER BY id DESC LIMIT 1',[params.id]);
+ const bank=await get('SELECT status FROM membership_bank_payments WHERE application_id=?',[params.id]);
+ const provider=await get("SELECT status FROM membership_payments WHERE application_id=? ORDER BY id DESC LIMIT 1",[params.id]);
+ res.json(200,{application:app,access:'LIMITED_APPLICANT',administrative_review:review.decision,identity_status:kyc?.status||'NOT_RECORDED',payment_status:bank?.status||provider?.status||'NOT_RECORDED',financial_services_enabled:false,active_membership_granted:false,support_request:await get('SELECT message,updated_ms FROM application_support_requests WHERE application_id=?',[params.id])||null});
+});
+applicationsRouter.post('/api/applications/:id/limited-portal/support', applicationParam, async(req,res,params)=>{
+ const message=String(req.body?.message||'').trim();
+ if(message.length<10||message.length>1000)throw new HttpError(422,'Enter 10–1000 characters. Do not include identity numbers, passwords or bank details.');
+ await atomic(async()=>{
+  await run('UPDATE member_applications SET status=status WHERE id=?',[params.id]);
+  const review=await get('SELECT decision FROM application_reviews WHERE application_id=?',[params.id]);
+  if(review?.decision!=='CONDITIONAL_ACCEPTANCE')throw new HttpError(403,'Limited portal access is unavailable. Contact staff.');
+  await run(`INSERT INTO application_support_requests(application_id,message,updated_ms) VALUES(?,?,?) ON CONFLICT(application_id) DO UPDATE SET message=excluded.message,updated_ms=excluded.updated_ms RETURNING application_id`,[params.id,message,Date.now()]);
+  await audit(null,'APPLICATION_SUPPORT_REQUEST','member_applications',params.id,{message});
+ });
+ res.json(200,{saved:true});
 });

@@ -1,3 +1,4 @@
+import { reviewDetails, recordReview } from '../services/application-review.js';
 // routes/admin.js — Admin MVP (staff/admin only).
 // Approving an application is the one place a `members` row (permanent
 // member ID) gets created — deliberately a human decision, not automatic
@@ -13,6 +14,13 @@ import { activateApprovedMember } from '../services/membership-approval.js';
 
 
 export const adminRouter = new Router();
+adminRouter.get('/api/admin/applications/:id/review', requireAuth('staff','admin'), async(req,res,params)=>{
+ res.setHeader?.('Cache-Control','no-store'); res.json(200,await reviewDetails(params.id));
+});
+adminRouter.post('/api/admin/applications/:id/review', requireAuth('admin'), async(req,res,params)=>{
+ res.json(200,await recordReview(params.id,req.body,req.user.id));
+});
+
 
 adminRouter.get('/api/admin/referral-bonuses', requireAuth('staff', 'admin'), async (req, res) => {
   const rows = await all(`SELECT b.*, s.member_code AS sponsor_code, s.full_legal_name AS sponsor_name,

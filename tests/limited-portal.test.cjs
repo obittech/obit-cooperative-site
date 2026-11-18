@@ -1,0 +1,11 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+test('actual portal plus API wrapper signs in, sends authorized support, clears password and logs out',async()=>{
+ const nodes=new Map();function node(id){if(!nodes.has(id))nodes.set(id,{value:'',hidden:false,textContent:'',disabled:false,children:[],replaceChildren(){this.children=[];},append(...a){this.children.push(...a);},querySelector(){return node(id+'-button');}});return nodes.get(id);}
+ const values=new Map(),storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,String(v)),removeItem:k=>values.delete(k)};
+ const calls=[];const ctx=vm.createContext({document:{getElementById:node,createElement:()=>({textContent:''})},sessionStorage:storage,localStorage:{getItem:()=>null,removeItem(){}},window:{OBIT_API_BASE:'https://fixture.invalid',dispatchEvent(){}},CustomEvent:class{},fetch:async(url,opts)=>{calls.push({url,opts});let data;if(url.endsWith('/resume'))data={application_id:30,application_token:'app.synthetic.test'};else{assert.equal(opts.headers.Authorization,'Bearer app.synthetic.test');data=url.endsWith('/support')?{saved:true}:{application:{id:30,full_legal_name:'Test',email:'test@example.invalid',phone:'000'},identity_status:'KYC_PENDING',payment_status:'NOT_RECORDED',support_request:null};}return{ok:true,json:async()=>data};}});
+ for(const file of ['api.js','application-portal.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/js',file),'utf8'),ctx);
+ node('username').value='testuser';node('password').value='synthetic';await node('login').onsubmit({preventDefault(){},currentTarget:node('login')});
+ assert.equal(node('account').hidden,false);assert.equal(node('password').value,'');assert.match(node('notice').textContent,/limited access/);
+ node('message').value='Please reconcile my payment';await node('support').onsubmit({preventDefault(){},currentTarget:node('support')});assert.match(node('notice').textContent,/saved/);assert.ok(calls.some(c=>c.url.endsWith('/limited-portal/support')));
+ node('logout').onclick();assert.equal(storage.getItem('obit_application_token'),null);assert.equal(node('account').hidden,true);assert.equal(node('details').children.length,0);
+});

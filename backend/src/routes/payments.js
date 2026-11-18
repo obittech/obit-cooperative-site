@@ -1,3 +1,4 @@
+import { assertApplicationNotHeld } from '../services/application-review.js';
 import { applicationBody } from '../middleware/application-access.js';
 // routes/payments.js
 // Correct sequence per handover doc:
@@ -132,6 +133,7 @@ paymentsRouter.post('/api/payments/membership/initialize', applicationBody, asyn
   const reference = `OBIT-${application_id}-${crypto.randomBytes(6).toString('hex')}`;
   await atomic(async () => {
     await run('UPDATE member_applications SET status = status WHERE id = ?', [application_id]);
+    await assertApplicationNotHeld(application_id);
     if (await get('SELECT id FROM membership_bank_payments WHERE application_id = ?', [application_id])) throw new HttpError(409, 'Use the existing bank-transfer form. Contact support before paying again.');
     const current = await get('SELECT status FROM member_applications WHERE id = ?', [application_id]);
     if (!['KYC_VERIFIED', 'PAYMENT_PENDING', 'PAYMENT_FAILED'].includes(current.status)) throw new HttpError(409, 'Application is not awaiting payment.');

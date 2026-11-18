@@ -35,6 +35,7 @@ if (DB_ENGINE === 'sqlite') {
 function sqliteMigrate() {
   const schema = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'schema.sql'), 'utf8');
   sqlite.exec(schema);
+  sqlite.exec(fs.readFileSync(path.join(__dirname, '..', 'migrations', 'application-review.sql'), 'utf8'));
   sqlite.exec(fs.readFileSync(path.join(__dirname, '..', 'migrations', 'kyc-cost-controls.sql'), 'utf8'));
   const cols = (table) => sqlite.prepare(`PRAGMA table_info(${table})`).all().map(r=>r.name);
   const userCols = cols('users');
@@ -86,6 +87,7 @@ export async function migrate() {
   if (DB_ENGINE === 'sqlite') { sqliteMigrate(); sqlite.exec(commerceSchema()); sqlite.exec(membershipTransferSchema()); sqlite.exec(memberReferralSchema()); sqlite.exec(memberFinanceSchema()); return; }
   const schema = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'postgres.sql'), 'utf8');
   await pool.query(schema);
+  await pool.query(fs.readFileSync(path.join(__dirname, '..', 'migrations', 'application-review.sql'), 'utf8'));
   await pool.query(fs.readFileSync(path.join(__dirname, '..', 'migrations', 'kyc-cost-controls.sql'), 'utf8'));
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0");
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT');

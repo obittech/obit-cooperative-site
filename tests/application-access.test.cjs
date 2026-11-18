@@ -17,7 +17,7 @@ test('API scopes session headers, preserves explicit tokens and clears expired a
     fetch: async (url, options) => { calls.push({url,options}); return { ok: true, json: async () => ({}) }; },
   });
   vm.runInContext(read('js/api.js'), ctx);
-  for (const endpoint of ['/api/applications/12','/api/applications/12/submit','/api/kyc/session','/api/kyc/youverify_sandbox_test/status','/api/payments/membership/bank-transfer/12','/api/payments/membership/initialize']) {
+  for (const endpoint of ['/api/applications/12','/api/applications/12/submit','/api/applications/12/limited-portal','/api/applications/12/limited-portal/support','/api/kyc/session','/api/kyc/youverify_sandbox_test/status','/api/payments/membership/bank-transfer/12','/api/payments/membership/initialize']) {
     await vm.runInContext(`OBIT.get(${JSON.stringify(endpoint)})`,ctx);
     assert.equal(calls.at(-1).options.headers.Authorization,'Bearer application-test-token');
   }
