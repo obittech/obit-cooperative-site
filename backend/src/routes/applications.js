@@ -176,7 +176,8 @@ applicationsRouter.get('/api/applications/:id', applicationParam, async (req, re
   if (!application) throw new HttpError(404, 'Application not found');
   const existing = application.status === 'UNDER_REVIEW' ? await existingMembershipForApplication(application) : null;
   const member = application.status === 'ACTIVE' ? await approvedMembershipForApplication(application.id) : null;
-  res.json(200, { ...await applicationWithSponsor(application), membership_review_required: Boolean(existing),
+  const review = await get('SELECT decision FROM application_reviews WHERE application_id=?',[application.id]);
+  res.json(200, { ...await applicationWithSponsor(application), administrative_review: review?.decision || null, membership_review_required: Boolean(existing),
     status: application.status === 'ACTIVE' ? (member?.status || 'UNDER_REVIEW') : application.status,
     member_code: member?.status === 'ACTIVE' ? member.member_code : null,
     ...await applicationLoginInfo(application.id) });

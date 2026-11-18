@@ -1,3 +1,4 @@
+import { assertApplicationNotHeld } from '../services/application-review.js';
 import { applicationBody, kycReference, kycStatus } from '../middleware/application-access.js';
 // routes/kyc.js
 // Youverify is the sole KYC provider. Sandbox is the default. Live calls require explicit
@@ -33,8 +34,10 @@ async function hasRequiredConsent(applicationId) {
   return Boolean(terms?.accepted && privacy?.accepted);
 }
 
-kycRouter.post('/api/kyc/session', applicationBody, async (req, res) => {
+kycRouter.post('/api/kyc/session', applicationBody, async (req, res) => atomic(async () => {
   const { application_id } = req.body || {};
+  await run('UPDATE member_applications SET status=status WHERE id=?',[application_id]);
+  await assertApplicationNotHeld(application_id);
   const application = await get('SELECT * FROM member_applications WHERE id = ?', [application_id]);
   if (!application) throw new HttpError(404, 'Application not found');
   const latest = await get('SELECT * FROM kyc_checks WHERE application_id = ? ORDER BY id DESC LIMIT 1', [application_id]);
@@ -74,7 +77,7 @@ kycRouter.post('/api/kyc/session', applicationBody, async (req, res) => {
       ? `${PROVIDER} sandbox session created. Use synthetic test data only.`
       : `${PROVIDER} live KYC session created.`,
   });
-});
+}));
 
 kycRouter.post('/api/kyc/session/:ref/verify', kycReference, async (req, res, params) => {
   const check = await get('SELECT * FROM kyc_checks WHERE session_ref = ?', [params.ref]);

@@ -1,3 +1,4 @@
+import { assertApplicationNotHeld } from '../services/application-review.js';
 import { applicationBody, requireApplicationAccess, transferReference } from '../middleware/application-access.js';
 import crypto from 'node:crypto';
 import { Router, HttpError } from '../router.js';
@@ -50,6 +51,7 @@ membershipTransfersRouter.post('/api/payments/membership/bank-transfer', applica
   const payment = await atomic(async () => {
     const id = req.body?.application_id;
     await run('UPDATE member_applications SET status = status WHERE id = ?', [id]);
+    await assertApplicationNotHeld(id);
     const app = await get('SELECT * FROM member_applications WHERE id = ?', [id]);
     if (!app) throw new HttpError(404, 'Application not found');
     const old = await get('SELECT * FROM membership_bank_payments WHERE application_id = ?', [id]);

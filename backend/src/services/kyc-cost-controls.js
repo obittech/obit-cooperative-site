@@ -1,3 +1,4 @@
+import { assertApplicationNotHeld } from './application-review.js';
 import crypto from 'node:crypto';
 import { atomic, get, run } from '../db.js';
 import { HttpError } from '../router.js';
@@ -31,6 +32,8 @@ export async function reserveKycRequest(check, environment, product) {
   const cost = environment === 'live' ? positiveInteger(`YOUVERIFY_${product.toUpperCase()}_MAX_COST_KOBO`) : 0;
   const budget = environment === 'live' ? positiveInteger('YOUVERIFY_DAILY_BUDGET_KOBO') : Number.MAX_SAFE_INTEGER;
   return atomic(async () => {
+    await run('UPDATE member_applications SET status=status WHERE id=?',[check.application_id]);
+    await assertApplicationNotHeld(check.application_id);
     const guard = await run('UPDATE kyc_dispatch_guard SET version = version + 1 WHERE id = 1');
     if (guard.changes !== 1) throw new HttpError(503, 'KYC spending controls are unavailable.');
     const now = Date.now();

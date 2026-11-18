@@ -1,3 +1,4 @@
+import { assertApplicationNotHeld } from '../services/application-review.js';
 import crypto from 'node:crypto';
 import { get } from '../db.js';
 import { HttpError } from '../router.js';
@@ -65,6 +66,7 @@ export function requireApplicationAccess(resolveId) {
       if (!credential.linked || !usable(credential) || Number(credential.id) !== Number(req.user.id)) throw new HttpError(403, 'Application access denied.');
     }
     res.setHeader?.('Cache-Control', 'no-store');
+    if (['POST','PATCH','PUT','DELETE'].includes(req.method)) await assertApplicationNotHeld(id);
     req.applicationId = id;
   };
 }
