@@ -8,7 +8,7 @@ const OBIT = {
 
   async request(method, path, { body, token } = {}) {
     const headers = { 'Content-Type': 'application/json' };
-    const applicationPath = /^\/api\/(?:applications\/\d+(?:\/submit)?|kyc\/.*|payments\/membership\/(?:initialize|bank-transfer)(?:\/.*)?)$/.test(path);
+    const applicationPath = /^\/api\/(?:applications\/\d+(?:\/submit|\/limited-portal(?:\/support)?)?|kyc\/.*|payments\/membership\/(?:initialize|bank-transfer)(?:\/.*)?)$/.test(path);
     const accessToken = token || (applicationPath ? OBIT.getSession('application') || OBIT.getSession('member') : null);
     if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
     const res = await fetch(`${OBIT.base()}${path}`, {
