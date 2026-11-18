@@ -75,7 +75,7 @@ function goToStep(stepName) {
   let notice = document.getElementById('administrativeReviewNotice');
   if (!notice) { notice=document.createElement('p');notice.id='administrativeReviewNotice';notice.setAttribute('role','status');document.getElementById('alertBox').before(notice); }
   const review=state.application?.administrative_review;
-  notice.textContent=review==='CONDITIONAL_ACCEPTANCE' ? 'Your application has conditional administrative acceptance. Identity verification and payment requirements remain unresolved. This is not active membership and does not grant financial services. Contact staff before paying again.' : review==='DUPLICATE_HOLD' ? 'This application is on a recoverable duplicate hold. Contact staff to continue your existing registration. Do not register or pay again.' : '';
+  notice.textContent=review==='CONDITIONAL_ACCEPTANCE' ? 'Your application has conditional administrative acceptance. Identity verification and payment requirements remain unresolved. This is not active membership and does not grant financial services. Open the Limited Applicant Portal using your existing registration login. Contact staff before paying again.' : review==='DUPLICATE_HOLD' ? 'This application is on a recoverable duplicate hold. Contact staff to continue your existing registration. Do not register or pay again.' : '';
 
   STEPS.forEach((s) => {
     document.getElementById(`panel-${s}`).style.display = s === stepName ? '' : 'none';

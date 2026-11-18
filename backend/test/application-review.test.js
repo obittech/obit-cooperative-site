@@ -33,3 +33,19 @@ test('held record cannot reserve a new KYC charge or create session after prefli
  assert.equal(Number((await get('SELECT COUNT(*) n FROM kyc_provider_requests WHERE application_id=?',[id])).n),0);
 });
 test('in-flight or uncertain KYC evidence prevents duplicate hold',async()=>{const keep=await app(),id=await app();await run("INSERT INTO kyc_provider_requests(id,application_id,check_id,environment,product,state,reserved_kobo,started_ms) VALUES(?,?,123,'sandbox','nin','DISPATCHED',0,1)",['test-pending-'+id,id]);await assert.rejects(recordReview(id,{decision:'DUPLICATE_HOLD',retained_application_id:keep,note,same_person_confirmed:true},actor),/in progress or uncertain/);await assertApplicationNotHeld(id);});
+test('conditional applicant signs in with existing credentials, sees limited account and saves support without financial access',async()=>{
+ const {applicationsRouter}=await import('../src/routes/applications.js');const {hashPassword}=await import('../src/utils/auth.js');const {requireAuth}=await import('../src/middleware/auth.js');const id=await app('limited@example.invalid','limited-phone');
+ await run('INSERT INTO registration_credentials(application_id,username,password_hash) VALUES(?,?,?) RETURNING application_id',[id,'limited.test',hashPassword('SyntheticPassword123')]);
+ await recordReview(id,{decision:'CONDITIONAL_ACCEPTANCE',note,acknowledge_restrictions:true},actor);
+ async function call(method,path,body={},token=''){const route=applicationsRouter.match(method,path),req={method,body,headers:{authorization:'Bearer '+token}},res={json(status,body){this.body=body;this.writableEnded=true;}};for(const h of route.handlers){await h(req,res,route.params);if(res.writableEnded)break;}return res.body;}
+ const session=await call('POST','/api/applications/resume',{username:'limited.test',password:'SyntheticPassword123'});
+ const account=await call('GET',`/api/applications/${id}/limited-portal`,{},session.application_token);
+ assert.equal(account.access,'LIMITED_APPLICANT');assert.equal(account.financial_services_enabled,false);assert.equal(account.application.status,'KYC_PENDING');
+ await assert.rejects(requireAuth('member')({headers:{authorization:'Bearer '+session.application_token}}),/Missing or invalid session token/);
+ await call('POST',`/api/applications/${id}/limited-portal/support`,{message:'Please reconcile my previous payment.'},session.application_token);
+ assert.equal((await reviewDetails(id)).support_request.message,'Please reconcile my previous payment.');
+ const other=await app();await assert.rejects(call('GET',`/api/applications/${other}/limited-portal`,{},session.application_token),/Application access denied/);
+ const keep=await app('limited@example.invalid','limited-phone');await recordReview(id,{decision:'DUPLICATE_HOLD',retained_application_id:keep,note,same_person_confirmed:true},actor);
+ await assert.rejects(call('GET',`/api/applications/${id}/limited-portal`,{},session.application_token),/requires conditional/);
+ assert.equal(await get('SELECT id FROM members WHERE application_id=?',[id]),undefined);
+});

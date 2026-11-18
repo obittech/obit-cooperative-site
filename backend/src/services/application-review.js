@@ -9,7 +9,7 @@ export async function assertApplicationNotHeld(id) {
 export async function reviewDetails(id) {
  const app = await get('SELECT id,full_legal_name,email,phone,status FROM member_applications WHERE id = ?', [id]);
  if (!app) throw new HttpError(404,'Application not found');
- return { application:app, review:await get('SELECT * FROM application_reviews WHERE application_id = ?', [id]) || null,
+ return { application:app, registration_login_available:Boolean(await get('SELECT application_id FROM registration_credentials WHERE application_id=?',[id])), support_request:await get('SELECT message,updated_ms FROM application_support_requests WHERE application_id=?',[id])||null, review:await get('SELECT * FROM application_reviews WHERE application_id = ?', [id]) || null,
   kyc:await all('SELECT id,status,verified_at FROM kyc_checks WHERE application_id = ? ORDER BY id DESC',[id]),
   bank_payments:await all('SELECT id,status,reference FROM membership_bank_payments WHERE application_id = ?',[id]),
   provider_payments:await all('SELECT id,status,reference FROM membership_payments WHERE application_id = ?',[id]),
