@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci
+      - run: npm install
       - name: Isolated PostgreSQL review and interleaving regressions
         env:
           DB_ENGINE: postgres
