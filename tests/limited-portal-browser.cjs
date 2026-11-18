@@ -24,7 +24,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal overflow '+width);
  await page.screenshot({path:`browser-artifacts/limited-portal-${width}.png`,fullPage:true});
  expired=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.locator('#login').waitFor({state:'visible'});assert.equal(await page.evaluate(()=>sessionStorage.getItem('obit_application_token')),null);
- expired=false;await page.locator('#password').fill('synthetic-password');await page.getByRole('button',{name:'Continue',exact:true}).click();await page.locator('#account').waitFor({state:'visible'});await page.getByRole('button',{name:'Log out',exact:true}).click();assert.equal(await page.locator('#account').isVisible(),false);assert.equal(await page.locator('#message').inputValue(),'');
+ expired=false;await page.locator('#username').fill('synthetic');await page.locator('#password').fill('synthetic-password');await page.getByRole('button',{name:'Continue',exact:true}).click();await page.locator('#account').waitFor({state:'visible'});await page.getByRole('button',{name:'Log out',exact:true}).click();assert.equal(await page.locator('#account').isVisible(),false);assert.equal(await page.locator('#message').inputValue(),'');
  await page.getByRole('link',{name:'Back to application',exact:true}).click();assert.ok(page.url().endsWith('/apply.html'));await page.goBack();await page.locator('#login').waitFor({state:'visible'});await page.close();console.log('PASS Chromium width '+width);
  }}finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);process.exit(1)});
